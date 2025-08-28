@@ -201,6 +201,17 @@ try {
             }
         });
 
+        // Listen fullscreenchange event
+        document.addEventListener("fullscreenchange", () => {
+          if (document.fullscreenElement) {
+            // Enter fullscreen
+            // Make the video element zoomable
+
+          } else {
+            // Exit fullscreen
+          }
+        });
+
         // MutationObserver to handle dynamic DOM changes
         const observer = new MutationObserver((mutationsList) => {
             for (const mutation of mutationsList) {
@@ -278,7 +289,7 @@ try {
 
                         // Add download button on watching page
                         if (getPageClass(location.href) === 'watch' && !document.getElementById('downloadButton')) {
-                            const saveButton = document.querySelector('.yt-spec-button-view-model.slim_video_action_bar_renderer_button');
+                            const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
                             if (saveButton) {
                                 const downloadButton = saveButton.cloneNode(true);
                                 downloadButton.id = 'downloadButton';

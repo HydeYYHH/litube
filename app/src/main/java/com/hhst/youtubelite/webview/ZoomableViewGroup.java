@@ -5,6 +5,8 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -33,6 +35,9 @@ public class ZoomableViewGroup extends FrameLayout {
 
   private View child;
   private Button resetButton;
+  private Handler hideButtonHandler;
+  private Runnable hideButtonRunnable;
+  private static final long HIDE_BUTTON_DELAY = 2000;
 
   private ScaleGestureDetector mScaleDetector;
 
@@ -53,6 +58,12 @@ public class ZoomableViewGroup extends FrameLayout {
 
   private void init(Context context) {
     mScaleDetector = new ScaleGestureDetector(context, new ScaleListener());
+    hideButtonHandler = new Handler(Looper.getMainLooper());
+    hideButtonRunnable = () -> {
+      if (resetButton != null && isZoomed) {
+        resetButton.setVisibility(View.GONE);
+      }
+    };
     createResetButton(context);
   }
 
@@ -76,7 +87,10 @@ public class ZoomableViewGroup extends FrameLayout {
 
     resetButton.setElevation(10f);
     resetButton.setPadding(30, 15, 30, 15);
-    resetButton.setOnClickListener(v -> resetView());
+    resetButton.setOnClickListener(v -> {
+      resetView();
+      cancelHideButtonTimer();
+    });
     resetButton.setVisibility(View.GONE);
 
     addView(resetButton);
@@ -99,6 +113,21 @@ public class ZoomableViewGroup extends FrameLayout {
     isZoomed = false;
 
     resetButton.setVisibility(View.GONE);
+    cancelHideButtonTimer();
+  }
+
+  private void showResetButtonWithTimer() {
+    if (resetButton != null && isZoomed) {
+      resetButton.setVisibility(View.VISIBLE);
+      cancelHideButtonTimer();
+      hideButtonHandler.postDelayed(hideButtonRunnable, HIDE_BUTTON_DELAY);
+    }
+  }
+
+  private void cancelHideButtonTimer() {
+    if (hideButtonHandler != null && hideButtonRunnable != null) {
+      hideButtonHandler.removeCallbacks(hideButtonRunnable);
+    }
   }
 
   private float getCurrentScale() {
@@ -177,6 +206,8 @@ public class ZoomableViewGroup extends FrameLayout {
       case MotionEvent.ACTION_UP:
         if (!isZoomed) {
           performClick();
+        } else {
+          showResetButtonWithTimer();
         }
         mode = NONE;
         break;
@@ -261,7 +292,12 @@ public class ZoomableViewGroup extends FrameLayout {
     child.setScaleX(m[Matrix.MSCALE_X]);
     child.setScaleY(m[Matrix.MSCALE_Y]);
 
-    resetButton.setVisibility(isZoomed ? View.VISIBLE : View.GONE);
+    if (isZoomed) {
+      showResetButtonWithTimer();
+    } else {
+      resetButton.setVisibility(View.GONE);
+      cancelHideButtonTimer();
+    }
   }
 
   private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {

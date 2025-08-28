@@ -14,8 +14,8 @@ android {
         applicationId = "com.hhst.litube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "1.6.0.1"
+        versionCode = 22
+        versionName = "1.6.0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
 
@@ -26,6 +26,13 @@ android {
 
         buildTypes {
             release {
+                isMinifyEnabled = true
+                isShrinkResources = true
+                proguardFiles(
+                    getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                )
+            }
+            debug {
                 isMinifyEnabled = true
                 isShrinkResources = true
                 proguardFiles(
