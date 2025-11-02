@@ -73,6 +73,8 @@ android {
         implementation(libs.material)
         implementation(libs.mmkv)
         implementation(libs.activity)
+        implementation(libs.media3.exoplayer)
+        implementation(libs.media3.ui)
         implementation(libs.constraintlayout)
         implementation(libs.swiperefreshlayout)
         testImplementation(libs.junit)

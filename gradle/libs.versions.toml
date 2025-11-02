@@ -11,6 +11,7 @@ appcompat = "1.6.1"
 library = "1.7.7"
 lombok = "1.18.38"
 material = "1.10.0"
+media3Exoplayer = "1.8.0"
 mockito = "5.8.0"
 mmkv = "1.3.12"
 activity = "1.8.0"
@@ -20,6 +21,7 @@ newpipeextractor = "v0.24.8"
 photoview = "2.0.0"
 picasso = "2.8"
 swiperefreshlayout = "1.1.0"
+androidxJunit = "1.3.0"
 
 [libraries]
 commons-io = { module = "commons-io:commons-io", version.ref = "commonsIo" }
@@ -33,6 +35,8 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 library = { module = "com.liulishuo.filedownloader:library", version.ref = "library" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3Exoplayer" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3Exoplayer" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 mmkv = { module = "com.tencent:mmkv", version.ref = "mmkv" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
@@ -42,6 +46,7 @@ newpipeextractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version
 photoview = { module = "com.github.chrisbanes:PhotoView", version.ref = "photoview" }
 picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
 swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
