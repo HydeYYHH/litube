@@ -4,16 +4,18 @@ plugins {
 
 android {
     namespace = "com.hhst.youtubelite"
-    compileSdk = 35
+    compileSdk = 36
 
     lint {
         disable.add("MissingTranslation")
+        disable.add("ExtraTranslation")
+        abortOnError = false
     }
 
     defaultConfig {
         applicationId = "com.hhst.litube"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 22
         versionName = "1.6.0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -33,8 +35,8 @@ android {
                 )
             }
             debug {
-                isMinifyEnabled = true
-                isShrinkResources = true
+                isMinifyEnabled = false
+                isShrinkResources = false
                 proguardFiles(
                     getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
                 )
@@ -74,9 +76,16 @@ android {
         implementation(libs.mmkv)
         implementation(libs.activity)
         implementation(libs.media3.exoplayer)
+        implementation(libs.media3.exoplayer.dash)
         implementation(libs.media3.ui)
+        implementation(libs.media3.datasource)
+        implementation(libs.media3.datasource.okhttp)
+        implementation(libs.okhttp)
+        implementation(libs.okio)
         implementation(libs.constraintlayout)
         implementation(libs.swiperefreshlayout)
+        implementation(libs.webkit)
+        implementation(libs.viewpager2)
         testImplementation(libs.junit)
         testImplementation(libs.mockito.core)
         androidTestImplementation(libs.ext.junit)

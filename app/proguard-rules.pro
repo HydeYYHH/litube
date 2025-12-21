@@ -50,7 +50,7 @@
 -dontwarn java.beans.PropertyDescriptor
 
 -dontobfuscate
--keepclassmembers class com.hhst.youtubelite.common.VideoDetails { *; }
+-keepclassmembers class com.hhst.youtubelite.extractor.VideoDetails { *; }
 -keep class com.googlecode.mp4parser.** { *; }
 -keep class com.coremedia.iso.** { *; }
 -keep class com.mp4parser.** { *; }

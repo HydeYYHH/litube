@@ -13,7 +13,7 @@
     <string name="thumbnail_has_been_saved_to">"封面已被保存至:  "</string>
     <string name="download_finished">下载完成:  \"%s\" 已被保存到 \"%s\"</string>
     <string name="failed_to_download">下载失败</string>
-    <string name="audio_only">仅音频</string>
+    <string name="audio_only">音频</string>
     <string name="download_canceled_err">取消下载时出错:  可能是因为该任务已经被取消或者已经完成</string>
     <string name="failed_to_download_thumbnail">"下载封面出错 "</string>
     <string name="failed_to_load_image">"加载图片出错 "</string>

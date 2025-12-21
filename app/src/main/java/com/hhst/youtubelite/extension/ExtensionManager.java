@@ -1,57 +1,51 @@
 package com.hhst.youtubelite.extension;
 
-import com.google.gson.Gson;
-import com.hhst.youtubelite.webview.YoutubeWebview;
-import java.lang.reflect.Type;
+import com.tencent.mmkv.MMKV;
+
+import java.util.HashMap;
 import java.util.Map;
 
 public class ExtensionManager {
 
-  private final YoutubeWebview webview;
-  private Map<String, Boolean> mm = Map.of();
+	private final MMKV mmkv;
 
-  public ExtensionManager(YoutubeWebview webview) {
-    this.webview = webview;
-    enableExtension();
-  }
+	public ExtensionManager() {
+		this.mmkv = MMKV.defaultMMKV();
+		initializeDefaultPreferences();
+	}
 
-  private void enableExtension() {
-    webview.evaluateJavascript(
-        String.format(
-            """
-          (function(){
-          const key = 'preferences';
-          let value = localStorage.getItem(key);
-          if (!value) {
-            value = JSON.stringify(%s);
-            localStorage.setItem(key, value);
-          }
-          return value;
-          })();
-        """,
-            new Gson().toJson(Constant.defaultPreferences)),
-        value -> {
-          // Remove the surrounding quotes and escape characters
-          if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-            value = value.substring(1, value.length() - 1);
-          }
-          value = value.replace("\\\\", "\\").replace("\\\"", "\"");
-          Type type = new com.google.gson.reflect.TypeToken<Map<String, Boolean>>() {}.getType();
-          mm = new Gson().fromJson(value, type);
-        });
-  }
+	private void initializeDefaultPreferences() {
+		// Set default preferences in MMKV if they don't exist
+		for (Map.Entry<String, Boolean> entry : Constant.defaultPreferences.entrySet()) {
+			String mmkvKey = "preferences:" + entry.getKey();
+			if (!mmkv.contains(mmkvKey)) mmkv.encode(mmkvKey, entry.getValue());
+		}
+	}
 
-  public void setEnabled(String key, Boolean enable) {
-    mm.put(key, enable);
-    // Update the local storage in the webview
-    webview.evaluateJavascript(
-        String.format(
-            "(function(){localStorage.setItem('preferences', JSON.stringify(%s));})();",
-            new Gson().toJson(mm)),
-        null);
-  }
+	public void setEnabled(String key, Boolean enable) {
+		String mmkvKey = "preferences:" + key;
+		mmkv.encode(mmkvKey, enable);
+	}
 
-  public Boolean isEnabled(String key) {
-    return mm.get(key) == null ? Constant.defaultPreferences.getOrDefault(key, false) : mm.get(key);
-  }
+	public Boolean isEnabled(String key) {
+		String mmkvKey = "preferences:" + key;
+		// If the key doesn't exist, return the default value
+		if (!mmkv.contains(mmkvKey)) return Constant.defaultPreferences.getOrDefault(key, false);
+		return mmkv.decodeBool(mmkvKey, Boolean.TRUE.equals(Constant.defaultPreferences.getOrDefault(key, false)));
+	}
+
+	public Map<String, Boolean> getAllPreferences() {
+
+		// Add all default preferences as a base
+		Map<String, Boolean> allPreferences = new HashMap<>(Constant.defaultPreferences);
+
+		// Override with existing values from MMKV
+		for (Map.Entry<String, Boolean> entry : Constant.defaultPreferences.entrySet()) {
+			String mmkvKey = "preferences:" + entry.getKey();
+			if (mmkv.contains(mmkvKey)) allPreferences.put(entry.getKey(), mmkv.decodeBool(mmkvKey));
+		}
+
+		return allPreferences;
+	}
+
 }

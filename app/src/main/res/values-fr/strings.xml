@@ -19,7 +19,7 @@
     <string name="failed_to_load_video_details">Échec du chargement des détails de la vidéo </string>
     <string name="delete">Supprimer</string>
     <string name="file_deleted">Fichier supprimé</string>
-    <string name="audio_only">Audio seulement</string>
+    <string name="audio_only">Audio</string>
     <string name="audio_move_error">Échec du déplacement du fichier audio vers le répertoire public</string>
     <string name="video_move_error">Échec du déplacement du fichier vidéo vers le répertoire public</string>
     <string name="downloader_initialize_error">Échec de l\'initialisation du téléchargeur</string>

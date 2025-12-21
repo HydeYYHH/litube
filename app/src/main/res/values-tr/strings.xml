@@ -18,7 +18,7 @@
     <string name="failed_to_load_video_details">"Video detayları yüklenemedi "</string>
     <string name="delete">Sil</string>
     <string name="file_deleted">Dosya silindi</string>
-    <string name="audio_only">Yalnızca Ses</string>
+    <string name="audio_only">Ses</string>
     <string name="audio_move_error">Ses dosyası genel dizine taşınamadı</string>
     <string name="video_move_error">Video dosyası genel dizine taşınamadı</string>
     <string name="downloader_initialize_error">İndirici başlatılamadı</string>

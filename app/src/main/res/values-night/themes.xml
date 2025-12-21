@@ -1,8 +1,8 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.YoutubeLite" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
-        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 </resources>

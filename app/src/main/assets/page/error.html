@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>Error</title>
+  <style>
+    :root {
+      --md-sys-color-primary: #6750A4;
+      --md-sys-color-on-primary: #FFFFFF;
+      --md-sys-color-surface: #FFFBFE;
+      --md-sys-color-on-surface: #1C1B1F;
+      --md-sys-color-outline: #79747E;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --md-sys-color-primary: #D0BCFF;
+        --md-sys-color-on-primary: #381E72;
+        --md-sys-color-surface: #1C1B1F;
+        --md-sys-color-on-surface: #E6E1E5;
+        --md-sys-color-outline: #938F99;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+    }
+    body {
+      margin: 0;
+      background: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .card {
+      max-width: 420px;
+      padding: 24px;
+      border-radius: 28px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      background: var(--md-sys-color-surface);
+      text-align: center;
+    }
+    .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+    p {
+      font-size: 14px;
+      line-height: 1.5;
+      opacity: 0.9;
+    }
+    .details {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--md-sys-color-outline);
+      word-break: break-all;
+    }
+    button {
+      margin-top: 24px;
+      padding: 10px 24px;
+      border-radius: 20px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+    button:active {
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class='card'>
+    <h1>Failed to load page</h1>
+    <p id='description'></p>
+    <div class='details'>
+      Error code: <span id='errorCode'></span><br>
+      <span id='failingUrl'></span>
+    </div>
+    <button onclick='window.history.back();'>Go Back</button>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById('description').textContent = decodeURIComponent(params.get('description') || '');
+    document.getElementById('errorCode').textContent = params.get('errorCode') || '';
+    document.getElementById('failingUrl').textContent = decodeURIComponent(params.get('url') || '');
+  </script>
+</body>
+</html>

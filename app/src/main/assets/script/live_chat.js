@@ -1,7 +1,7 @@
 // refers: https://greasyfork.org/en/scripts/519614-live-chat-on-youtube-mobile
 (function () {
     'use strict';
-    if (!JSON.parse(localStorage.getItem("preferences")).enable_live_chat) return;
+    if (!JSON.parse(android.getPreferences()).enable_live_chat) return;
 
     setInterval(() => {
         const isLive = document.querySelector('#movie_player')?.getPlayerResponse()?.playabilityStatus?.liveStreamability &&
@@ -94,8 +94,6 @@
     
                     chatContainer.style.display = 'block'; // Show the chat container
                     button.innerText = values('Hide Live Chat'); // Change the button text to "Hide Live Chat"
-                } else {
-                    alert('Could not find the video ID.');
                 }
             } else {
                 chatContainer.style.display = 'none'; // Hide the chat container

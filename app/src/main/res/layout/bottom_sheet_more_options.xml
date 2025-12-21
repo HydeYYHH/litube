@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingBottom="16dp"
+        android:text="@string/more_options"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/option_resize_mode"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="16dp"
+            android:contentDescription="@string/resize_mode"
+            android:src="@drawable/ic_resize"
+            app:tint="?attr/colorControlNormal" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/resize_mode"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/colorControlNormal" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/option_pip"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="16dp"
+            android:contentDescription="@string/pip"
+            android:src="@drawable/ic_pip"
+            app:tint="?attr/colorControlNormal" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/pip"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/colorControlNormal" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/option_audio_track"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="16dp"
+            android:contentDescription="@string/audio_track"
+            android:src="@drawable/ic_track"
+            app:tint="?attr/colorControlNormal" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/audio_track"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/colorControlNormal" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/option_stream_details"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="16dp"
+            android:contentDescription="@string/video_details"
+            android:src="@drawable/ic_info"
+            app:tint="?attr/colorControlNormal" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/video_details"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/colorControlNormal" />
+    </LinearLayout>
+
+</LinearLayout>

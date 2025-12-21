@@ -18,7 +18,7 @@
     <string name="failed_to_load_video_details">"Не удалось загрузить сведения о видео "</string>
     <string name="delete">Удалить</string>
     <string name="file_deleted">Файл удален</string>
-    <string name="audio_only">Только аудио</string>
+    <string name="audio_only">Аудио</string>
     <string name="audio_move_error">Не удалось переместить аудиофайл в общий каталог</string>
     <string name="video_move_error">Не удалось переместить видеофайл в общий каталог</string>
     <string name="downloader_initialize_error">Не удалось инициализировать загрузчик</string>

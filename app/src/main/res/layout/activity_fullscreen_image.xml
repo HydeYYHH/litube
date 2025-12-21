@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/fullscreen_container"
-    android:layout_height="match_parent"
     android:layout_width="match_parent"
-    android:fitsSystemWindows="false" >
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="false">
 
-    <com.github.chrisbanes.photoview.PhotoView
-        android:id="@+id/photoView"
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="@string/thumbnail" />
+        android:layout_height="match_parent" />
 
     <ImageButton
         android:id="@+id/btnClose"
@@ -19,7 +18,8 @@
         android:layout_gravity="top|end"
         android:layout_margin="16dp"
         android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/close"
         android:src="@drawable/ic_cancel"
-        android:contentDescription="@string/close" />
+        app:tint="?attr/colorOnSurface" />
 
 </FrameLayout>

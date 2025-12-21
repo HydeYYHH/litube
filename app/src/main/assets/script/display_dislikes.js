@@ -24,7 +24,7 @@
 // ==/UserScript==
 
 (function() {
-  if (!JSON.parse(localStorage.getItem("preferences")).enable_display_dislikes) return;
+  if (!JSON.parse(android.getPreferences()).enable_display_dislikes) return;
   if (window.returnDislikeInjected) {
     return
   }
