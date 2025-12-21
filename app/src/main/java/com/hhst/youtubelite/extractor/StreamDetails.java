@@ -12,6 +12,6 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 @AllArgsConstructor
 public class StreamDetails {
   private List<VideoStream> videoStreams;
-  private AudioStream audioStream;
+  private List<AudioStream> audioStreams;
   private String dashUrl;
 }

@@ -1,6 +1,10 @@
 package com.hhst.youtubelite.extractor;
 
 import java.util.Date;
+import java.util.List;
+
+import org.schabi.newpipe.extractor.stream.StreamSegment;
+import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -22,4 +26,6 @@ public class VideoDetails {
   private String uploaderUrl;
   private String uploaderAvatar;
   private long viewCount;
+  private List<SubtitlesStream> subtitles;
+  private List<StreamSegment> segments;
 }

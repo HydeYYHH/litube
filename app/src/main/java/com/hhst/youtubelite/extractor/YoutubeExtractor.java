@@ -13,25 +13,24 @@ import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
+import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
-import org.schabi.newpipe.extractor.stream.VideoStream;
-import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class YoutubeExtractor {
 	static final MMKV cache = MMKV.defaultMMKV();
 	static final Gson gson = new Gson();
-	private static final Map<String, StreamInfo> tempInfo = new ConcurrentHashMap<>();
+	private static StreamInfo info = null;
 
 	public YoutubeExtractor() {
 		NewPipe.init(DownloaderImpl.getInstance());
@@ -51,8 +50,8 @@ public class YoutubeExtractor {
 		var extractor = new YoutubeExtractor();
 		checkInterrupt();
 		var info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=" + videoID);
-		// cache for getStreamInfo
-		tempInfo.put(videoID, info);
+		// cache for StreamInfo
+		YoutubeExtractor.info = info;
 
 		var details = new VideoDetails();
 		details.setId(info.getId());
@@ -67,6 +66,8 @@ public class YoutubeExtractor {
 		details.setUploaderUrl(info.getUploaderUrl());
 		details.setUploaderAvatar(extractor.getBestAvatar(info));
 		details.setViewCount(info.getViewCount());
+		details.setSubtitles(info.getSubtitles());
+		details.setSegments(info.getStreamSegments());
 		// 1 hours expires cache
 		cache.encode(videoID, gson.toJson(details, VideoDetails.class), 3600);
 		return details;
@@ -78,18 +79,23 @@ public class YoutubeExtractor {
 	 */
 	@NonNull
 	public static StreamDetails getStreamInfo(String videoUrl) throws ExtractionException, IOException, InterruptedException {
+		StreamInfo info = YoutubeExtractor.info;
+		YoutubeExtractor.info = null;
+
 		String videoID = getVideoId(videoUrl);
 		if (videoID == null) throw new ExtractionException("Invalid YouTube URL: " + videoUrl);
 
 		var extractor = new YoutubeExtractor();
-		StreamInfo info = tempInfo.remove(videoID);
 		if (info == null) {
 			checkInterrupt();
 			info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=" + videoID);
 		}
 		var details = new StreamDetails();
-		details.setVideoStreams(extractor.getVideoOnlyStreams(info));
-		details.setAudioStream(extractor.getBestAudioStream(info));
+		details.setVideoStreams(info.getVideoOnlyStreams());
+
+		// Filter audio streams: M4A only, max bitrate, allow multiples
+		details.setAudioStreams(extractor.filterAudioStreams(info.getAudioStreams()));
+
 		details.setDashUrl(info.getDashMpdUrl());
 		return details;
 	}
@@ -109,6 +115,29 @@ public class YoutubeExtractor {
 		return null;
 	}
 
+	private List<AudioStream> filterAudioStreams(List<AudioStream> streams) {
+		if (streams == null) return new ArrayList<>();
+
+		// 1. Filter M4A streams
+		List<AudioStream> m4aStreams = new ArrayList<>();
+		for (AudioStream stream : streams)
+			if (stream.getFormat() == MediaFormat.M4A) m4aStreams.add(stream);
+
+		if (m4aStreams.isEmpty()) return new ArrayList<>();
+
+		// 2. Find max bitrate
+		int maxBitrate = -1;
+		for (AudioStream stream : m4aStreams)
+			if (stream.getAverageBitrate() > maxBitrate) maxBitrate = stream.getAverageBitrate();
+
+		// 3. Select all streams with max bitrate
+		List<AudioStream> bestStreams = new ArrayList<>();
+		for (AudioStream stream : m4aStreams)
+			if (stream.getAverageBitrate() == maxBitrate) bestStreams.add(stream);
+
+		Collections.reverse(bestStreams);
+		return bestStreams;
+	}
 
 	@Nullable
 	public String getBestThumbnail(StreamInfo info) {
@@ -116,27 +145,11 @@ public class YoutubeExtractor {
 		Image bestThumbnail = null;
 		Map<Image.ResolutionLevel, Integer> resolutionPriority = Map.of(Image.ResolutionLevel.HIGH, 3, Image.ResolutionLevel.MEDIUM, 2, Image.ResolutionLevel.LOW, 1, Image.ResolutionLevel.UNKNOWN, 0);
 		for (var thumbnail : thumbnails) {
-
 			if (bestThumbnail == null || Objects.requireNonNullElse(resolutionPriority.get(thumbnail.getEstimatedResolutionLevel()), 0) > Objects.requireNonNullElse(resolutionPriority.get(bestThumbnail.getEstimatedResolutionLevel()), 0)) {
 				bestThumbnail = thumbnail;
 			}
 		}
 		return bestThumbnail != null ? bestThumbnail.getUrl() : null;
-	}
-
-	@Nullable
-	public AudioStream getBestAudioStream(StreamInfo info) {
-		AudioStream bestAudioStream = null;
-		for (var audioStream : info.getAudioStreams()) {
-			if (audioStream.getFormat() == MediaFormat.M4A && (bestAudioStream == null || audioStream.getAverageBitrate() > bestAudioStream.getAverageBitrate())) {
-				bestAudioStream = audioStream;
-			}
-		}
-		return bestAudioStream;
-	}
-
-	public List<VideoStream> getVideoOnlyStreams(StreamInfo info) {
-		return info.getVideoOnlyStreams().stream().filter(s -> s.getFormat() == MediaFormat.MPEG_4).collect(Collectors.toList());
 	}
 
 	@Nullable
