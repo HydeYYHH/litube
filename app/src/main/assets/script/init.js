@@ -11,13 +11,13 @@ try {
         const getLocalizedText = (key) => {
             // Automatically translated by AI
             const languages = {
-                'zh': { 'loop': '循环播放', 'download': '下载', 'ok': '确定', 'video': '视频', 'cover': '封面', 'extension': '插件', 'share': '分享' },
-                'en': { 'loop': 'Loop Play', 'download': 'Download', 'ok': 'OK', 'video': 'Video', 'cover': 'Cover', 'extension': 'Extension', 'share': 'Share' },
-                'ja': { 'loop': 'ループ再生', 'download': 'ダウンロード', 'ok': 'はい', 'video': 'ビデオ', 'cover': 'カバー', 'extension': 'プラグイン', 'share': '共有' },
-                'ko': { 'loop': '반복 재생', 'download': '시모타코', 'ok': '확인', 'video': '비디오', 'cover': '커버', 'extension': '플러그인', 'share': '공유' },
-                'fr': { 'loop': 'Lecture en boucle', 'download': 'Télécharger', 'ok': "D'accord", 'video': 'vidéo', 'cover': 'couverture', 'extension': 'extension', 'share': 'partager', 'downloading': 'Téléchargement en cours' },
-                'ru': { 'loop': 'Повторение', 'download': 'Скачать', 'ok': 'ОК', 'video': 'видео', 'cover': 'обложка', 'extension': 'расширение', 'share': 'поделиться', 'downloading': 'Загрузка' },
-                'tr': { 'loop': 'Döngü', 'download': 'İndir', 'ok': 'Tamam', 'video': 'Vide', 'cover': 'Kapak', 'extension': 'Uzantı', 'share': 'Paylaş', 'downloading': 'Yükleniyor' },
+                'zh': { 'download': '下载', 'extension': '插件', 'chat': '聊天', 'about': '关于' },
+                'en': { 'download': 'Download', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
+                'ja': { 'download': 'ダウンロード', 'extension': 'プラグイン', 'chat': 'チャット', 'about': 'バージョン情報' },
+                'ko': { 'download': '다운로드', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
+                'fr': { 'download': 'Télécharger', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
+                'ru': { 'download': 'Скачать', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
+                'tr': { 'download': 'İndir', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
             const lang = (document.body.lang || 'en').substring(0, 2).toLowerCase();
             return languages[lang] ? languages[lang][key] : languages['en'][key];
@@ -25,16 +25,22 @@ try {
 
         // Determine the type of YouTube page based on the URL
         const getPageClass = (url) => {
-            url = url.toLowerCase();
-            if (url.startsWith('https://m.youtube.com/shorts')) return 'shorts';
-            if (url.startsWith('https://m.youtube.com/watch')) return 'watch';
-            if (url.startsWith('https://m.youtube.com/feed/subscriptions')) return 'subscriptions';
-            if (url.startsWith('https://m.youtube.com/feed/library')) return 'library';
-            if (url.startsWith('https://m.youtube.com/channel')) return 'channel';
-            if (url.startsWith('https://m.youtube.com/@')) return '@';
-            if (url.startsWith('https://m.youtube.com/select_site')) return 'select_site';
-            if (url.startsWith('https://m.youtube.com')) return 'home';
-            return 'unknown';
+            const u = new URL(url.toLowerCase());
+            if (u.hostname !== 'm.youtube.com') return 'unknown';
+            const path = u.pathname;
+            if (path === '/' ) return 'home';
+            if (path === '/shorts') return 'shorts';
+            if (path === '/watch') return 'watch';
+            if (path === '/channel') return 'channel';
+            if (path === '/gaming') return 'gaming';
+            if (path === '/feed/subscriptions') return 'subscriptions';
+            if (path === '/feed/library') return 'library';
+            if (path === '/feed/history') return 'history';
+            if (path === '/feed/channels') return 'channels';
+            if (path === '/feed/playlists') return 'playlists';
+            if (path === '/select_site') return 'select_site';
+            if (path.startsWith('/@')) return '@';
+            return path.slice(1) || 'home';
         };
 
         // Observe page type changes and dispatch event
@@ -99,7 +105,6 @@ try {
         const handlePlayerVisibility = () => {
             const pageClass = getPageClass(location.href);
             if (pageClass === 'watch') {
-                console.log('should play video');
                 android.play(location.href);
             } else {
                 android.hidePlayer();
@@ -175,6 +180,132 @@ try {
                     android.canSkipToNext(!btn[1].getAttribute('aria-disabled') !== 'true');
                 }
             }
+            // Add chat button on live page
+            const isLive = document.querySelector('#movie_player')?.getPlayerResponse()?.playabilityStatus?.liveStreamability &&
+                location.href.toLowerCase().startsWith('https://m.youtube.com/watch');
+            
+            if (isLive) {
+                 if (!document.getElementById('chatButton')) {
+                     const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
+                    if (saveButton) {
+                        const chatButton = saveButton.cloneNode(true);
+                        chatButton.id = 'chatButton';
+                        const textContent = chatButton.querySelector('.yt-spec-button-shape-next__button-text-content');
+                        if (textContent) {
+                            textContent.innerText = getLocalizedText('chat');
+                        }
+                        const svg = chatButton.querySelector('svg');
+                        if (svg) {
+                            svg.setAttribute("viewBox", "0 -960 960 960");
+                            const path = svg.querySelector('path');
+                            if (path) {
+                                path.setAttribute("d", "M240-384h336v-72H240v72Zm0-132h480v-72H240v72Zm0-132h480v-72H240v72ZM96-96v-696q0-29.7 21.15-50.85Q138.3-864 168-864h624q29.7 0 50.85 21.15Q864-821.7 864-792v480q0 29.7-21.15 50.85Q821.7-240 792-240H240L96-96Zm114-216h582v-480H168v522l42-42Zm-42 0v-480 480Z");
+                            }
+                        } else return;
+                        chatButton.addEventListener('click', () => {
+                              let chatContainer = document.getElementById('live_chat_container');
+                              if (chatContainer) {
+                                  if (chatContainer.style.display === 'none') {
+                                      chatContainer.style.display = 'flex';
+                                      document.body.style.overflow = 'hidden';
+                                  } else {
+                                      chatContainer.style.display = 'none';
+                                      document.body.style.overflow = '';
+                                  }
+                              } else {
+                                  const panelContainer = document.querySelector('#panel-container') || document.querySelector('.watch-below-the-player');
+                                  if (panelContainer) {
+                                      chatContainer = document.createElement('div');
+                                      chatContainer.id = 'live_chat_container';
+                                      chatContainer.style.cssText = `
+                                          position: fixed;
+                                          top: calc(56.25vw + 48px);
+                                          bottom: 0;
+                                          left: 0;
+                                          right: 0;
+                                          z-index: 4;
+                                          display: flex;
+                                          flex-direction: column;
+                                          box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                                          border-top-left-radius: 12px;
+                                          border-top-right-radius: 12px;
+                                          overflow: hidden;
+                                      `;
+ 
+                                      const header = document.createElement('div');
+                                      header.style.cssText = `
+                                          display: flex;
+                                          justify-content: space-between;
+                                          align-items: center;
+                                          padding: 12px 16px;
+                                          border-bottom: 1px solid var(--yt-spec-10-percent-layer);
+                                          background-color: inherit;
+                                          border-top-left-radius: 12px;
+                                          border-top-right-radius: 12px;
+                                      `;
+                                      
+                                      const title = document.createElement('h2');
+                                      title.className = 'engagement-panel-section-list-header-title';
+                                      title.innerText = getLocalizedText('chat');
+                                      title.style.cssText = `
+                                          font-family: "YouTube Sans", "Roboto", sans-serif;
+                                          font-size: 1.8rem;
+                                          font-weight: 600;
+                                          color: var(--yt-spec-text-primary);
+                                          margin: 0;
+                                      `;
+                                      
+                                      const closeBtn = document.createElement('div');
+                                      const closeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                                      closeSvg.setAttribute('viewBox', '0 0 24 24');
+                                      closeSvg.setAttribute('width', '24');
+                                      closeSvg.setAttribute('height', '24');
+                                      closeSvg.setAttribute('fill', 'currentColor');
+                                      closeSvg.style.display = 'block';
+                                      const closePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                                      closePath.setAttribute('d', 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z');
+                                      closeSvg.appendChild(closePath);
+                                      closeBtn.appendChild(closeSvg);
+                                      closeBtn.style.cssText = 'cursor: pointer; color: var(--yt-spec-text-primary); padding: 4px;';
+                                      closeBtn.onclick = (e) => {
+                                          e.stopPropagation();
+                                          chatContainer.style.display = 'none';
+                                          document.body.style.overflow = '';
+                                      };
+                                      
+                                      header.appendChild(title);
+                                      header.appendChild(closeBtn);
+                                      chatContainer.appendChild(header);
+                                      
+                                      const videoId = getVideoId(location.href);
+                                      if (videoId) {
+                                          const iframe = document.createElement('iframe');
+                                          iframe.id = 'chatIframe';
+                                          const isDarkMode = document.documentElement.getAttribute('dark') === 'true' || 
+                                                             window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                          chatContainer.style.backgroundColor = isDarkMode ? '#0f0f0f' : '#ffffff';
+                                          iframe.src = `https://www.youtube.com/live_chat?v=${videoId}&embed_domain=${location.hostname}${isDarkMode ? '&dark_theme=1' : ''}`;
+                                          iframe.style.cssText = 'width: 100%; height: 100%; border: none; flex: 1; background-color: transparent;';
+                                          
+                                          chatContainer.addEventListener('touchmove', (e) => {
+                                              e.stopPropagation();
+                                          }, { passive: false });
+                                          
+                                          chatContainer.appendChild(iframe);
+                                          panelContainer.insertBefore(chatContainer, panelContainer.firstChild);
+                                      }
+                                  }
+                              }
+                          });
+                        saveButton.parentElement.insertBefore(chatButton, saveButton);
+                    }
+                }
+            } else {
+                const chatContainer = document.getElementById('live_chat_container');
+                if (chatContainer) chatContainer.remove();
+                const chatButton = document.getElementById('chatButton');
+                if (chatButton) chatButton.remove();
+            }
             // Add download button on watching page
             if (getPageClass(location.href) === 'watch' && !document.getElementById('downloadButton')) {
                 const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
@@ -198,6 +329,36 @@ try {
                         android.download(location.href)
                     });
                     saveButton.parentElement.insertBefore(downloadButton, saveButton);
+                }
+            }
+
+            // Add about button on settings page
+            if (getPageClass(location.href) === 'select_site' && !document.getElementById('aboutButton')) {
+                const settings = document.querySelector('ytm-settings');
+                if (settings) {
+                    const button = settings.firstElementChild;
+                    if (button && button.querySelector('svg')) {
+                        const aboutButton = button.cloneNode(true);
+                        aboutButton.id = 'aboutButton';
+                        const textElement = aboutButton.querySelector('.yt-core-attributed-string');
+                        if (textElement) {
+                            textElement.innerText = getLocalizedText('about');
+                        }
+                        const svg = aboutButton.querySelector('svg');
+                        if (svg) {
+                            svg.setAttribute("viewBox", "0 -960 960 960");
+                            const path = svg.querySelector('path');
+                            if (path) {
+                                path.setAttribute("d", "M444-288h72v-240h-72v240Zm35.79-312q15.21 0 25.71-10.29t10.5-25.5q0-15.21-10.29-25.71t-25.5-10.5q-15.21 0-25.71 10.29t-10.5 25.5q0 15.21 10.29 25.71t25.5 10.5Zm.49 504Q401-96 331-126t-122.5-82.5Q156-261 126-330.96t-30-149.5Q96-560 126-629.5q30-69.5 82.5-122T330.96-834q69.96-30 149.5-30t149.04 30q69.5 30 122 82.5T834-629.28q30 69.73 30 149Q864-401 834-331t-82.5 122.5Q699-156 629.28-126q-69.73 30-149 30Zm-.28-72q130 0 221-91t91-221q0-130-91-221t-221-91q-130 0-221 91t-91 221q0 130 91 221t221 91Zm0-312Z");
+                            }
+                        }
+                        aboutButton.addEventListener('click', () => {
+                            android.about();
+                        });
+                        const children = settings.children;
+                        const index = Math.max(0, children.length - 1);
+                        settings.insertBefore(aboutButton, children[index]);
+                    }
                 }
             }
 
@@ -229,7 +390,7 @@ try {
                 }
             }
 
-        }, 500);
+        }, 200);
 
         // Extract poToken
         const originalFetch = window.fetch;
@@ -263,25 +424,55 @@ try {
             el.addEventListener('pointerdown', e => {
                 startX = e.clientX;
                 startY = e.clientY;
-            });
+            }, { passive: false });
 
             el.addEventListener('pointerup', e => {
                 const dx = Math.abs(e.clientX - startX);
                 const dy = Math.abs(e.clientY - startY);
 
                 if (dx < 10 && dy < 10) {
-                handler(e);
+                    handler(e);
                 }
-            });
-        }
-        // Poster
+            }, { passive: false });
+        };
+
+
         addTapEvent(document, e => {
+            // Poster
             const renderer = e.target.closest('ytm-post-multi-image-renderer');
-            if (renderer) {
-                const urls = [...renderer.querySelectorAll('ytm-backstage-image-renderer')].map(el => el?.data?.image?.thumbnails?.at(-1)?.url)
-                android.onPosterLongPress(JSON.stringify(urls));
-            }
+            if (renderer) android.onPosterLongPress(JSON.stringify([...renderer.querySelectorAll('ytm-backstage-image-renderer')].map(el => el?.data?.image?.thumbnails?.at(-1)?.url)));
         });
+        
+        document.addEventListener(
+            'click',
+            e => {
+                const a = e.target.closest('a');
+                const logo = e.target.closest('ytm-home-logo');
+                const nav = e.target.closest('ytm-pivot-bar-item-renderer');
+
+                let href;
+                if (nav?.data?.navigationEndpoint) {
+                    href =
+                        nav.data.navigationEndpoint.commandMetadata
+                            ?.webCommandMetadata?.url;
+                } else if (a?.href) {
+                    href = a.getAttribute('href');
+                } else if (logo) {
+                    href = '/';
+                }
+                if (!href) return;
+                const url = href.startsWith('http')
+                    ? href
+                    : 'https://m.youtube.com' + href;
+                const c = getPageClass(url);
+                if (c !== getPageClass(location.href)) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    android.openTab(url, c);
+                }
+            },
+            true
+        );
 
         // Mark script as totally injected
         window.injected = true;

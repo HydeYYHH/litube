@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
@@ -18,30 +19,32 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class ErrorDialog {
+public final class ErrorDialog {
+
+	private static final String TAG = "ErrorDialog";
+	private static final String DEBUG_INFO_LABEL = "Debug Info";
+
+	private ErrorDialog() {
+	}
 
 	public static void show(Context context, String title, String stack) {
 		show(context, title, stack, null);
 	}
 
 	public static void show(Context context, String title, String stack, DialogInterface.OnDismissListener onDismissListener) {
-		if (title == null) title = context.getString(R.string.error_title);
+		String displayTitle = (title == null) ? context.getString(R.string.error_title) : title;
 
 		// Avoid showing dialog in PIP mode
-		if (((Activity) context).isInPictureInPictureMode()) return;
+		if (context instanceof Activity && ((Activity) context).isInPictureInPictureMode()) return;
 
 		View view = LayoutInflater.from(context).inflate(R.layout.dialog_error, null);
 		TextView titleView = view.findViewById(R.id.error_title);
 		TextView stackView = view.findViewById(R.id.error_stack);
 
-		titleView.setText(title);
+		titleView.setText(displayTitle);
 		stackView.setText(stack);
 
-		String finalTitle = title;
-		new MaterialAlertDialogBuilder(context).setView(view).setCancelable(true).setOnDismissListener(onDismissListener).setPositiveButton(R.string.copy, (dialog, which) -> {
-			copyDebugInfo(context, finalTitle, stack);
-			if (onDismissListener != null) onDismissListener.onDismiss(dialog);
-		}).setNegativeButton(R.string.close, (dialog, which) -> dialog.dismiss()).show();
+		new MaterialAlertDialogBuilder(context).setView(view).setCancelable(true).setOnDismissListener(onDismissListener).setPositiveButton(R.string.copy, (dialog, which) -> copyDebugInfo(context, displayTitle, stack)).setNegativeButton(R.string.close, (dialog, which) -> dialog.dismiss()).show();
 	}
 
 	private static void copyDebugInfo(Context context, String title, String stack) {
@@ -54,11 +57,13 @@ public class ErrorDialog {
 			String sb = "App Version: " + version + "\n" + "Date: " + date + "\n" + "Error Message: " + title + "\n" + "Stack Trace:\n" + stack;
 
 			ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-			ClipData clip = ClipData.newPlainText("Debug Info", sb);
-			clipboard.setPrimaryClip(clip);
-
-			Toast.makeText(context, R.string.debug_info_copied, Toast.LENGTH_SHORT).show();
-		} catch (Exception ignored) {
+			if (clipboard != null) {
+				ClipData clip = ClipData.newPlainText(DEBUG_INFO_LABEL, sb);
+				clipboard.setPrimaryClip(clip);
+				Toast.makeText(context, R.string.debug_info_copied, Toast.LENGTH_SHORT).show();
+			}
+		} catch (Exception e) {
+			Log.e(TAG, "Failed to copy debug info", e);
 		}
 	}
 }

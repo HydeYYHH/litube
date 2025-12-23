@@ -29,7 +29,6 @@ public class ExtensionManager {
 
 	public Boolean isEnabled(String key) {
 		String mmkvKey = "preferences:" + key;
-		// If the key doesn't exist, return the default value
 		if (!mmkv.contains(mmkvKey)) return Constant.defaultPreferences.getOrDefault(key, false);
 		return mmkv.decodeBool(mmkvKey, Boolean.TRUE.equals(Constant.defaultPreferences.getOrDefault(key, false)));
 	}

@@ -40,7 +40,7 @@
         </receiver>
 
         <service
-            android:name=".downloader.DownloadService"
+            android:name=".downloader.service.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
@@ -56,7 +56,6 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
-            android:documentLaunchMode="always"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:exported="true">
@@ -95,6 +94,13 @@
         <activity
             android:name=".image.FullScreenImageActivity"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+
+        <activity
+            android:name=".AboutActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:label="@string/about"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
 
     </application>
 

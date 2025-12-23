@@ -143,7 +143,7 @@
                         app:scrubber_color="#FF0000"
                         app:scrubber_dragged_size="12dp"
                         app:scrubber_enabled_size="10dp"
-                        app:touch_target_height="14dp"
+                        app:touch_target_height="20dp"
                         app:unplayed_color="#99FFFFFF" />
 
                     <com.hhst.youtubelite.player.sponsor.SponsorOverlayView

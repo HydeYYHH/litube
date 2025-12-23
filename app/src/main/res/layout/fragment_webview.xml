@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/swipeRefreshLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.hhst.youtubelite.webview.YoutubeWebview
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="@android:style/Widget.DeviceDefault.Light.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:indeterminateOnly="false"
+            android:progressDrawable="@drawable/progress_bar"
+            android:visibility="gone"
+            android:max="100" />
+
+    </com.hhst.youtubelite.webview.YoutubeWebview>
+
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

@@ -1,10 +1,21 @@
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# IDE files
+.idea/
+.vscode/
+.trae/
 *.iml
-.gradle
-/local.properties
-/.idea/
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Local configuration
 local.properties
+
+# Signing files
+*.jks
+*.keystore
+
+# System files
+.DS_Store
+Thumbs.db

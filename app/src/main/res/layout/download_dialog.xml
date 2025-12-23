@@ -71,6 +71,15 @@
                         android:text="@string/audio_only" />
 
                     <Button
+                        android:id="@+id/button_subtitle"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="10dp"
+                        android:gravity="center"
+                        android:text="@string/subtitles" />
+
+                    <Button
                         android:id="@+id/button_thumbnail"
                         style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
@@ -83,6 +92,44 @@
                 </LinearLayout>
 
             </HorizontalScrollView>
+            
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/threads_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/threads"
+                    android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <SeekBar
+                        android:id="@+id/threads_seekbar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:max="15"
+                        android:progress="2" />
+
+                    <TextView
+                        android:id="@+id/threads_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:minWidth="20dp"
+                        android:text="3"
+                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+                </LinearLayout>
+            </LinearLayout>
 
 
             <androidx.constraintlayout.widget.ConstraintLayout

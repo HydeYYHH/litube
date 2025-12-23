@@ -10,9 +10,11 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
-import androidx.media3.common.Player;
 import androidx.media3.common.Format;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.DecoderCounters;
 import androidx.media3.ui.DefaultTimeBar;
@@ -21,13 +23,15 @@ import androidx.media3.ui.PlayerView;
 import com.hhst.youtubelite.ErrorDialog;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
+import com.hhst.youtubelite.extractor.ExtractionException;
+import com.hhst.youtubelite.player.exception.PlaybackException;
 import com.hhst.youtubelite.player.interfaces.IPlayerInternal;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
-import com.hhst.youtubelite.webview.YoutubeWebview;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
@@ -37,6 +41,8 @@ import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -50,34 +56,57 @@ import lombok.Getter;
  */
 @UnstableApi
 @OptIn(markerClass = UnstableApi.class)
-public class YoutubePlayer implements IPlayerInternal {
+public final class YoutubePlayer implements IPlayerInternal {
+	private static final String TAG = "YoutubePlayer";
+	private static final int PROGRESS_SAVE_INTERVAL_MS = 1_000;
+	private static final long MS_PER_SECOND = 1_000L;
+	private static final String JS_NEXT_VIDEO = "document.querySelector('#movie_player')?.nextVideo();";
+	private static final String JS_PREV_VIDEO = "document.querySelector('#movie_player')?.previousVideo();";
+
+	@NonNull
 	private final Activity activity;
+	@NonNull
 	private final PlayerEngine engine;
+	@NonNull
 	@Getter
 	private final PlayerPreferences prefs;
+	@NonNull
 	@Getter
 	private final SponsorBlockManager sponsor;
+	@NonNull
 	@Getter
-	private final YoutubeWebview webview;
+	private final TabManager tabManager;
+	@NonNull
 	private final PlayerView playerView;
+	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
+	@NonNull
 	private final ExecutorService executor = Executors.newSingleThreadExecutor();
+	@Nullable
 	private PlaybackService playbackService;
+	@Nullable
 	@Getter
 	private volatile StreamDetails streamDetails;
+	@Nullable
 	private volatile VideoDetails videoDetails;
+	@Nullable
 	private volatile String vid;
 	@Getter
 	private volatile long duration;
+	@Nullable
 	@Getter
 	private AudioStream audioStream;
+	@Nullable
+	private VideoStream videoStream;
+	@Nullable
 	private Future<?> task;
+	@NonNull
 	private List<VideoStream> availableVideoStreams = new ArrayList<>();
 
-	public YoutubePlayer(Activity activity, YoutubeWebview webview, PlayerEngine engine) {
+	public YoutubePlayer(@NonNull final Activity activity, @NonNull final TabManager tabManager, @NonNull final PlayerEngine engine) {
 		this.activity = activity;
 		this.playerView = PlayerContext.getInstance().getPlayerView();
-		this.webview = webview;
+		this.tabManager = tabManager;
 		this.engine = engine;
 		this.prefs = PlayerContext.getInstance().getPreferences();
 		this.sponsor = new SponsorBlockManager();
@@ -91,54 +120,56 @@ public class YoutubePlayer implements IPlayerInternal {
 	private void saveProgress() {
 		if (vid != null && engine.isPlaying()) {
 			long position = engine.position();
-			long endTime = sponsor.shouldSkip(position);
+			final long endTime = sponsor.shouldSkip(position);
 			if (endTime > 0 && endTime != position) {
 				engine.seekTo(endTime);
 				position = endTime;
 			}
 			prefs.persistProgress(vid, position);
-			if (playbackService != null)
-				playbackService.updateProgress(position, prefs.getSpeed(), true);
+			if (playbackService != null) playbackService.updateProgress(position, prefs.getSpeed(), true);
 		}
-		handler.postDelayed(this::saveProgress, 1000);
+		handler.postDelayed(this::saveProgress, PROGRESS_SAVE_INTERVAL_MS);
 	}
-
 
 	/**
 	 * Sets up listeners for the media engine events.
 	 * Configures playback state, navigation, and error handling.
 	 */
 	private void setupEngine() {
-		Runnable playNext = () -> webview.evaluateJavascript("document.querySelector('#movie_player')?.nextVideo();", null);
+		engine.addListener(createPlayerListener());
+		engine.setNavCallback(createNavigationCallback());
+		engine.setErrorListener(this::handleError);
+	}
 
-		engine.addListener(new Player.Listener() {
+	private Player.Listener createPlayerListener() {
+		return new Player.Listener() {
 			@Override
-			public void onPlaybackStateChanged(int state) {
-				if (state == Player.STATE_ENDED) playNext.run();
+			public void onPlaybackStateChanged(final int state) {
+				if (state == Player.STATE_ENDED) tabManager.evaluateJavascript(JS_NEXT_VIDEO, null);
 			}
 
 			@Override
-			public void onIsPlayingChanged(boolean isPlaying) {
+			public void onIsPlayingChanged(final boolean isPlaying) {
 				if (playbackService != null)
 					playbackService.updateProgress(engine.position(), prefs.getSpeed(), isPlaying);
 				if (isPlaying) handler.post(YoutubePlayer.this::saveProgress);
 				else handler.removeCallbacks(YoutubePlayer.this::saveProgress);
 			}
-		});
+		};
+	}
 
-		engine.setNavCallback(new PlayerEngine.NavigationCallback() {
+	private PlayerEngine.NavigationCallback createNavigationCallback() {
+		return new PlayerEngine.NavigationCallback() {
 			@Override
 			public void onNext() {
-				playNext.run();
+				tabManager.evaluateJavascript(JS_NEXT_VIDEO, null);
 			}
 
 			@Override
 			public void onPrev() {
-				webview.evaluateJavascript("document.querySelector('#movie_player')?.previousVideo();", null);
+				tabManager.evaluateJavascript(JS_PREV_VIDEO, null);
 			}
-		});
-
-		engine.setErrorListener(this::handleError);
+		};
 	}
 
 	/**
@@ -147,7 +178,7 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param e The exception that occurred
 	 */
 	@Override
-	public void handleError(Exception e) {
+	public void handleError(@NonNull final Exception e) {
 		if (e instanceof InterruptedException || e instanceof InterruptedIOException) return;
 		Log.e("YoutubePlayer", "Play error", e);
 		activity.runOnUiThread(() -> launchErrorActivity(e));
@@ -159,7 +190,7 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param listener The listener to add
 	 */
 	@Override
-	public void addListener(Player.Listener listener) {
+	public void addListener(@NonNull final Player.Listener listener) {
 		engine.addListener(listener);
 	}
 
@@ -169,12 +200,18 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param url The YouTube video URL
 	 */
 	@Override
-	public void play(String url) {
-		var _vid = YoutubeExtractor.getVideoId(url);
-		Log.d("YoutubePlayer", String.format(Locale.getDefault(), "play(%s), parsed vid: %s", url, _vid));
-		if (vid != null && vid.equals(_vid)) return;
+	public void play(@Nullable final String url) {
+		if (url == null || url.isEmpty()) return;
+		final String _vid = YoutubeExtractor.getVideoId(url);
+		Log.d(TAG, String.format(Locale.getDefault(), "play(%s), parsed vid: %s", url, _vid));
+		if (vid != null && Objects.equals(vid, _vid)) return;
 		vid = _vid;
 
+		resetPlayerUI();
+		task = executor.submit(() -> loadVideoData(url, _vid));
+	}
+
+	private void resetPlayerUI() {
 		activity.runOnUiThread(() -> {
 			if (task != null) task.cancel(true);
 			engine.stop();
@@ -182,47 +219,49 @@ public class YoutubePlayer implements IPlayerInternal {
 			playerView.setVisibility(View.VISIBLE);
 			setTitle("");
 		});
-
-		task = executor.submit(() -> {
-			try {
-				checkInterrupt();
-
-				sponsor.load(vid);
-				videoDetails = YoutubeExtractor.getVideoInfo(url);
-				StreamDetails si = YoutubeExtractor.getStreamInfo(url);
-
-				availableVideoStreams = PlayerUtils.filterBestStreams(si.getVideoStreams());
-				si.setVideoStreams(availableVideoStreams);
-
-				streamDetails = si;
-				duration = videoDetails.getDuration() * 1000;
-
-				VideoStream videoStream = PlayerUtils.selectVideoStream(availableVideoStreams, prefs.getQuality());
-				this.audioStream = PlayerUtils.selectAudioStream(si.getAudioStreams(), prefs.getPreferredAudioTrack());
-
-				long resume = prefs.getResumePosition(vid, duration);
-				float speed = prefs.getSpeed();
-
-				checkInterrupt();
-
-				activity.runOnUiThread(() -> {
-					try {
-						setTitle(videoDetails.getTitle());
-						updateSkipMarkers();
-						TextView qualityView = playerView.findViewById(R.id.btn_quality);
-						qualityView.setText(videoStream.getResolution());
-
-						play(videoStream, this.audioStream, si.getDashUrl(), duration, resume, speed);
-					} catch (Exception e) {
-						handleError(e);
-					}
-				});
-			} catch (Exception e) {
-				handleError(e);
-			}
-		});
 	}
 
+	private void loadVideoData(final String url, final String vid) {
+		try {
+			checkInterrupt();
+
+			sponsor.load(vid);
+			final VideoDetails details = YoutubeExtractor.getVideoInfo(url);
+			final StreamDetails si = YoutubeExtractor.getStreamInfo(url);
+
+			final List<VideoStream> filteredStreams = PlayerUtils.filterBestStreams(si.getVideoStreams());
+			si.setVideoStreams(filteredStreams);
+
+			availableVideoStreams = filteredStreams;
+			videoDetails = details;
+			streamDetails = si;
+			duration = details.getDuration() * MS_PER_SECOND;
+
+			final VideoStream videoStream = PlayerUtils.selectVideoStream(availableVideoStreams, prefs.getQuality());
+			this.videoStream = videoStream;
+			this.audioStream = PlayerUtils.selectAudioStream(si.getAudioStreams(), null);
+
+			final long resume = prefs.getResumePosition(vid, duration);
+			final float speed = prefs.getSpeed();
+
+			checkInterrupt();
+
+			activity.runOnUiThread(() -> updatePlayer(details, videoStream, si, resume, speed));
+		} catch (final Exception e) {
+			if (e instanceof InterruptedException || e instanceof InterruptedIOException) return;
+			handleError(new ExtractionException("Failed to load video data", e));
+		}
+	}
+
+	private void updatePlayer(@NonNull final VideoDetails details, @Nullable final VideoStream videoStream, @NonNull final StreamDetails si, final long resume, final float speed) {
+		try {
+			setTitle(details.getTitle());
+			updateSkipMarkers();
+			play(videoStream, this.audioStream, si.getDashUrl(), duration, resume, speed);
+		} catch (final Exception e) {
+			handleError(new PlaybackException("Failed to update player", e));
+		}
+	}
 
 	/**
 	 * Hides the player and stops playback.
@@ -239,20 +278,22 @@ public class YoutubePlayer implements IPlayerInternal {
 	}
 
 	@Override
-	public void setPlayerHeight(int height) {
+	public void setPlayerHeight(final int height) {
 		playerView.post(() -> {
-			float density = activity.getResources().getDisplayMetrics().density;
-			int deviceHeight = (int) (height * density);
+			final float density = activity.getResources().getDisplayMetrics().density;
+			final int deviceHeight = (int) (height * density);
 			if (playerView.getLayoutParams().height == deviceHeight) return;
 			playerView.getLayoutParams().height = deviceHeight;
 			playerView.requestLayout();
 		});
 	}
 
-	private void setTitle(String title) {
-		TextView titleView = playerView.findViewById(R.id.tv_title);
-		titleView.setText(title);
-		titleView.setSelected(true);
+	private void setTitle(@NonNull final String title) {
+		final TextView titleView = playerView.findViewById(R.id.tv_title);
+		if (titleView != null) {
+			titleView.setText(title);
+			titleView.setSelected(true);
+		}
 	}
 
 	/**
@@ -260,34 +301,35 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * Displays sponsor segments on both the time bar and overlay.
 	 */
 	private void updateSkipMarkers() {
-		List<long[]> segs = sponsor.getSegments();
+		final List<long[]> segs = sponsor.getSegments();
 		if (segs == null || segs.isEmpty()) return;
 
-		List<long[]> validSegs = new ArrayList<>();
-		for (long[] seg : segs)
+		final List<long[]> validSegs = new ArrayList<>();
+		for (final long[] seg : segs) {
 			if (seg != null && seg.length >= 2) validSegs.add(seg);
+		}
+
 		if (validSegs.isEmpty()) return;
 
-		SponsorOverlayView layer = playerView.findViewById(R.id.sponsor_overlay);
-		layer.setData(validSegs, duration);
+		final SponsorOverlayView layer = playerView.findViewById(R.id.sponsor_overlay);
+		if (layer != null) layer.setData(validSegs, duration);
 
-		long[] times = new long[validSegs.size() * 2];
+		final long[] times = new long[validSegs.size() * 2];
 		for (int i = 0; i < validSegs.size(); i++) {
 			times[i * 2] = validSegs.get(i)[0];
 			times[i * 2 + 1] = validSegs.get(i)[1];
 		}
 
-		DefaultTimeBar bar = playerView.findViewById(R.id.exo_progress);
-		bar.setAdGroupTimesMs(times, new boolean[times.length], times.length);
+		final DefaultTimeBar bar = playerView.findViewById(R.id.exo_progress);
+		if (bar != null) bar.setAdGroupTimesMs(times, new boolean[times.length], times.length);
 	}
-
 
 	/**
 	 * Shows error dialog with exception details.
 	 *
 	 * @param e The exception that occurred
 	 */
-	private void launchErrorActivity(Exception e) {
+	private void launchErrorActivity(@NonNull final Exception e) {
 		ErrorDialog.show(activity, e.getMessage(), Log.getStackTraceString(e));
 	}
 
@@ -297,7 +339,7 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param service The playback service instance
 	 */
 	@Override
-	public void attachPlaybackService(PlaybackService service) {
+	public void attachPlaybackService(@Nullable final PlaybackService service) {
 		this.playbackService = service;
 	}
 
@@ -320,25 +362,30 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param res Selected resolution string
 	 */
 	@Override
-	public void onQualitySelected(String res) {
-		if (streamDetails == null) return;
+	public void onQualitySelected(@Nullable final String res) {
+		final var sd = streamDetails;
+		if (res == null || sd == null) return;
 		prefs.setQuality(res);
 
 		if (availableVideoStreams.isEmpty()) return;
 
-		if (streamDetails.getDashUrl() != null && !streamDetails.getDashUrl().isEmpty()) {
+		if (sd.getDashUrl() != null && !sd.getDashUrl().isEmpty()) {
 			int actualHeight = PlayerUtils.parseHeight(res);
-			VideoStream match = PlayerUtils.selectVideoStream(availableVideoStreams, res);
-			if (match != null) actualHeight = match.getHeight();
+			final VideoStream match = PlayerUtils.selectVideoStream(availableVideoStreams, res);
+			if (match != null) {
+				actualHeight = match.getHeight();
+				this.videoStream = match;
+			}
 			engine.setVideoQuality(actualHeight);
 		} else {
-			VideoStream selectedStream = PlayerUtils.selectVideoStream(availableVideoStreams, res);
+			final VideoStream selectedStream = PlayerUtils.selectVideoStream(availableVideoStreams, res);
 			if (selectedStream != null) {
-				long pos = engine.position();
-				AudioStream audioStream = streamDetails.getAudioStreams().get(0);
-				engine.play(selectedStream, audioStream, null, streamDetails.getDashUrl(), duration, pos, prefs.getSpeed());
-				TextView qualityView = playerView.findViewById(R.id.btn_quality);
-				qualityView.setText(selectedStream.getResolution());
+				this.videoStream = selectedStream;
+				final long pos = engine.position();
+				final AudioStream currentAudioStream = sd.getAudioStreams().isEmpty() ? null : sd.getAudioStreams().get(0);
+				engine.play(selectedStream, currentAudioStream, null, sd.getDashUrl(), duration, pos, prefs.getSpeed());
+				final TextView qualityView = playerView.findViewById(R.id.btn_quality);
+				if (qualityView != null) qualityView.setText(selectedStream.getResolution());
 			}
 		}
 	}
@@ -349,7 +396,7 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param position Current playback position in milliseconds
 	 */
 	@Override
-	public void updateProgress(long position) {
+	public void updateProgress(final long position) {
 		if (playbackService != null)
 			playbackService.updateProgress(position, prefs.getSpeed(), engine.isPlaying());
 	}
@@ -369,8 +416,10 @@ public class YoutubePlayer implements IPlayerInternal {
 	 *
 	 * @return Current quality string (e.g., "1080p")
 	 */
+	@NonNull
 	@Override
 	public String getQuality() {
+		if (videoStream != null) return videoStream.getResolution();
 		return prefs.getQuality();
 	}
 
@@ -380,7 +429,7 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param speed Selected playback speed multiplier
 	 */
 	@Override
-	public void onSpeedSelected(float speed) {
+	public void onSpeedSelected(final float speed) {
 		prefs.setSpeed(speed);
 		engine.setSpeed(speed);
 	}
@@ -396,11 +445,14 @@ public class YoutubePlayer implements IPlayerInternal {
 	 * @param speed       Playback speed
 	 */
 	@Override
-	public void play(VideoStream videoStream, AudioStream audioStream, String dashUrl, long duration, long resumePos, float speed) {
+	public void play(@Nullable final VideoStream videoStream, @Nullable final AudioStream audioStream, @Nullable final String dashUrl, final long duration, final long resumePos, final float speed) {
 		this.audioStream = audioStream;
 		activity.runOnUiThread(() -> {
 			try {
-				engine.play(videoStream, audioStream, videoDetails != null ? videoDetails.getSubtitles() : null, dashUrl, duration, resumePos, speed);
+				final var vd = videoDetails;
+				final var sd = streamDetails;
+				if (vd == null || sd == null) throw new IllegalArgumentException("VideoDetails or StreamDetails is null");
+				engine.play(videoStream, audioStream, sd.getSubtitles(), dashUrl, duration, resumePos, speed);
 				this.duration = duration;
 				prefs.setSpeed(speed);
 				updateQualityDisplay();
@@ -408,19 +460,21 @@ public class YoutubePlayer implements IPlayerInternal {
 
 				if (videoDetails != null) {
 					// Handle subtitles
-					String savedSubtitle = prefs.getSubtitleLanguage();
-					ImageButton subtitlesBtn = playerView.findViewById(R.id.btn_subtitles);
-					if (savedSubtitle != null && !savedSubtitle.isEmpty() && videoDetails.getSubtitles() != null && !videoDetails.getSubtitles().isEmpty()) {
-						engine.setSubtitleLanguage(savedSubtitle);
-						subtitlesBtn.setImageResource(R.drawable.ic_subtitles_on);
-					} else subtitlesBtn.setImageResource(R.drawable.ic_subtitles_off);
+					final String savedSubtitle = prefs.getSubtitleLanguage();
+					final ImageButton subtitlesBtn = playerView.findViewById(R.id.btn_subtitles);
+					if (subtitlesBtn != null) {
+						if (savedSubtitle != null && !savedSubtitle.isEmpty() && sd.getSubtitles() != null && !sd.getSubtitles().isEmpty()) {
+							engine.setSubtitleLanguage(savedSubtitle);
+							subtitlesBtn.setImageResource(R.drawable.ic_subtitles_on);
+						} else subtitlesBtn.setImageResource(R.drawable.ic_subtitles_off);
+					}
 
 					// Show notification
 					if (playbackService != null)
-						playbackService.showNotification(videoDetails.getTitle(), videoDetails.getAuthor(), videoDetails.getThumbnail(), duration);
+						playbackService.showNotification(vd.getTitle(), vd.getAuthor(), vd.getThumbnail(), duration);
 				}
-			} catch (Exception e) {
-				handleError(e);
+			} catch (final Exception e) {
+				handleError(new PlaybackException("Playback execution failed", e));
 			}
 		});
 	}
@@ -430,11 +484,12 @@ public class YoutubePlayer implements IPlayerInternal {
 	 *
 	 * @return List of resolution strings
 	 */
+	@NonNull
 	@Override
 	public List<String> getAvailableResolutions() {
-		List<String> resolutions = new ArrayList<>();
-		for (VideoStream s : availableVideoStreams)
-			resolutions.add(s.getResolution());
+		final List<String> resolutions = new ArrayList<>();
+		for (final VideoStream stream : availableVideoStreams)
+			resolutions.add(stream.getResolution());
 		return resolutions;
 	}
 
@@ -444,8 +499,8 @@ public class YoutubePlayer implements IPlayerInternal {
 	@Override
 	public void updateQualityDisplay() {
 		activity.runOnUiThread(() -> {
-			TextView qualityView = playerView.findViewById(R.id.btn_quality);
-			qualityView.setText(prefs.getQuality());
+			final TextView qualityView = playerView.findViewById(R.id.btn_quality);
+			if (qualityView != null) qualityView.setText(getQuality());
 		});
 	}
 
@@ -455,8 +510,9 @@ public class YoutubePlayer implements IPlayerInternal {
 	@Override
 	public void updateSpeedDisplay() {
 		activity.runOnUiThread(() -> {
-			TextView speedView = playerView.findViewById(R.id.btn_speed);
-			speedView.setText(String.format(Locale.getDefault(), "%sx", prefs.getSpeed()));
+			final TextView speedView = playerView.findViewById(R.id.btn_speed);
+			if (speedView != null)
+				speedView.setText(String.format(Locale.getDefault(), "%sx", prefs.getSpeed()));
 		});
 	}
 
@@ -465,64 +521,68 @@ public class YoutubePlayer implements IPlayerInternal {
 	 *
 	 * @return List of stream segments
 	 */
+	@NonNull
 	@Override
 	public List<StreamSegment> getStreamSegments() {
-		if (videoDetails != null && videoDetails.getSegments() != null && !videoDetails.getSegments().isEmpty())
-			return videoDetails.getSegments();
-		else {
-			// Create default segment with video title at 0 seconds
-			List<StreamSegment> defaultSegments = new ArrayList<>();
-			if (videoDetails != null) defaultSegments.add(new StreamSegment(videoDetails.getTitle(), 0));
-			return defaultSegments;
-		}
+		final var vd = videoDetails;
+		if (vd != null && vd.getSegments() != null && !vd.getSegments().isEmpty())
+			return vd.getSegments();
+
+		// Create default segment with video title at 0 seconds
+		final List<StreamSegment> defaultSegments = new ArrayList<>();
+		if (vd != null) defaultSegments.add(new StreamSegment(vd.getTitle(), 0));
+		return defaultSegments;
 	}
 
 	@Override
-	public void switchAudioTrack(AudioStream audioStream) {
-		if (streamDetails == null || audioStream == null) return;
+	public void switchAudioTrack(@Nullable final AudioStream audioStream) {
+		final var sd = streamDetails;
+		if (sd == null || audioStream == null) return;
 
 		// Get video stream, playback position, playback speed
-		VideoStream videoStream = null;
-		List<VideoStream> videoStreams = streamDetails.getVideoStreams();
-		if (videoStreams != null && !videoStreams.isEmpty()) {
-			// Try to find the playing video stream
-			String quality = getQuality();
-			for (VideoStream vs : videoStreams) {
-				if (vs.getResolution().equals(quality)) {
-					videoStream = vs;
-					break;
-				}
-			}
-			// If no match found, use the first video stream
-			if (videoStream == null) videoStream = videoStreams.get(0);
-		}
+		final List<VideoStream> videoStreams = sd.getVideoStreams();
+		if (videoStreams.isEmpty()) return;
 
-		if (videoStream == null) return;
+		// Try to find the playing video stream
+		final String quality = getQuality();
+		VideoStream videoStream = null;
+		for (final VideoStream vs : videoStreams) {
+			if (vs.getResolution().equals(quality)) {
+				videoStream = vs;
+				break;
+			}
+		}
+		if (videoStream == null) videoStream = videoStreams.get(0);
 
 		// Get playback position and speed
-		long position = engine.position();
-		float speed = engine.speed();
+		final long position = engine.position();
+		final float speed = engine.speed();
 
 		// Replay video with new audio track
-		play(videoStream, audioStream, streamDetails.getDashUrl(), duration, position, speed);
+		play(videoStream, audioStream, sd.getDashUrl(), duration, position, speed);
 	}
 
 	@Override
+	@Nullable
 	public String getThumbnail() {
-		return videoDetails.getThumbnail();
+		final var vd = videoDetails;
+		return vd != null ? vd.getThumbnail() : null;
 	}
 
 	@Override
-	public Format getVideoFormat() {
+	@NonNull
+	public Optional<Format> getVideoFormat() {
 		return engine.getVideoFormat();
 	}
 
 	@Override
-	public Format getAudioFormat() {
+	@NonNull
+	public Optional<Format> getAudioFormat() {
 		return engine.getAudioFormat();
 	}
 
 	@Override
+	@Nullable
 	public DecoderCounters getVideoDecoderCounters() {
 		return engine.getVideoDecoderCounters();
 	}

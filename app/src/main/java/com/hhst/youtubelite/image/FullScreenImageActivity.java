@@ -21,7 +21,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.hhst.youtubelite.R;
-import com.hhst.youtubelite.downloader.DownloadService;
+import com.hhst.youtubelite.downloader.service.DownloadService;
 
 import org.apache.commons.io.FileUtils;
 
@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -71,8 +70,9 @@ public class FullScreenImageActivity extends AppCompatActivity {
 		String baseFilename = getIntent().getStringExtra("filename");
 
 		urls = urlList;
+		if (urls == null) urls = new ArrayList<>();
 		// Generate filenames for each image
-		for (int i = 0; i < Objects.requireNonNull(urls).size(); i++) {
+		for (int i = 0; i < urls.size(); i++) {
 			filenames.add(baseFilename + "_" + i);
 			files.add(null); // Initialize with null files
 		}
@@ -137,9 +137,7 @@ public class FullScreenImageActivity extends AppCompatActivity {
 		// clean cached images
 		try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
 			executorService.execute(() -> {
-				for (File file : files) {
-					if (file != null) FileUtils.deleteQuietly(file);
-				}
+				for (File file : files) if (file != null) FileUtils.deleteQuietly(file);
 			});
 		}
 	}

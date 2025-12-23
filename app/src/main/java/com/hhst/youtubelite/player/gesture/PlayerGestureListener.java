@@ -140,13 +140,12 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		float absDx = Math.abs(dx);
 		float absDy = Math.abs(dy);
 
-		if (gestureMode == MODE_NONE) {
+		if (gestureMode == MODE_NONE)
 			if (absDy > absDx && absDy > SCROLL_THRESHOLD) gestureMode = MODE_VERTICAL;
-		}
 
 		if (gestureMode == MODE_NONE) return false;
 
-		gestureHandler.setIsGesturing(true);
+		gestureHandler.setGesturing(true);
 
 		float x = e1.getX();
 		float width = playerView.getWidth();

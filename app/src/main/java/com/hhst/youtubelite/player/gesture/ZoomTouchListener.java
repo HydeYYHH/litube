@@ -72,9 +72,7 @@ public class ZoomTouchListener extends ScaleGestureDetector.SimpleOnScaleGesture
     private void checkResetVisibility() {
         View target = getTargetView();
         boolean hasTranslation = target != null && (target.getTranslationX() != 0 || target.getTranslationY() != 0);
-        if (onShowReset != null) {
-            onShowReset.accept(scaleFactor > 1.0f || hasTranslation);
-        }
+        if (onShowReset != null) onShowReset.accept(scaleFactor > 1.0f || hasTranslation);
     }
 
     public boolean shouldShowReset() {

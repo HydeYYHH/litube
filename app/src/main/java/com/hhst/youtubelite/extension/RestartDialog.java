@@ -22,7 +22,6 @@ public class RestartDialog {
     if (intent != null) {
       intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
       context.startActivity(intent);
-      // Process.killProcess(Process.myPid());
     }
   }
 }

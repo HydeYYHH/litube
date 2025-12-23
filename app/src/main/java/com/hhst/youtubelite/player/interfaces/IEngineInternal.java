@@ -10,6 +10,7 @@ import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -50,9 +51,9 @@ public interface IEngineInternal extends IEngine {
 
 	void clearMediaItems();
 
-	Format getVideoFormat();
+	Optional<Format> getVideoFormat();
 
-	Format getAudioFormat();
+	Optional<Format> getAudioFormat();
 
 	DecoderCounters getVideoDecoderCounters();
 

@@ -8,33 +8,14 @@
     android:fitsSystemWindows="false"
     tools:context=".MainActivity">
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipeRefreshLayout"
+    <FrameLayout
+        android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent">
-
-        <com.hhst.youtubelite.webview.YoutubeWebview
-            android:id="@+id/webview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <ProgressBar
-                android:id="@+id/progressBar"
-                style="@android:style/Widget.DeviceDefault.Light.ProgressBar.Horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="2dp"
-                android:indeterminateOnly="false"
-                android:progressDrawable="@drawable/progress_bar"
-                android:visibility="gone"
-                android:max="100" />
-
-        </com.hhst.youtubelite.webview.YoutubeWebview>
-
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        app:layout_constraintBottom_toBottomOf="parent" />
 
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
@@ -46,6 +27,7 @@
         app:layout_constraintDimensionRatio="16:9"
         android:visibility="gone"
         app:use_controller="true"
+        app:show_timeout="-1"
         app:show_buffering="when_playing"
         app:controller_layout_id="@layout/player_view"/>
 

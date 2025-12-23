@@ -40,15 +40,14 @@ public class ExtensionDialog {
 		// Check if all children are leaves (no further children)
 		boolean allLeaves = true;
 		for (Extension ext : extensions) {
-			if (java.util.Optional.ofNullable(ext.getChildren()).filter(list -> !list.isEmpty()).isPresent()) {
+			if (Optional.ofNullable(ext.getChildren()).filter(list -> !list.isEmpty()).isPresent()) {
 				allLeaves = false;
 				break;
 			}
 		}
 
-		if (allLeaves) {
-			showLeafMultiChoiceDialog(extensions, titleRes);
-		} else {
+		if (allLeaves) showLeafMultiChoiceDialog(extensions, titleRes);
+		else {
 			// Show as a list, clicking into subgroups or leaves
 			CharSequence[] items = new CharSequence[extensions.size()];
 			for (int i = 0; i < extensions.size(); i++) {
@@ -101,9 +100,7 @@ public class ExtensionDialog {
 					changed = true;
 				}
 			}
-			if (changed) {
-				RestartDialog.show(context);
-			}
+			if (changed) RestartDialog.show(context);
 			dialog.dismiss();
 		}));
 

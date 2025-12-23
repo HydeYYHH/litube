@@ -1,5 +1,6 @@
 package com.hhst.youtubelite.player;
 
+import lombok.Data;
 import com.google.gson.Gson;
 import com.hhst.youtubelite.extension.Constant;
 import com.hhst.youtubelite.extension.ExtensionManager;
@@ -50,7 +51,7 @@ public class PlayerPreferences {
 
 	public int getResizeMode() {
 		boolean enable = extensionManager.isEnabled(Constant.rememberResizeMode);
-		if (!enable) return 0; // AspectRatioFrameLayout.RESIZE_MODE_FIT
+		if (!enable) return 0;
 		return mmkv.decodeInt("resize_mode", 0);
 	}
 
@@ -58,18 +59,6 @@ public class PlayerPreferences {
 		boolean enable = extensionManager.isEnabled(Constant.rememberResizeMode);
 		if (!enable) return;
 		mmkv.encode("resize_mode", mode);
-	}
-
-	public String getPreferredAudioTrack() {
-		boolean enable = extensionManager.isEnabled(Constant.rememberAudioTrack);
-		if (!enable) return null;
-		return mmkv.decodeString("preferred_audio_track", null);
-	}
-
-	public void setPreferredAudioTrack(String trackInfo) {
-		boolean enable = extensionManager.isEnabled(Constant.rememberAudioTrack);
-		if (!enable) return;
-		mmkv.encode("preferred_audio_track", trackInfo);
 	}
 
 	public long getResumePosition(String videoId, long durationMs) {
@@ -105,6 +94,7 @@ public class PlayerPreferences {
 		return cats;
 	}
 
+	@Data
 	static class Progress {
 		public long time;
 		public long expiration;

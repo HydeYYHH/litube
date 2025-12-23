@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "youtube lite"
 include(":app")
- 

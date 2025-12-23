@@ -21,7 +21,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
 import androidx.media3.common.PlaybackException;
-import androidx.media3.common.util.Assertions;
 import androidx.media3.common.util.Log;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.util.Util;
@@ -33,6 +32,7 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.HttpUtil;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HttpHeaders;
 import com.hhst.youtubelite.extractor.DownloaderImpl;
@@ -131,6 +131,16 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		return buffer.toByteArray();
 	}
 
+	private static boolean isRedirectResponse(int httpMethod, int responseCode) {
+		if (httpMethod != DataSpec.HTTP_METHOD_GET && httpMethod != DataSpec.HTTP_METHOD_HEAD)
+			return false;
+		return responseCode == HttpURLConnection.HTTP_MULT_CHOICE || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_SEE_OTHER || responseCode == HTTP_STATUS_TEMPORARY_REDIRECT || responseCode == HTTP_STATUS_PERMANENT_REDIRECT;
+	}
+
+	private static boolean isPostRedirectResponse(int responseCode) {
+		return responseCode == HttpURLConnection.HTTP_MULT_CHOICE || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_SEE_OTHER;
+	}
+
 	@Override
 	@Nullable
 	public Uri getUri() {
@@ -151,14 +161,14 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 	@Override
 	public void setRequestProperty(@NonNull final String name, @NonNull final String value) {
-		Assertions.checkNotNull(name);
-		Assertions.checkNotNull(value);
+		Preconditions.checkNotNull(name);
+		Preconditions.checkNotNull(value);
 		requestProperties.set(name, value);
 	}
 
 	@Override
 	public void clearRequestProperty(@NonNull final String name) {
-		Assertions.checkNotNull(name);
+		Preconditions.checkNotNull(name);
 		requestProperties.remove(name);
 	}
 
@@ -289,29 +299,26 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		final long length = dataSpecToUse.length;
 		final boolean allowGzip = dataSpecToUse.isFlagSet(DataSpec.FLAG_ALLOW_GZIP);
 
-		if (!allowCrossProtocolRedirects && !keepPostFor302Redirects) {
+		if (!allowCrossProtocolRedirects && !keepPostFor302Redirects)
 			return makeConnection(url, httpMethod, httpBody, position, length, allowGzip, true, dataSpecToUse.httpRequestHeaders);
-		}
 
 		int redirectCount = 0;
 		while (redirectCount++ <= MAX_REDIRECTS) {
-			final HttpURLConnection httpURLConnection = makeConnection(url, httpMethod, httpBody, position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
-			final int httpURLConnectionResponseCode = httpURLConnection.getResponseCode();
-			final String location = httpURLConnection.getHeaderField("Location");
-			if ((httpMethod == DataSpec.HTTP_METHOD_GET || httpMethod == DataSpec.HTTP_METHOD_HEAD) && (httpURLConnectionResponseCode == HttpURLConnection.HTTP_MULT_CHOICE || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_PERM || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_TEMP || httpURLConnectionResponseCode == HttpURLConnection.HTTP_SEE_OTHER || httpURLConnectionResponseCode == HTTP_STATUS_TEMPORARY_REDIRECT || httpURLConnectionResponseCode == HTTP_STATUS_PERMANENT_REDIRECT)) {
-				httpURLConnection.disconnect();
+			final HttpURLConnection connection = makeConnection(url, httpMethod, httpBody, position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
+			final int code = connection.getResponseCode();
+			final String location = connection.getHeaderField(HttpHeaders.LOCATION);
+
+			if (isRedirectResponse(httpMethod, code)) {
+				connection.disconnect();
 				url = handleRedirect(url, location, dataSpecToUse);
-			} else if (httpMethod == DataSpec.HTTP_METHOD_POST && (httpURLConnectionResponseCode == HttpURLConnection.HTTP_MULT_CHOICE || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_PERM || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_TEMP || httpURLConnectionResponseCode == HttpURLConnection.HTTP_SEE_OTHER)) {
-				httpURLConnection.disconnect();
-				final boolean shouldKeepPost = keepPostFor302Redirects && responseCode == HttpURLConnection.HTTP_MOVED_TEMP;
-				if (!shouldKeepPost) {
+			} else if (httpMethod == DataSpec.HTTP_METHOD_POST && isPostRedirectResponse(code)) {
+				connection.disconnect();
+				if (!(keepPostFor302Redirects && code == HttpURLConnection.HTTP_MOVED_TEMP)) {
 					httpMethod = DataSpec.HTTP_METHOD_GET;
 					httpBody = null;
 				}
 				url = handleRedirect(url, location, dataSpecToUse);
-			} else {
-				return httpURLConnection;
-			}
+			} else return connection;
 		}
 
 		throw new HttpDataSourceException(new NoRouteToHostException("Too many redirects: " + redirectCount), dataSpecToUse, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, HttpDataSourceException.TYPE_OPEN);
@@ -330,9 +337,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 		if (rangeParameterEnabled && isVideoPlaybackUrl) {
 			final String rangeParameterBuilt = buildRangeParameter(position, length);
-			if (rangeParameterBuilt != null) {
-				requestUrl += rangeParameterBuilt;
-			}
+			if (rangeParameterBuilt != null) requestUrl += rangeParameterBuilt;
 		}
 
 		final HttpURLConnection httpURLConnection = openConnection(new URL(requestUrl));
@@ -340,21 +345,17 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		httpURLConnection.setReadTimeout(readTimeoutMillis);
 
 		final Map<String, String> requestHeaders = new HashMap<>();
-		if (defaultRequestProperties != null) {
+		if (defaultRequestProperties != null)
 			requestHeaders.putAll(defaultRequestProperties.getSnapshot());
-		}
 		requestHeaders.putAll(requestProperties.getSnapshot());
 		requestHeaders.putAll(requestParameters);
 
-		for (final Map.Entry<String, String> property : requestHeaders.entrySet()) {
+		for (final Map.Entry<String, String> property : requestHeaders.entrySet())
 			httpURLConnection.setRequestProperty(property.getKey(), property.getValue());
-		}
 
 		if (!rangeParameterEnabled) {
 			final String rangeHeader = HttpUtil.buildRangeRequestHeader(position, length);
-			if (rangeHeader != null) {
-				httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
-			}
+			if (rangeHeader != null) httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
 		}
 
 		final boolean isTvHtml5StreamingUrl = isTvHtml5StreamingUrl(requestUrl);
@@ -371,15 +372,13 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 		final boolean isAndroidStreamingUrl = isAndroidStreamingUrl(requestUrl);
 		final boolean isIosStreamingUrl = isIosStreamingUrl(requestUrl);
-		if (isAndroidStreamingUrl) {
+		if (isAndroidStreamingUrl)
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getAndroidUserAgent(null));
-		} else if (isIosStreamingUrl) {
+		else if (isIosStreamingUrl)
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getIosUserAgent(null));
-		} else if (isTvHtml5StreamingUrl) {
+		else if (isTvHtml5StreamingUrl)
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getTvHtml5UserAgent());
-		} else {
-			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, DownloaderImpl.USER_AGENT);
-		}
+		else httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, DownloaderImpl.USER_AGENT);
 
 		httpURLConnection.setRequestProperty(HttpHeaders.ACCEPT_ENCODING, allowGzip ? "gzip" : "identity");
 		httpURLConnection.setInstanceFollowRedirects(followRedirects);
@@ -401,9 +400,8 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 	@NonNull
 	private URL handleRedirect(final URL originalUrl, @Nullable final String location, final DataSpec dataSpecToHandleRedirect) throws HttpDataSourceException {
-		if (location == null) {
+		if (location == null)
 			throw new HttpDataSourceException("Null location redirect", dataSpecToHandleRedirect, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, HttpDataSourceException.TYPE_OPEN);
-		}
 
 		try {
 			return new URL(originalUrl, location);
@@ -413,9 +411,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	private void skipFully(final long bytesToSkip, final DataSpec dataSpec) throws IOException {
-		if (bytesToSkip == 0) {
-			return;
-		}
+		if (bytesToSkip == 0) return;
 		final byte[] skipBuffer = new byte[4096];
 		long bytesSkipped = 0;
 		while (bytesSkipped < bytesToSkip) {

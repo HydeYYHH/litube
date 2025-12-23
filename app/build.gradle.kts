@@ -64,7 +64,7 @@ android {
         annotationProcessor(libs.lombok)
         coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
         implementation(libs.newpipeextractor)
-        implementation(libs.library)
+        implementation(libs.filedownloader)
         implementation(libs.isoparser)
         implementation(libs.gson)
         implementation(libs.commons.io)

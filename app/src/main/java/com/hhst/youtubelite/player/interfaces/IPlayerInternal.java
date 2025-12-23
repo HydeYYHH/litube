@@ -9,13 +9,14 @@ import androidx.media3.exoplayer.DecoderCounters;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.PlayerPreferences;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
-import com.hhst.youtubelite.webview.YoutubeWebview;
+import com.hhst.youtubelite.TabManager;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Internal interface for player implementation details.
@@ -26,7 +27,7 @@ public interface IPlayerInternal extends IPlayer {
 
 	SponsorBlockManager getSponsor();
 
-	YoutubeWebview getWebview();
+	TabManager getTabManager();
 
 	long getDuration();
 
@@ -60,9 +61,9 @@ public interface IPlayerInternal extends IPlayer {
 
 	AudioStream getAudioStream();
 
-	Format getVideoFormat();
+	Optional<Format> getVideoFormat();
 
-	Format getAudioFormat();
+	Optional<Format> getAudioFormat();
 
 	@OptIn(markerClass = UnstableApi.class)
 	DecoderCounters getVideoDecoderCounters();

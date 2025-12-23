@@ -9,6 +9,6 @@ public interface IControllerInternal extends IController {
     void hideHint();
     boolean isControlsVisible();
     void setControlsVisible(boolean visible);
-    void setIsGesturing(boolean gesturing);
+    void setGesturing(boolean gesturing);
     void setLongPress(boolean longPress);
 }
