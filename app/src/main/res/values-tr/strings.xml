@@ -59,8 +59,6 @@
     <string name="hint_brightness">Parlaklık %1$d%%</string>
     <string name="hint_seek_plus">+%1$ds</string>
     <string name="hint_seek_minus">-%1$ds</string>
-    <string name="failed_to_play_video">Video oynatılamadı</string>
-    <string name="retry">Yeniden Dene</string>
     <string name="lock_screen">Ekranı kilitle</string>
     <string name="unlock_screen">Ekran kilidini aç</string>
     <string name="error_title">Hata</string>
@@ -75,11 +73,8 @@
     <string name="jumped_to_segment">Şuraya atlandı: %1$s</string>
     <string name="jump">Atla</string>
     <string name="remember_resize_mode">Yeniden boyutlandırma modunu hatırla</string>
-    <string name="video_codec">Video Codec Bileşeni</string>
-    <string name="audio_codec">Ses Codec Bileşeni</string>
     <string name="bitrate">Bit hızı</string>
     <string name="dropped_frames">Düşen Kareler</string>
-    <string name="video_track">Video Parçası</string>
     <string name="audio_track">Ses Parçası</string>
     <string name="resolution">Çözünürlük</string>
     <string name="video_format">Video Formatı</string>
@@ -102,7 +97,6 @@
     <string name="unknown_bitrate">Bilinmeyen bit hızı</string>
     <string name="unable_to_get_stream_info">Akış bilgisi alınamadı</string>
     <string name="no_audio_tracks">Ses parçası mevcut değil</string>
-    <string name="select_audio_track">Ses Parçası Seç</string>
     <string name="switched_to_audio_track">Şuna geçildi: %1$s</string>
     <string name="info">Bilgi</string>
     <string name="more_options">Daha fazla seçenek</string>
@@ -114,13 +108,11 @@
     <string name="select_audio">Ses Seç</string>
     <string name="select_subtitle">Altyazı Seç</string>
     <string name="downloading_subtitle">Altyazı indiriliyor</string>
-    <string name="about">Hakkında</string>
     <string name="app_description">Reklam engelleme, arka planda oynatma ve video indirme gibi ek özelliklere sahip YouTube için hafif bir Android WebView sarmalayıcısı.</string>
     <string name="source_code">Kaynak Kodu</string>
     <string name="clear_cache">Önbelleği Temizle</string>
     <string name="export_error_log">Hata Günlüğünü Dışa Aktar</string>
     <string name="cache_cleared">Önbellek temizlendi</string>
-    <string name="log_exported">Günlük şuraya aktarıldı: %1$s</string>
     <string name="failed_to_export_log">Günlük dışa aktarılamadı</string>
     <string name="version">Sürüm: %1$s</string>
     <string name="check_for_updates">Güncellemeleri Denetle</string>
@@ -128,8 +120,8 @@
     <string name="no_updates_available">En son sürümü kullanıyorsunuz</string>
     <string name="checking_for_updates">Güncellemeler denetleniyor...</string>
     <string name="failed_to_check_for_updates">Güncellemeler denetlenemedi</string>
-    <string name="download_update">Güncellemeyi İndir</string>
     <string name="clear_cache_confirmation">Uygulama önbelleğini temizlemek istediğinizden emin misiniz?</string>
     <string name="clear">Temizle</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="tap_to_unmute">Sesi açmak için dokunun</string>
 </resources>

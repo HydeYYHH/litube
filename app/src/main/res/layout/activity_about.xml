@@ -7,7 +7,8 @@
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:layout_marginTop="24dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -20,10 +21,10 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:paddingTop="48dp"
-                android:paddingBottom="32dp"
                 android:paddingStart="24dp"
-                android:paddingEnd="24dp">
+                android:paddingTop="48dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="32dp">
 
                 <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/app_icon"
@@ -141,11 +142,11 @@
                     android:id="@+id/check_update_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
                     android:text="@string/check_for_updates"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
                     android:textColor="?attr/colorOnSurface"
-                    android:textStyle="normal"
-                    android:fontFamily="sans-serif" />
+                    android:textStyle="normal" />
             </LinearLayout>
 
             <!-- Clear Cache -->
@@ -172,11 +173,11 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
                     android:text="@string/clear_cache"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
                     android:textColor="?attr/colorOnSurface"
-                    android:textStyle="normal"
-                    android:fontFamily="sans-serif" />
+                    android:textStyle="normal" />
             </LinearLayout>
 
             <!-- Export Log -->
@@ -203,11 +204,11 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
                     android:text="@string/export_error_log"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
                     android:textColor="?attr/colorOnSurface"
-                    android:textStyle="normal"
-                    android:fontFamily="sans-serif" />
+                    android:textStyle="normal" />
             </LinearLayout>
 
             <View

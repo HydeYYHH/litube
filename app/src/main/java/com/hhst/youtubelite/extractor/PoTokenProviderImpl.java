@@ -10,22 +10,18 @@ import org.schabi.newpipe.extractor.services.youtube.PoTokenResult;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
+@Singleton
 public class PoTokenProviderImpl implements PoTokenProvider {
 
 	private static final String TAG = "PoTokenProvider";
-	private static PoTokenProviderImpl instance;
 	private CountDownLatch latch = new CountDownLatch(1);
 	private volatile PoTokenResult poToken = null;
 
-	public static synchronized PoTokenProviderImpl getInstance() {
-		if (instance == null) throw new IllegalStateException("PoTokenProviderImpl not initialized.");
-		return instance;
-	}
-
-	public static synchronized PoTokenProviderImpl init() {
-		if (instance == null) instance = new PoTokenProviderImpl();
-		return instance;
+	@Inject
+	public PoTokenProviderImpl() {
 	}
 
 	// Explicit setter for poToken with notification

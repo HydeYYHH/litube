@@ -59,8 +59,6 @@
     <string name="hint_brightness">Яркость %1$d%%</string>
     <string name="hint_seek_plus">+%1$dс</string>
     <string name="hint_seek_minus">-%1$dс</string>
-    <string name="failed_to_play_video">Не удалось воспроизвести видео</string>
-    <string name="retry">Повторить</string>
     <string name="lock_screen">Заблокировать экран</string>
     <string name="unlock_screen">Разблокировать экран</string>
     <string name="error_title">Ошибка</string>
@@ -75,11 +73,8 @@
     <string name="jumped_to_segment">Переход к: %1$s</string>
     <string name="jump">Перейти</string>
     <string name="remember_resize_mode">Запоминать режим изменения размера</string>
-    <string name="video_codec">Видеокодек</string>
-    <string name="audio_codec">Аудиокодек</string>
     <string name="bitrate">Битрейт</string>
     <string name="dropped_frames">Пропущенные кадры</string>
-    <string name="video_track">Видеодорожка</string>
     <string name="audio_track">Аудиодорожка</string>
     <string name="resolution">Разрешение</string>
     <string name="video_format">Формат видео</string>
@@ -102,7 +97,6 @@
     <string name="unknown_bitrate">Неизвестный битрейт</string>
     <string name="unable_to_get_stream_info">Не удалось получить информацию о потоке</string>
     <string name="no_audio_tracks">Аудиодорожки недоступны</string>
-    <string name="select_audio_track">Выберите аудиодорожку</string>
     <string name="switched_to_audio_track">Переключено на: %1$s</string>
     <string name="info">Инфо</string>
     <string name="more_options">Дополнительные параметры</string>
@@ -114,13 +108,11 @@
     <string name="select_audio">Выбрать аудио</string>
     <string name="select_subtitle">Выбрать субтитры</string>
     <string name="downloading_subtitle">Загрузка субтитров</string>
-    <string name="about">О программе</string>
     <string name="app_description">Легкая оболочка Android WebView для YouTube с дополнительными функциями, такими как блокировка рекламы, фоновое воспроизведение и загрузка видео.</string>
     <string name="source_code">Исходный код</string>
     <string name="clear_cache">Очистить кэш</string>
     <string name="export_error_log">Экспорт журнала ошибок</string>
     <string name="cache_cleared">Кэш очищен</string>
-    <string name="log_exported">Журнал экспортирован в: %1$s</string>
     <string name="failed_to_export_log">Не удалось экспортировать журнал</string>
     <string name="version">Версия: %1$s</string>
     <string name="check_for_updates">Проверить обновления</string>
@@ -132,4 +124,5 @@
     <string name="clear_cache_confirmation">Вы уверены, что хотите очистить кэш приложения?</string>
     <string name="clear">Очистить</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="tap_to_unmute">Нажмите, чтобы включить звук</string>
 </resources>

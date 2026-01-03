@@ -5,45 +5,43 @@ import com.tencent.mmkv.MMKV;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
+
+@Singleton
 public class ExtensionManager {
 
 	private final MMKV mmkv;
 
-	public ExtensionManager() {
-		this.mmkv = MMKV.defaultMMKV();
+	@Inject
+	public ExtensionManager(MMKV mmkv) {
+		this.mmkv = mmkv;
 		initializeDefaultPreferences();
 	}
 
 	private void initializeDefaultPreferences() {
 		// Set default preferences in MMKV if they don't exist
-		for (Map.Entry<String, Boolean> entry : Constant.defaultPreferences.entrySet()) {
+		for (Map.Entry<String, Boolean> entry : Constant.DEFAULT_PREFERENCES.entrySet()) {
 			String mmkvKey = "preferences:" + entry.getKey();
-			if (!mmkv.contains(mmkvKey)) mmkv.encode(mmkvKey, entry.getValue());
+			if (!mmkv.contains(mmkvKey)) {
+				mmkv.encode(mmkvKey, entry.getValue());
+			}
 		}
 	}
 
-	public void setEnabled(String key, Boolean enable) {
-		String mmkvKey = "preferences:" + key;
-		mmkv.encode(mmkvKey, enable);
+	public void setEnabled(String key, boolean enable) {
+		mmkv.encode("preferences:" + key, enable);
 	}
 
-	public Boolean isEnabled(String key) {
-		String mmkvKey = "preferences:" + key;
-		if (!mmkv.contains(mmkvKey)) return Constant.defaultPreferences.getOrDefault(key, false);
-		return mmkv.decodeBool(mmkvKey, Boolean.TRUE.equals(Constant.defaultPreferences.getOrDefault(key, false)));
+	public boolean isEnabled(String key) {
+		return mmkv.decodeBool("preferences:" + key, Constant.DEFAULT_PREFERENCES.getOrDefault(key, false));
 	}
 
 	public Map<String, Boolean> getAllPreferences() {
-
-		// Add all default preferences as a base
-		Map<String, Boolean> allPreferences = new HashMap<>(Constant.defaultPreferences);
-
-		// Override with existing values from MMKV
-		for (Map.Entry<String, Boolean> entry : Constant.defaultPreferences.entrySet()) {
-			String mmkvKey = "preferences:" + entry.getKey();
-			if (mmkv.contains(mmkvKey)) allPreferences.put(entry.getKey(), mmkv.decodeBool(mmkvKey));
+		Map<String, Boolean> allPreferences = new HashMap<>();
+		for (String key : Constant.DEFAULT_PREFERENCES.keySet()) {
+			allPreferences.put(key, isEnabled(key));
 		}
-
 		return allPreferences;
 	}
 

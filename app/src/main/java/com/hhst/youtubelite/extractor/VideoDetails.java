@@ -1,9 +1,9 @@
 package com.hhst.youtubelite.extractor;
 
+import org.schabi.newpipe.extractor.stream.StreamSegment;
+
 import java.util.Date;
 import java.util.List;
-
-import org.schabi.newpipe.extractor.stream.StreamSegment;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,17 +13,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoDetails {
-  private String id;
-  private String title;
-  private String author;
-  private String description;
-  private Long duration;
-  private String thumbnail;
-  private long likeCount;
-  private long dislikeCount;
-  private Date uploadDate;
-  private String uploaderUrl;
-  private String uploaderAvatar;
-  private long viewCount;
-  private List<StreamSegment> segments;
+	private String id;
+	private String title;
+	private String author;
+	private String description;
+	private Long duration;
+	private String thumbnail;
+	private long likeCount;
+	private long dislikeCount;
+	private Date uploadDate;
+	private String uploaderUrl;
+	private String uploaderAvatar;
+	private long viewCount;
+	private List<StreamSegment> segments;
 }

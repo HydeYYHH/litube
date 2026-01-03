@@ -1,21 +1,15 @@
-# Gradle files
 .gradle/
 build/
-app/build/
+release/
+/*/build/
 
-# IDE files
+local.properties
 .idea/
 .vscode/
-.trae/
-*.iml
+.trae
 
-# Local configuration
-local.properties
+out/
 
-# Signing files
-*.jks
-*.keystore
-
-# System files
-.DS_Store
-Thumbs.db
+/script/
+/external/
+*.apk

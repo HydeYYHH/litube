@@ -1,5 +1,6 @@
 [versions]
 agp = "8.9.3"
+hilt = "2.57.2"
 commonsIo = "2.18.0"
 desugar_jdk_libs_nio = "2.1.5"
 gson = "2.13.2"
@@ -25,6 +26,7 @@ swiperefreshlayout = "1.2.0"
 webkit = "1.15.0"
 okhttp = "5.3.2"
 okio = "3.16.4"
+recyclerview = "1.4.0"
 
 [libraries]
 commons-io = { module = "commons-io:commons-io", version.ref = "commonsIo" }
@@ -57,6 +59,10 @@ picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
 swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
 webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version = "1.1.0" }
+recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }

@@ -20,12 +20,13 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.OptIn;
 import androidx.core.app.NotificationCompat;
+import androidx.media.app.NotificationCompat.MediaStyle;
 import androidx.media.session.MediaButtonReceiver;
 import androidx.media3.common.util.UnstableApi;
 
-import com.hhst.youtubelite.player.interfaces.IEngine;
+import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.ui.MainActivity;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,7 +35,11 @@ import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@OptIn(markerClass = UnstableApi.class)
+import dagger.hilt.android.AndroidEntryPoint;
+
+
+@AndroidEntryPoint
+@UnstableApi
 public class PlaybackService extends Service {
 
 	private static final String TAG = "PlaybackService";
@@ -81,7 +86,7 @@ public class PlaybackService extends Service {
 		return super.onStartCommand(intent, flags, startId);
 	}
 
-	public void initialize(@NonNull final IEngine engine) {
+	public void initialize(@NonNull final Engine engine) {
 		if (mediaSession == null) return;
 		mediaSession.setCallback(new MediaSessionCompat.Callback() {
 			@Override
@@ -168,7 +173,7 @@ public class PlaybackService extends Service {
 		launchIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 		final PendingIntent contentIntent = PendingIntent.getActivity(this, 101, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-		return new NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher).setContentTitle(title).setContentText(artist).setLargeIcon(largeIcon).setContentIntent(contentIntent).setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(isPlaying).addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevActionIntent).addAction(playPauseIconResId, playPauseActionTitle, playPauseActionIntent).addAction(R.drawable.ic_next, getString(R.string.action_next), nextActionIntent).setStyle(new androidx.media.app.NotificationCompat.MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).build();
+		return new NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle(title).setContentText(artist).setLargeIcon(largeIcon).setContentIntent(contentIntent).setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(isPlaying).addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevActionIntent).addAction(playPauseIconResId, playPauseActionTitle, playPauseActionIntent).addAction(R.drawable.ic_next, getString(R.string.action_next), nextActionIntent).setStyle(new MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).build();
 	}
 
 	public void showNotification(@Nullable final String title, @Nullable final String author, @Nullable final String thumbnail, final long duration) {
@@ -206,7 +211,8 @@ public class PlaybackService extends Service {
 		// disable update notification if state isn't change
 		if (isPlaying != lastIsPlayingState) {
 			final Notification updatedNotification = buildNotification(isPlaying);
-			if (updatedNotification != null && notificationManager != null) notificationManager.notify(NOTIFICATION_ID, updatedNotification);
+			if (updatedNotification != null && notificationManager != null)
+				notificationManager.notify(NOTIFICATION_ID, updatedNotification);
 		}
 		lastIsPlayingState = isPlaying;
 	}

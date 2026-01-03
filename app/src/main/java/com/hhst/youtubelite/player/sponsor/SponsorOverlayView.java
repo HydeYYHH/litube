@@ -10,6 +10,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class SponsorOverlayView extends View {
 	private final Paint paint = new Paint();
@@ -22,9 +23,9 @@ public class SponsorOverlayView extends View {
 		paint.setStyle(Paint.Style.FILL);
 	}
 
-	public void setData(List<long[]> segments, long duration) {
+	public void setData(List<long[]> segments, long duration, TimeUnit unit) {
 		this.segments = segments;
-		this.duration = duration;
+		this.duration = unit.toMillis(duration);
 		invalidate();
 	}
 

@@ -2,32 +2,25 @@ package com.hhst.youtubelite.extension;
 
 import java.util.Map;
 
+import static com.hhst.youtubelite.Constant.*;
+
 public class Constant {
+	public static final String ENABLE_DISPLAY_DISLIKES = "enable_display_dislikes";
+	public static final String ENABLE_HIDE_SHORTS = "enable_hide_shorts";
+	public static final String REMEMBER_QUALITY = "remember_quality";
+	public static final String REMEMBER_PLAYBACK_SPEED = "remember_playback_speed";
 
-  // Extension key
-  public static final String enableDisplayDislikes = "enable_display_dislikes";
-  public static final String enableHideShorts = "enable_hide_shorts";
-  public static final String skipSponsor = "skip_sponsors";
-  public static final String skipSelfPromo = "skip_self_promo";
-  public static final String skipHighlight = "skip_poi_highlight";
-  public static final String rememberLastPosition = "remember_last_position";
-  public static final String rememberQuality = "remember_quality";
-  public static final String enableBackgroundPlay = "enable_background_play";
-  public static final String rememberPlaybackSpeed = "remember_playback_speed";
-  public static final String enablePip = "enable_pip";
-  public static final String rememberResizeMode = "remember_resize_mode";
-
-  public static final Map<String, Boolean> defaultPreferences =
-      Map.ofEntries(
-          Map.entry(enableDisplayDislikes, true),
-          Map.entry(enableHideShorts, false),
-          Map.entry(skipSponsor, true),
-          Map.entry(skipSelfPromo, true),
-          Map.entry(skipHighlight, true),
-          Map.entry(rememberLastPosition, true),
-          Map.entry(rememberQuality, true),
-          Map.entry(enableBackgroundPlay, true),
-          Map.entry(enablePip, true),
-          Map.entry(rememberResizeMode, false),
-          Map.entry(rememberPlaybackSpeed, false));
+	public static final Map<String, Boolean> DEFAULT_PREFERENCES = Map.ofEntries(
+					Map.entry(ENABLE_DISPLAY_DISLIKES, true),
+					Map.entry(ENABLE_HIDE_SHORTS, false),
+					Map.entry(SKIP_SPONSORS, true),
+					Map.entry(SKIP_SELF_PROMO, true),
+					Map.entry(SKIP_POI_HIGHLIGHT, true),
+					Map.entry(REMEMBER_LAST_POSITION, true),
+					Map.entry(REMEMBER_QUALITY, true),
+					Map.entry(ENABLE_BACKGROUND_PLAY, true),
+					Map.entry(ENABLE_PIP, true),
+					Map.entry(REMEMBER_RESIZE_MODE, false),
+					Map.entry(REMEMBER_PLAYBACK_SPEED, false)
+	);
 }

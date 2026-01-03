@@ -14,6 +14,16 @@
         android:visibility="visible"
         android:elevation="0dp"/>
 
+    <TextView
+        android:id="@+id/hint_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:background="@drawable/bg_gesture_hint"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <FrameLayout
         android:id="@+id/other_controls"
         android:layout_width="match_parent"
@@ -76,8 +86,7 @@
                     android:contentDescription="@string/segments"
                     android:padding="4dp"
                     android:src="@drawable/ic_segment"
-                    android:visibility="visible"
-                    app:tint="@android:color/white" />
+                    android:visibility="visible"/>
 
                 <ImageButton
                     android:id="@+id/btn_subtitles"
@@ -87,8 +96,7 @@
                     android:contentDescription="@string/subtitles"
                     android:padding="4dp"
                     android:src="@drawable/ic_subtitles_off"
-                    android:visibility="visible"
-                    app:tint="@android:color/white" />
+                    android:visibility="visible" />
 
                 <ImageButton
                     android:id="@+id/btn_loop"
@@ -98,8 +106,7 @@
                     android:contentDescription="@string/action_repeat"
                     android:padding="4dp"
                     android:src="@drawable/ic_repeat_off"
-                    android:visibility="visible"
-                    app:tint="@android:color/white" />
+                    android:visibility="visible" />
 
                 <ImageButton
                     android:id="@+id/btn_more"
@@ -109,8 +116,7 @@
                     android:contentDescription="@string/more_options"
                     android:padding="4dp"
                     android:src="@drawable/ic_more"
-                    android:visibility="visible"
-                    app:tint="@android:color/white" />
+                    android:visibility="visible" />
             </LinearLayout>
 
             <Space
@@ -232,8 +238,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/action_fullscreen"
                         android:padding="4dp"
-                        android:src="@drawable/ic_fullscreen"
-                        app:tint="@android:color/white" />
+                        android:src="@drawable/ic_fullscreen" />
 
                 </LinearLayout>
             </LinearLayout>
@@ -241,70 +246,81 @@
 
     </FrameLayout>
 
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/center_controls"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:padding="8dp"
         android:visibility="gone">
 
-        <ImageButton
-            android:id="@+id/exo_prev"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_margin="8dp"
-            android:background="@drawable/bg_circle_gray"
-            android:contentDescription="@string/action_previous"
-            android:padding="12dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_previous"
-            app:tint="@android:color/white" />
-
-        <FrameLayout
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guide_left"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="8dp">
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.38" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guide_right"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.62" />
+
+        <ImageButton
+            android:id="@+id/btn_prev"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_circle_gray"
+            android:contentDescription="@string/action_previous"
+            android:padding="8dp"
+            android:src="@drawable/ic_previous"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/guide_left"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <FrameLayout
+            android:id="@+id/play_pause_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
 
             <ImageButton
-                android:id="@+id/exo_play"
+                android:id="@+id/btn_play"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:background="@drawable/bg_circle_gray"
                 android:contentDescription="@string/action_play"
                 android:padding="16dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/exo_icon_play"
-                app:tint="@android:color/white"
-                tools:ignore="PrivateResource" />
+                android:src="@drawable/ic_play" />
 
             <ImageButton
-                android:id="@+id/exo_pause"
+                android:id="@+id/btn_pause"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:background="@drawable/bg_circle_gray"
                 android:contentDescription="@string/action_pause"
                 android:padding="16dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/exo_icon_pause"
-                app:tint="@android:color/white"
-                tools:ignore="PrivateResource" />
+                android:src="@drawable/ic_pause" />
         </FrameLayout>
 
         <ImageButton
-            android:id="@+id/exo_next"
+            android:id="@+id/btn_next"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_margin="8dp"
             android:background="@drawable/bg_circle_gray"
             android:contentDescription="@string/action_next"
-            android:padding="12dp"
-            android:scaleType="fitCenter"
+            android:padding="8dp"
             android:src="@drawable/ic_next"
-            app:tint="@android:color/white" />
-    </LinearLayout>
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/guide_right"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <TextView
         android:id="@+id/btn_reset"
@@ -314,18 +330,6 @@
         android:layout_marginBottom="80dp"
         android:background="@drawable/bg_gesture_hint"
         android:text="@string/reset"
-        android:textColor="@android:color/white"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/hint_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="80dp"
-        android:background="@drawable/bg_gesture_hint"
         android:textColor="@android:color/white"
         android:textSize="14sp"
         android:textStyle="bold"
@@ -341,7 +345,6 @@
         android:contentDescription="@string/lock_screen"
         android:padding="12dp"
         android:src="@drawable/ic_unlock"
-        android:visibility="gone"
-        app:tint="@android:color/white" />
+        android:visibility="gone" />
 
 </FrameLayout>

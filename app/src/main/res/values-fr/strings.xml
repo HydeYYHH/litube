@@ -75,11 +75,8 @@
     <string name="jumped_to_segment">Sauté à : %1$s</string>
     <string name="jump">Sauter</string>
     <string name="remember_resize_mode">Se souvenir du mode de redimensionnement</string>
-    <string name="video_codec">Codec vidéo</string>
-    <string name="audio_codec">Codec audio</string>
     <string name="bitrate">Débit binaire</string>
     <string name="dropped_frames">Images perdues</string>
-    <string name="video_track">Piste vidéo</string>
     <string name="audio_track">Piste audio</string>
     <string name="resolution">Résolution</string>
     <string name="video_format">Format vidéo</string>
@@ -114,13 +111,11 @@
     <string name="select_audio">Sélectionner l\'audio</string>
     <string name="select_subtitle">Sélectionner le sous-titre</string>
     <string name="downloading_subtitle">Téléchargement du sous-titre</string>
-    <string name="about">À propos</string>
     <string name="app_description">Un wrapper Android WebView léger pour YouTube avec des fonctionnalités supplémentaires telles que le blocage des publicités, la lecture en arrière-plan et le téléchargement de vidéos.</string>
     <string name="source_code">Code Source</string>
     <string name="clear_cache">Effacer le cache</string>
     <string name="export_error_log">Exporter le journal d\'erreurs</string>
     <string name="cache_cleared">Cache effacé</string>
-    <string name="log_exported">Journal exporté vers : %1$s</string>
     <string name="failed_to_export_log">Échec de l\'exportation du journal</string>
     <string name="version">Version : %1$s</string>
     <string name="check_for_updates">Vérifier les mises à jour</string>
@@ -128,7 +123,6 @@
     <string name="no_updates_available">Vous utilisez la dernière version</string>
     <string name="checking_for_updates">Vérification des mises à jour...</string>
     <string name="failed_to_check_for_updates">Échec de la vérification des mises à jour</string>
-    <string name="download_update">Télécharger la mise à jour</string>
     <string name="clear_cache_confirmation">Êtes-vous sûr de vouloir effacer le cache de l\'application ?</string>
     <string name="clear">Effacer</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>

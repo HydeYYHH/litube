@@ -1,10 +1,14 @@
 package com.hhst.youtubelite.downloader.ui;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Environment;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.util.TypedValue;
@@ -23,20 +27,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.OptIn;
+import androidx.appcompat.R.attr;
 import androidx.appcompat.app.AlertDialog;
-import androidx.media3.common.util.UnstableApi;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hhst.youtubelite.ErrorDialog;
-import com.hhst.youtubelite.MainActivity;
 import com.hhst.youtubelite.R;
-import com.hhst.youtubelite.downloader.core.DownloadTask;
+import com.hhst.youtubelite.downloader.core.Task;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
-import com.hhst.youtubelite.image.FullScreenImageActivity;
+import com.hhst.youtubelite.gallery.GalleryActivity;
+import com.hhst.youtubelite.ui.ErrorDialog;
 import com.squareup.picasso.Picasso;
 import com.tencent.mmkv.MMKV;
 
@@ -45,18 +47,19 @@ import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
+import java.io.File;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@OptIn(markerClass = UnstableApi.class)
+
 public class DownloadDialog {
 	private static final String KEY_THREAD_COUNT = "download_thread_count";
 	private final Context context;
-	private final String url;
 	private final ExecutorService executor;
 	private final CountDownLatch videoLatch;
 	private final CountDownLatch streamLatch;
@@ -67,24 +70,44 @@ public class DownloadDialog {
 	private boolean thumbSel;
 	private boolean audioSel;
 	private boolean subtitleSel;
-	private VideoStream streamSel;
+	private VideoStream videoSelStream;
 	private AudioStream audioSelStream;
 	private SubtitlesStream subtitleSelStream;
 	private int threadCount = 4;
 
-	public DownloadDialog(String url, Context context) {
-		this.url = url;
+	private DownloadService downloadService;
+	private boolean isBound = false;
+
+	private final ServiceConnection connection = new ServiceConnection() {
+		@Override
+		public void onServiceConnected(ComponentName name, IBinder service) {
+			DownloadService.DownloadBinder binder = (DownloadService.DownloadBinder) service;
+			downloadService = binder.getService();
+			isBound = true;
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName name) {
+			isBound = false;
+		}
+	};
+
+	public DownloadDialog(String url, Context context, YoutubeExtractor youtubeExtractor) {
 		this.context = context;
 		this.dialogView = LayoutInflater.from(context).inflate(R.layout.download_dialog, new FrameLayout(context), false);
 		executor = Executors.newCachedThreadPool();
 		videoLatch = new CountDownLatch(1);
 		streamLatch = new CountDownLatch(1);
+
+		Intent intent = new Intent(context, DownloadService.class);
+		context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+
 		executor.submit(() -> {
 			try {
 				// try to get details from cache
-				videoDetails = YoutubeExtractor.getVideoInfo(url);
+				videoDetails = youtubeExtractor.getVideoInfo(url);
 				videoLatch.countDown();
-				streamDetails = YoutubeExtractor.getStreamInfo(url);
+				streamDetails = youtubeExtractor.getStreamInfo(url);
 				streamLatch.countDown();
 			} catch (Exception e) {
 				if (e instanceof InterruptedIOException) return;
@@ -151,7 +174,7 @@ public class DownloadDialog {
 		thumbSel = false;
 		audioSel = false;
 		subtitleSel = false;
-		streamSel = null;
+		videoSelStream = null;
 		audioSelStream = null;
 		subtitleSelStream = null;
 
@@ -163,7 +186,7 @@ public class DownloadDialog {
 
 		// get theme color
 		TypedValue value = new TypedValue();
-		context.getTheme().resolveAttribute(androidx.appcompat.R.attr.colorPrimary, value, true);
+		context.getTheme().resolveAttribute(attr.colorPrimary, value, true);
 
 		// on video button clicked
 		videoButton.setOnClickListener(v -> showVideoQualityDialog(videoButton, value.data));
@@ -218,27 +241,11 @@ public class DownloadDialog {
 			if (fileName.isEmpty()) fileName = videoDetails.getTitle();
 			fileName = sanitizeFileName(fileName);
 
-			// download thumbnail
-			if (thumbSel) {
-				Intent thumbnailIntent = new Intent(context, DownloadService.class);
-				thumbnailIntent.setAction("DOWNLOAD_THUMBNAIL");
-				thumbnailIntent.putExtra("thumbnail", videoDetails.getThumbnail());
-				thumbnailIntent.putExtra("filename", fileName);
-				context.startService(thumbnailIntent);
-			}
-
 			// download video/audio/subtitle
-			if (videoSel || audioSel || subtitleSel) {
-				Intent downloadIntent = new Intent(context, DownloadService.class);
-				DownloadTask downloadTask = getTask(fileName);
-
-				// Start download service
-				context.startService(downloadIntent);
-
-				// Get service and initiate download
-				if (context instanceof MainActivity activity) {
-					DownloadService service = activity.getDownloadService();
-					if (service != null) service.initiateDownload(downloadTask);
+			if (videoSel || audioSel || subtitleSel || thumbSel) {
+				List<Task> tasks = getTasks(fileName);
+				if (isBound && downloadService != null) {
+					downloadService.download(tasks);
 				}
 			}
 
@@ -247,6 +254,14 @@ public class DownloadDialog {
 
 		// on cancel button clicked
 		cancelButton.setOnClickListener(v -> dialog.dismiss());
+
+		dialog.setOnDismissListener(dialogInterface -> {
+			executor.shutdownNow();
+			if (isBound) {
+				context.unbindService(connection);
+				isBound = false;
+			}
+		});
 
 		dialog.setOnShowListener(l -> {
 			loadImage(imageView);
@@ -257,22 +272,35 @@ public class DownloadDialog {
 	}
 
 	@NonNull
-	private DownloadTask getTask(String fileName) {
-		DownloadTask downloadTask = new DownloadTask();
-		downloadTask.setUrl(url);
-		downloadTask.setFileName(fileName);
-		downloadTask.setThumbnail(videoDetails.getThumbnail());
-		downloadTask.setVideoStream(videoSel ? streamSel : null);
+	private List<Task> getTasks(String fileName) {
+		List<Task> tasks = new ArrayList<>();
+		File outputDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
+		if (!outputDir.exists()) {
+			boolean ignored = outputDir.mkdirs();
+		}
+		final String baseVid = videoDetails.getId();
 
-		// Set audio stream if video or audio is selected
-		if (videoSel || audioSel)
-			downloadTask.setAudioStream(audioSel ? audioSelStream : (streamDetails != null && !streamDetails.getAudioStreams().isEmpty() ? streamDetails.getAudioStreams().get(0) : null));
+		if (videoSel) {
+			AudioStream audio = audioSel ? audioSelStream : (streamDetails != null && !streamDetails.getAudioStreams().isEmpty() ? streamDetails.getAudioStreams().get(0) : null);
+			tasks.add(new Task(taskId(baseVid, "video"), videoSelStream, audio, null, null, fileName, outputDir, threadCount));
+		} else if (audioSel) {
+			tasks.add(new Task(taskId(baseVid, "audio"), null, audioSelStream, null, null, fileName, outputDir, threadCount));
+		}
 
-		downloadTask.setSubtitlesStream(subtitleSel ? subtitleSelStream : null);
-		downloadTask.setAudio(audioSel && !videoSel); // Only audio if video is not selected
-		downloadTask.setSubtitle(subtitleSel && !videoSel && !audioSel); // Standalone subtitle only if nothing else is selected
-		downloadTask.setThreadCount(threadCount);
-		return downloadTask;
+		if (subtitleSel) {
+			tasks.add(new Task(taskId(baseVid, "subtitle"), null, null, subtitleSelStream, null, fileName, outputDir, threadCount));
+		}
+
+		if (thumbSel) {
+			tasks.add(new Task(taskId(baseVid, "thumbnail"), null, null, null, videoDetails.getThumbnail(), fileName, outputDir, threadCount));
+		}
+
+		return tasks;
+	}
+
+	@NonNull
+	private static String taskId(@NonNull final String baseVid, @NonNull final String type) {
+		return baseVid + ":" + type;
 	}
 
 	private void loadImage(ImageView imageView) {
@@ -283,7 +311,7 @@ public class DownloadDialog {
 	private void bindDeferredImageClick(ImageView imageView) {
 		if (videoDetails == null || videoDetails.getThumbnail() == null) return;
 		imageView.setOnClickListener(view -> executor.submit(() -> {
-			Intent intent = new Intent(context, FullScreenImageActivity.class);
+			Intent intent = new Intent(context, GalleryActivity.class);
 			ArrayList<String> urls = new ArrayList<>();
 			urls.add(videoDetails.getThumbnail());
 			intent.putStringArrayListExtra("thumbnails", urls);
@@ -321,8 +349,8 @@ public class DownloadDialog {
 				dialogView.post(() -> progressBar.setVisibility(View.GONE));
 
 			// Find a default audio stream to calculate total size
-			AudioStream defaultAudio = streamDetails.getAudioStreams().isEmpty() ? null : streamDetails.getAudioStreams().get(0);
-			long audioSize = (defaultAudio != null && defaultAudio.getItagItem() != null) ? defaultAudio.getItagItem().getContentLength() : 0;
+			AudioStream audioForSize = audioSel ? audioSelStream : (streamDetails.getAudioStreams().isEmpty() ? null : streamDetails.getAudioStreams().get(0));
+			long audioSize = (audioForSize != null && audioForSize.getItagItem() != null) ? audioForSize.getItagItem().getContentLength() : 0;
 
 			new Handler(Looper.getMainLooper()).post(() -> {
 				for (var stream : streamDetails.getVideoStreams()) {
@@ -336,15 +364,15 @@ public class DownloadDialog {
 					choice.setOnCheckedChangeListener((v, isChecked) -> {
 						if (isChecked) {
 							if (checkedBoxRef[0] != null) checkedBoxRef[0].setChecked(false);
-							streamSel = stream;
+							videoSelStream = stream;
 							checkedBoxRef[0] = (CheckBox) v;
 						} else {
-							streamSel = null;
+							videoSelStream = null;
 							checkedBoxRef[0] = null;
 						}
 					});
 					qualitySelector.addView(choice);
-					if (streamSel != null && streamSel.equals(stream)) choice.setChecked(true);
+					if (videoSelStream != null && videoSelStream.equals(stream)) choice.setChecked(true);
 				}
 			});
 		});
@@ -352,7 +380,7 @@ public class DownloadDialog {
 		cancelButton.setOnClickListener(v -> qualityDialog.dismiss());
 		confirmButton.setOnClickListener(v -> {
 			if (checkedBoxRef[0] == null) {
-				streamSel = null;
+				videoSelStream = null;
 				videoSel = false;
 				videoButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
 			} else {
@@ -369,7 +397,8 @@ public class DownloadDialog {
 		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar2);
 		if (streamDetails == null) progressBar.setVisibility(View.VISIBLE);
 
-		AlertDialog audioDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.select_audio)).setView(dialogView).create();
+		int titleRes = videoSel ? R.string.audio_track : R.string.audio_only;
+		AlertDialog audioDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(titleRes)).setView(dialogView).create();
 		LinearLayout container = dialogView.findViewById(R.id.quality_container);
 		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
 		Button confirmButton = dialogView.findViewById(R.id.button_confirm);
@@ -435,7 +464,7 @@ public class DownloadDialog {
 		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar2);
 		if (streamDetails == null) progressBar.setVisibility(View.VISIBLE);
 
-		AlertDialog subtitleDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.select_subtitle)).setView(dialogView).create();
+		AlertDialog subtitleDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.subtitles)).setView(dialogView).create();
 		LinearLayout container = dialogView.findViewById(R.id.quality_container);
 		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
 		Button confirmButton = dialogView.findViewById(R.id.button_confirm);

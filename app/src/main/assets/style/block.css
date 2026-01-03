@@ -1,7 +1,6 @@
 #masthead-ad,
 ytd-rich-item-renderer.style-scope.ytd-rich-grid-row #content:has(.ytd-display-ad-renderer),
 .video-ads.ytp-ad-module,
-.ytp-unmute,
 tp-yt-paper-dialog:has(yt-mealbar-promo-renderer),
 ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
 #related #player-ads,
@@ -9,6 +8,7 @@ ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
 ytd-ad-slot-renderer,
 yt-mealbar-promo-renderer,
 ad-slot-renderer,
+.ytp-unmute,
 a.yt-spec-button-shape-next.yt-spec-button-shape-next--overlay,
 ytm-companion-ad-renderer
 {

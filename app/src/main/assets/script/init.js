@@ -11,22 +11,27 @@ try {
         const getLocalizedText = (key) => {
             // Automatically translated by AI
             const languages = {
-                'zh': { 'download': '下载', 'extension': '插件', 'chat': '聊天', 'about': '关于' },
+                'zh': { 'download': '下载', 'extension': '扩展', 'chat': '聊天室', 'about': '关于' },
+                'zt': { 'download': '下載', 'extension': '擴充功能', 'chat': '聊天室', 'about': '關於' },
                 'en': { 'download': 'Download', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
-                'ja': { 'download': 'ダウンロード', 'extension': 'プラグイン', 'chat': 'チャット', 'about': 'バージョン情報' },
+                'ja': { 'download': 'ダウンロード', 'extension': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
                 'ko': { 'download': '다운로드', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
                 'fr': { 'download': 'Télécharger', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
                 'ru': { 'download': 'Скачать', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
                 'tr': { 'download': 'İndir', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
-            const lang = (document.body.lang || 'en').substring(0, 2).toLowerCase();
-            return languages[lang] ? languages[lang][key] : languages['en'][key];
+            const lang = (document.querySelector('html').lang || 'en').toLowerCase();
+            let keyLang = lang.substring(0, 2);
+            if (lang.includes('tw') || lang.includes('hk') || lang.includes('mo') || lang.includes('hant')) {
+                keyLang = 'zt';
+            }
+            return languages[keyLang] ? languages[keyLang][key] : languages['en'][key];
         };
 
         // Determine the type of YouTube page based on the URL
         const getPageClass = (url) => {
             const u = new URL(url.toLowerCase());
-            if (u.hostname !== 'm.youtube.com') return 'unknown';
+            if (!u.hostname.includes('youtube.com')) return 'unknown';
             const path = u.pathname;
             if (path === '/' ) return 'home';
             if (path === '/shorts') return 'shorts';
@@ -172,21 +177,13 @@ try {
                 const video = document.querySelector('.ad-showing video');
                 if (video) video.currentTime = video.duration;
             }
-            // Judge if the video can skip to previous or next
-            if (getPageClass(location.href) === 'watch') {
-                const btn = document.querySelectorAll('.player-middle-controls-prev-next-button');
-                if (btn && btn.length >= 2) {
-                    android.canSkipToPrevious(!btn[0].getAttribute('aria-disabled') !== 'true');
-                    android.canSkipToNext(!btn[1].getAttribute('aria-disabled') !== 'true');
-                }
-            }
             // Add chat button on live page
             const isLive = document.querySelector('#movie_player')?.getPlayerResponse()?.playabilityStatus?.liveStreamability &&
                 location.href.toLowerCase().startsWith('https://m.youtube.com/watch');
             
             if (isLive) {
                  if (!document.getElementById('chatButton')) {
-                     const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
+                    const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
                     if (saveButton) {
                         const chatButton = saveButton.cloneNode(true);
                         chatButton.id = 'chatButton';
@@ -208,9 +205,15 @@ try {
                                   if (chatContainer.style.display === 'none') {
                                       chatContainer.style.display = 'flex';
                                       document.body.style.overflow = 'hidden';
+                                      document.documentElement.style.overflow = 'hidden';
+                                      history.pushState({ chatOpen: true }, '', location.href + '#chat');
                                   } else {
                                       chatContainer.style.display = 'none';
                                       document.body.style.overflow = '';
+                                      document.documentElement.style.overflow = '';
+                                      if (location.hash === '#chat') {
+                                          history.back();
+                                      }
                                   }
                               } else {
                                   const panelContainer = document.querySelector('#panel-container') || document.querySelector('.watch-below-the-player');
@@ -231,7 +234,11 @@ try {
                                           border-top-right-radius: 12px;
                                           overflow: hidden;
                                       `;
- 
+
+                                      document.body.style.overflow = 'hidden';
+                                      document.documentElement.style.overflow = 'hidden';
+                                      history.pushState({ chatOpen: true }, '', location.href + '#chat');
+
                                       const header = document.createElement('div');
                                       header.style.cssText = `
                                           display: flex;
@@ -271,6 +278,10 @@ try {
                                           e.stopPropagation();
                                           chatContainer.style.display = 'none';
                                           document.body.style.overflow = '';
+                                          document.documentElement.style.overflow = '';
+                                          if (location.hash === '#chat') {
+                                              history.back();
+                                          }
                                       };
                                       
                                       header.appendChild(title);
@@ -286,28 +297,35 @@ try {
                                           chatContainer.style.backgroundColor = isDarkMode ? '#0f0f0f' : '#ffffff';
                                           iframe.src = `https://www.youtube.com/live_chat?v=${videoId}&embed_domain=${location.hostname}${isDarkMode ? '&dark_theme=1' : ''}`;
                                           iframe.style.cssText = 'width: 100%; height: 100%; border: none; flex: 1; background-color: transparent;';
-                                          
-                                          chatContainer.addEventListener('touchmove', (e) => {
-                                              e.stopPropagation();
-                                          }, { passive: false });
-                                          
                                           chatContainer.appendChild(iframe);
                                           panelContainer.insertBefore(chatContainer, panelContainer.firstChild);
+
+                                          window.addEventListener('popstate', () => {
+                                              if (chatContainer && chatContainer.style.display !== 'none' && !location.hash.includes('chat')) {
+                                                  chatContainer.style.display = 'none';
+                                                  document.body.style.overflow = '';
+                                                  document.documentElement.style.overflow = '';
+                                              }
+                                          });
                                       }
                                   }
                               }
-                          });
+                        });
                         saveButton.parentElement.insertBefore(chatButton, saveButton);
                     }
                 }
             } else {
                 const chatContainer = document.getElementById('live_chat_container');
-                if (chatContainer) chatContainer.remove();
+                if (chatContainer) {
+                    chatContainer.remove();
+                    document.body.style.overflow = '';
+                    document.documentElement.style.overflow = '';
+                }
                 const chatButton = document.getElementById('chatButton');
                 if (chatButton) chatButton.remove();
             }
             // Add download button on watching page
-            if (getPageClass(location.href) === 'watch' && !document.getElementById('downloadButton')) {
+            if (!isLive && getPageClass(location.href) === 'watch' && !document.getElementById('downloadButton')) {
                 const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
                 if (saveButton) {
                     const downloadButton = saveButton.cloneNode(true);
@@ -358,6 +376,33 @@ try {
                         const children = settings.children;
                         const index = Math.max(0, children.length - 1);
                         settings.insertBefore(aboutButton, children[index]);
+                    }
+                }
+            }
+            // Add download button on setting page
+             if (getPageClass(location.href) === 'select_site' && !document.getElementById('downloadButton')) {
+                const settings = document.querySelector('ytm-settings');
+                if (settings) {
+                    const button = settings.firstElementChild;
+                    if (button && button.querySelector('svg')) {
+                        const downloadButton = button.cloneNode(true);
+                        downloadButton.id = 'downloadButton';
+                        const textElement = downloadButton.querySelector('.yt-core-attributed-string');
+                        if (textElement) {
+                            textElement.innerText = getLocalizedText('download');
+                        }
+                        const svg = downloadButton.querySelector('svg');
+                        if (svg) {
+                            svg.setAttribute("viewBox", "0 -960 960 960");
+                            const path = svg.querySelector('path');
+                            if (path) {
+                                path.setAttribute("d", "M480-336 288-528l51-51 105 105v-342h72v342l105-105 51 51-192 192ZM263.72-192Q234-192 213-213.15T192-264v-72h72v72h432v-72h72v72q0 29.7-21.16 50.85Q725.68-192 695.96-192H263.72Z");
+                            }
+                        }
+                        downloadButton.addEventListener('click', () => {
+                            android.download();
+                        });
+                        settings.insertBefore(downloadButton, button);
                     }
                 }
             }

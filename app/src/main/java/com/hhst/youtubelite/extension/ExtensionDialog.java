@@ -3,12 +3,9 @@ package com.hhst.youtubelite.extension;
 import android.content.Context;
 import android.widget.ListView;
 
-import androidx.annotation.OptIn;
 import androidx.appcompat.app.AlertDialog;
-import androidx.media3.common.util.UnstableApi;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hhst.youtubelite.MainActivity;
 import com.hhst.youtubelite.R;
 
 import java.util.List;
@@ -18,12 +15,10 @@ public class ExtensionDialog {
 	private final Context context;
 	private final ExtensionManager manager;
 
-	@OptIn(markerClass = UnstableApi.class)
-	public ExtensionDialog(Context context) {
+
+	public ExtensionDialog(Context context, ExtensionManager manager) {
 		this.context = context;
-		if (!(context instanceof MainActivity))
-			throw new IllegalArgumentException("Context must be an instance of MainActivity");
-		this.manager = ((MainActivity) context).getExtensionManager();
+		this.manager = manager;
 	}
 
 	/**
@@ -40,7 +35,7 @@ public class ExtensionDialog {
 		// Check if all children are leaves (no further children)
 		boolean allLeaves = true;
 		for (Extension ext : extensions) {
-			if (Optional.ofNullable(ext.getChildren()).filter(list -> !list.isEmpty()).isPresent()) {
+			if (Optional.ofNullable(ext.children()).filter(list -> !list.isEmpty()).isPresent()) {
 				allLeaves = false;
 				break;
 			}
@@ -52,7 +47,7 @@ public class ExtensionDialog {
 			CharSequence[] items = new CharSequence[extensions.size()];
 			for (int i = 0; i < extensions.size(); i++) {
 				Extension ext = extensions.get(i);
-				String text = context.getString(ext.getDescription());
+				String text = context.getString(ext.description());
 				items[i] = text;
 			}
 
@@ -64,11 +59,11 @@ public class ExtensionDialog {
 				ListView listView = dialog.getListView();
 				listView.setOnItemClickListener((parent, view, position, id) -> {
 					Extension selected = extensions.get(position);
-					if (Optional.ofNullable(selected.getChildren()).filter(list -> !list.isEmpty()).isPresent())
-						showGroupDialog(selected.getChildren(), selected.getDescription());
+					if (Optional.ofNullable(selected.children()).filter(list -> !list.isEmpty()).isPresent())
+						showGroupDialog(selected.children(), selected.description());
 					else
 						// Single leaf, show single toggle dialog
-						showLeafMultiChoiceDialog(List.of(selected), selected.getDescription());
+						showLeafMultiChoiceDialog(List.of(selected), selected.description());
 				});
 			});
 
@@ -81,9 +76,9 @@ public class ExtensionDialog {
 		CharSequence[] items = new CharSequence[leaves.size()];
 		boolean[] checked = new boolean[leaves.size()];
 		for (int i = 0; i < leaves.size(); i++) {
-			String text = context.getString(leaves.get(i).getDescription());
+			String text = context.getString(leaves.get(i).description());
 			items[i] = text;
-			checked[i] = manager.isEnabled(leaves.get(i).getKey());
+			checked[i] = manager.isEnabled(leaves.get(i).key());
 		}
 
 		AlertDialog dialog = new MaterialAlertDialogBuilder(context).setTitle(titleRes).setMultiChoiceItems(items, checked, (dlg, which, isChecked) -> {
@@ -94,9 +89,9 @@ public class ExtensionDialog {
 		dialog.setOnShowListener(dlg -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
 			boolean changed = false;
 			for (int i = 0; i < leaves.size(); i++) {
-				boolean oldState = manager.isEnabled(leaves.get(i).getKey());
+				boolean oldState = manager.isEnabled(leaves.get(i).key());
 				if (oldState != checked[i]) {
-					manager.setEnabled(leaves.get(i).getKey(), checked[i]);
+					manager.setEnabled(leaves.get(i).key(), checked[i]);
 					changed = true;
 				}
 			}
