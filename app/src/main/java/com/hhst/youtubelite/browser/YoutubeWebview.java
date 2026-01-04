@@ -181,7 +181,7 @@ public class YoutubeWebview extends WebView {
 				final int errorCode = error.getErrorCode();
 				final String failingUrl = request.getUrl().toString();
 				final String description = error.getDescription().toString();
-				if (description.contains("TIMED_OUT") || description.contains("CONNECTION_ABORTED")) {
+				if (description.contains("CONNECTION_ABORTED")) {
 					final String encodedDescription = URLEncoder.encode(description, StandardCharsets.UTF_8);
 					final String encodedUrl = URLEncoder.encode(failingUrl, StandardCharsets.UTF_8);
 					final String url = "file:///android_asset/page/error.html?description=" + encodedDescription + "&errorCode=" + errorCode + "&url=" + encodedUrl;
