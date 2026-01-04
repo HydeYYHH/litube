@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">Küçük Resim</string>
     <string name="video">Video</string>
     <string name="cancel">İptal</string>
     <string name="download">İndir</string>
     <string name="video_quality">Video Kalitesi</string>
     <string name="confirm">Onayla</string>
-    <string name="downloading">İndiriliyor</string>
     <string name="select_something_first">Önce bir şey seçin</string>
-    <string name="download_complete">İndirme tamamlandı</string>
     <string name="download_canceled">İndirme iptal edildi</string>
-    <string name="thumbnail_has_been_saved_to">"Küçük resim şu konuma kaydedildi: "</string>
     <string name="download_finished">İndirme tamamlandı: \"%1$s\" şu konuma kaydedildi: \"%2$s\"</string>
     <string name="failed_to_download">İndirme başarısız oldu</string>
     <string name="failed_to_download_thumbnail">"Küçük resim indirilemedi "</string>
-    <string name="delete">Sil</string>
-    <string name="file_deleted">Dosya silindi</string>
     <string name="audio_only">Ses</string>
-    <string name="failed_to_delete">Dosya silinemedi</string>
     <string name="close">Kapat</string>
     <string name="save">Kaydet</string>
     <string name="share">Paylaş</string>
@@ -34,7 +29,6 @@
     <string name="general">Genel</string>
     <string name="player">Oynatıcı</string>
     <string name="skip_sponsors">Sponsorlukları atla</string>
-    <string name="skip_sponsors_sponsor">Sponsorlukları atla</string>
     <string name="skip_sponsors_selfpromo">Kendi tanıtımlarını atla</string>
     <string name="skip_sponsors_highlight">Öne çıkan bölümleri atla</string>
     <string name="failed_to_load_video_formats">Video formatları yüklenemedi</string>
@@ -42,13 +36,8 @@
     <string name="remember_quality">Video kalitesini hatırla</string>
     <string name="segments">Bölümler</string>
     <string name="background_play">Arka planda oynatmayı etkinleştir</string>
-    <string name="enable_pip">Resim içinde Resim özelliğini etkinleştir</string>
     <string name="pip">Resim içinde Resim</string>
     <string name="remember_playback_speed">Oynatma hızını hatırla</string>
-    <string name="downloading_video">Video indiriliyor</string>
-    <string name="downloading_audio">Ses indiriliyor</string>
-    <string name="merging">Birleştiriliyor</string>
-    <string name="merging_audio_video">Ses ve video birleştiriliyor</string>
     <string name="reset">Sıfırla</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">Otomatik</string>
@@ -75,7 +64,6 @@
     <string name="remember_resize_mode">Yeniden boyutlandırma modunu hatırla</string>
     <string name="bitrate">Bit hızı</string>
     <string name="dropped_frames">Düşen Kareler</string>
-    <string name="audio_track">Ses Parçası</string>
     <string name="resolution">Çözünürlük</string>
     <string name="video_format">Video Formatı</string>
     <string name="audio_format">Ses Formatı</string>
@@ -97,6 +85,7 @@
     <string name="unknown_bitrate">Bilinmeyen bit hızı</string>
     <string name="unable_to_get_stream_info">Akış bilgisi alınamadı</string>
     <string name="no_audio_tracks">Ses parçası mevcut değil</string>
+    <string name="audio_track">Ses Parçası</string>
     <string name="switched_to_audio_track">Şuna geçildi: %1$s</string>
     <string name="info">Bilgi</string>
     <string name="more_options">Daha fazla seçenek</string>
@@ -104,11 +93,9 @@
     <string name="failed_to_load_image">Resim yüklenemedi</string>
     <string name="application_not_found">Uygulama bulunamadı</string>
     <string name="press_back_again_to_exit">Çıkmak için tekrar geri basın</string>
+    <string name="tap_to_unmute">Tap to unmute</string>
     <string name="threads">İş parçacıkları</string>
-    <string name="select_audio">Ses Seç</string>
-    <string name="select_subtitle">Altyazı Seç</string>
-    <string name="downloading_subtitle">Altyazı indiriliyor</string>
-    <string name="app_description">Reklam engelleme, arka planda oynatma ve video indirme gibi ek özelliklere sahip YouTube için hafif bir Android WebView sarmalayıcısı.</string>
+    <string name="app_description">YouTube için gelişmiş bir webview sarmalayıcısı.</string>
     <string name="source_code">Kaynak Kodu</string>
     <string name="clear_cache">Önbelleği Temizle</string>
     <string name="export_error_log">Hata Günlüğünü Dışa Aktar</string>
@@ -123,5 +110,31 @@
     <string name="clear_cache_confirmation">Uygulama önbelleğini temizlemek istediğinizden emin misiniz?</string>
     <string name="clear">Temizle</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
-    <string name="tap_to_unmute">Sesi açmak için dokunun</string>
+    <string name="about">Hakkında</string>
+    <string name="download_tasks_added">İndirme görevleri eklendi</string>
+    <string name="download_tasks_added_count">Sıraya %1$d görev eklendi</string>
+    <string name="download_history">İndirme Geçmişi</string>
+    <string name="no_download_records">İndirme kaydı bulunamadı</string>
+    <string name="open_file">Dosyayı Aç</string>
+    <string name="file_not_found">Dosya bulunamadı</string>
+    <string name="copy_vid">Video ID\'sini Kopyala</string>
+    <string name="vid_copied">Video ID\'si kopyalandı</string>
+    <string name="cancel_download">İptal</string>
+    <string name="retry_download">Tekrar Dene</string>
+    <string name="delete_record">Sil</string>
+    <string name="delete_record_confirmation">Bu kaydı silmek istediğinizden emin misiniz?</string>
+    <string name="delete_local_file">Yerel dosyayı da sil</string>
+    <string name="clear_history">Geçmişi Temizle</string>
+    <string name="clear_history_confirmation">Tüm indirme geçmişini temizlemek istediğinizden emin misiniz?</string>
+    <string name="history_cleared">Geçmiş temizlendi</string>
+    <string name="status_queued">Sırada</string>
+    <string name="status_downloading">İndiriliyor (%1$d%%)</string>
+    <string name="status_merging">Birleştiriliyor...</string>
+    <string name="status_completed">Tamamlandı</string>
+    <string name="status_cancelled">İptal Edildi</string>
+    <string name="status_failed">Başarısız</string>
+    <string name="type_video">Video</string>
+    <string name="type_audio">Ses</string>
+    <string name="type_subtitle">Altyazı</string>
+    <string name="type_thumbnail">Küçük Resim</string>
 </resources>

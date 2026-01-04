@@ -435,7 +435,7 @@ try {
                 }
             }
 
-        }, 200);
+        }, 500);
 
         // Extract poToken
         const originalFetch = window.fetch;

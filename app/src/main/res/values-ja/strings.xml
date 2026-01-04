@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">サムネイル</string>
     <string name="video">動画</string>
     <string name="cancel">キャンセル</string>
     <string name="download">ダウンロード</string>
     <string name="video_quality">画質</string>
     <string name="confirm">確認</string>
-    <string name="downloading">ダウンロード中</string>
     <string name="select_something_first">まず何かを選択してください</string>
-    <string name="download_complete">ダウンロード完了</string>
     <string name="download_canceled">ダウンロードがキャンセルされました</string>
-    <string name="thumbnail_has_been_saved_to">サムネイルが保存されました: </string>
     <string name="download_finished">ダウンロード完了: \"%1$s\" が \"%2$s\" に保存されました</string>
     <string name="failed_to_download">ダウンロードに失敗しました</string>
     <string name="failed_to_download_thumbnail">サムネイルのダウンロードに失敗しました</string>
-    <string name="delete">削除</string>
-    <string name="file_deleted">ファイルを削除しました</string>
     <string name="audio_only">音声</string>
-    <string name="failed_to_delete">ファイルの削除に失敗しました</string>
     <string name="close">閉じる</string>
     <string name="save">保存</string>
     <string name="share">共有</string>
@@ -34,7 +29,6 @@
     <string name="general">全般</string>
     <string name="player">プレーヤー</string>
     <string name="skip_sponsors">スポンサーをスキップ</string>
-    <string name="skip_sponsors_sponsor">スポンサーをスキップ</string>
     <string name="skip_sponsors_selfpromo">自己宣伝をスキップ</string>
     <string name="skip_sponsors_highlight">ハイライトをスキップ</string>
     <string name="failed_to_load_video_formats">動画形式の読み込みに失敗しました</string>
@@ -42,13 +36,8 @@
     <string name="remember_quality">画質を記憶</string>
     <string name="segments">セグメント</string>
     <string name="background_play">バックグラウンド再生を有効にする</string>
-    <string name="enable_pip">ピクチャーインピクチャーを有効にする</string>
     <string name="pip">ピクチャーインピクチャー</string>
     <string name="remember_playback_speed">再生速度を記憶</string>
-    <string name="downloading_video">動画をダウンロード中</string>
-    <string name="downloading_audio">音声をダウンロード中</string>
-    <string name="merging">結合中</string>
-    <string name="merging_audio_video">音声と動画を結合中</string>
     <string name="reset">リセット</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">自動</string>
@@ -73,12 +62,8 @@
     <string name="jumped_to_segment">%1$s にジャンプしました</string>
     <string name="jump">ジャンプ</string>
     <string name="remember_resize_mode">サイズ変更モードを記憶</string>
-    <string name="video_codec">動画コーデック</string>
-    <string name="audio_codec">音声コーデック</string>
     <string name="bitrate">ビットレート</string>
     <string name="dropped_frames">ドロップフレーム</string>
-    <string name="video_track">動画トラック</string>
-    <string name="audio_track">音声トラック</string>
     <string name="resolution">解像度</string>
     <string name="video_format">動画形式</string>
     <string name="audio_format">音声形式</string>
@@ -100,6 +85,7 @@
     <string name="unknown_bitrate">不明なビットレート</string>
     <string name="unable_to_get_stream_info">ストリーム情報を取得できません</string>
     <string name="no_audio_tracks">利用可能な音声トラックはありません</string>
+    <string name="audio_track">音声トラック</string>
     <string name="switched_to_audio_track">%1$s に切り替えました</string>
     <string name="info">情報</string>
     <string name="more_options">その他のオプション</string>
@@ -109,10 +95,7 @@
     <string name="press_back_again_to_exit">終了するにはもう一度戻るを押してください</string>
     <string name="tap_to_unmute">タップしてミュート解除</string>
     <string name="threads">スレッド</string>
-    <string name="select_audio">音声を選択</string>
-    <string name="select_subtitle">字幕を選択</string>
-    <string name="downloading_subtitle">字幕をダウンロード中</string>
-    <string name="app_description">広告ブロック、バックグラウンド再生、動画ダウンロードなどの機能を備えた、軽量な YouTube Android WebView ラッパーです。</string>
+    <string name="app_description">高度な YouTube WebView ラッパーです。</string>
     <string name="source_code">ソースコード</string>
     <string name="clear_cache">キャッシュを消去</string>
     <string name="export_error_log">エラーログをエクスポート</string>
@@ -127,4 +110,31 @@
     <string name="clear_cache_confirmation">アプリのキャッシュ को 消去してもよろしいですか？</string>
     <string name="clear">消去</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="about">詳細</string>
+    <string name="download_tasks_added">ダウンロードタスクを追加しました</string>
+    <string name="download_tasks_added_count">%1$d 個のタスクをキューに追加しました</string>
+    <string name="download_history">ダウンロード履歴</string>
+    <string name="no_download_records">ダウンロード履歴はありません</string>
+    <string name="open_file">ファイルを開く</string>
+    <string name="file_not_found">ファイルが見つかりません</string>
+    <string name="copy_vid">動画 ID をコピー</string>
+    <string name="vid_copied">動画 ID をコピーしました</string>
+    <string name="cancel_download">キャンセル</string>
+    <string name="retry_download">再ダウンロード</string>
+    <string name="delete_record">削除</string>
+    <string name="delete_record_confirmation">この履歴を削除しますか？</string>
+    <string name="delete_local_file">ローカルファイルも削除する</string>
+    <string name="clear_history">履歴を消去</string>
+    <string name="clear_history_confirmation">すべてのダウンロード履歴を消去しますか？</string>
+    <string name="history_cleared">履歴を消去しました</string>
+    <string name="status_queued">待機中</string>
+    <string name="status_downloading">ダウンロード中 (%1$d%%)</string>
+    <string name="status_merging">結合中…</string>
+    <string name="status_completed">完了</string>
+    <string name="status_cancelled">キャンセル済み</string>
+    <string name="status_failed">失敗</string>
+    <string name="type_video">動画</string>
+    <string name="type_audio">音声</string>
+    <string name="type_subtitle">字幕</string>
+    <string name="type_thumbnail">サムネイル</string>
 </resources>

@@ -150,10 +150,6 @@ public class Engine {
 														.setLiveMaxSpeed(1.25f)
 						).build();
 		this.player.addListener(new Player.Listener() {
-			@Override
-			public void onPlayerError(@NonNull final PlaybackException error) {
-				ErrorDialog.show(context, error.getMessage(), Log.getStackTraceString(error));
-			}
 
 			@Override
 			public void onPlaybackStateChanged(final int state) {

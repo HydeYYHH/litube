@@ -278,7 +278,7 @@ public class Controller {
 
 		speedView.setText(String.format(Locale.getDefault(), "%sx", engine.getPlaybackRate()));
 		speedView.setOnClickListener(v -> {
-			final float[] speeds = {0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
+			final float[] speeds = {0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f};
 			final String[] options = new String[speeds.length];
 			int checked = -1;
 			final float currentSpeed = engine.getPlaybackRate();

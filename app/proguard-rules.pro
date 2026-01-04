@@ -1,7 +1,23 @@
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
-#
+
+# Keep Generic signatures
+-keepattributes Signature
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keepattributes *Annotation*
+
+# Gson
+-keep class com.google.gson.** { *; }
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+-keepclassmembers class * extends com.google.gson.reflect.TypeToken { *; }
+
+# Keep models used for JSON serialization
+-keep class com.hhst.youtubelite.downloader.core.history.** { *; }
+-keep enum com.hhst.youtubelite.downloader.core.history.** { *; }
+
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 

@@ -3,8 +3,8 @@ package com.hhst.youtubelite.downloader.core.history;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.tencent.mmkv.MMKV;
 
 import java.lang.reflect.Type;

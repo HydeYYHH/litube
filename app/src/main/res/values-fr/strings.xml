@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">Miniature</string>
     <string name="video">Vidéo</string>
     <string name="cancel">Annuler</string>
     <string name="download">Télécharger</string>
     <string name="video_quality">Qualité vidéo</string>
     <string name="confirm">Confirmer</string>
-    <string name="downloading">Téléchargement</string>
     <string name="select_something_first">Sélectionnez d\'abord quelque chose</string>
-    <string name="download_complete">Téléchargement terminé</string>
     <string name="download_canceled">Téléchargement annulé</string>
-    <string name="thumbnail_has_been_saved_to">La miniature a été sauvegardée dans : </string>
     <string name="download_finished">Téléchargement terminé : \"%1$s\" a été sauvegardé dans \"%2$s\"</string>
     <string name="failed_to_download">Échec du téléchargement</string>
     <string name="failed_to_download_thumbnail">Échec du téléchargement de la miniature </string>
-    <string name="delete">Supprimer</string>
-    <string name="file_deleted">Fichier supprimé</string>
     <string name="audio_only">Audio</string>
-    <string name="failed_to_delete">Échec de la suppression du fichier </string>
     <string name="close">Fermer</string>
     <string name="save">Sauvegarder</string>
     <string name="share">Partager</string>
@@ -34,7 +29,6 @@
     <string name="general">Général</string>
     <string name="player">Lecteur</string>
     <string name="skip_sponsors">Ignorer les sponsors</string>
-    <string name="skip_sponsors_sponsor">Ignorer les sponsors</string>
     <string name="skip_sponsors_selfpromo">Ignorer l\'auto-promotion</string>
     <string name="skip_sponsors_highlight">Ignorer les moments forts</string>
     <string name="failed_to_load_video_formats">Échec du chargement des formats vidéo</string>
@@ -42,13 +36,8 @@
     <string name="remember_quality">Se souvenir de la qualité vidéo</string>
     <string name="segments">Segments</string>
     <string name="background_play">Activer la lecture en arrière-plan</string>
-    <string name="enable_pip">Activer le Picture-in-Picture</string>
     <string name="pip">Picture-in-Picture</string>
     <string name="remember_playback_speed">Se souvenir de la vitesse de lecture</string>
-    <string name="downloading_video">Téléchargement de la vidéo</string>
-    <string name="downloading_audio">Téléchargement de l\'audio</string>
-    <string name="merging">Fusion</string>
-    <string name="merging_audio_video">Fusion de l\'audio et de la vidéo</string>
     <string name="reset">Réinitialiser</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">Auto</string>
@@ -59,8 +48,6 @@
     <string name="hint_brightness">Luminosité %1$d%%</string>
     <string name="hint_seek_plus">+%1$ds</string>
     <string name="hint_seek_minus">-%1$ds</string>
-    <string name="failed_to_play_video">Échec de la lecture de la vidéo</string>
-    <string name="retry">Réessayer</string>
     <string name="lock_screen">Verrouiller l\'écran</string>
     <string name="unlock_screen">Déverrouiller l\'écran</string>
     <string name="error_title">Erreur</string>
@@ -77,7 +64,6 @@
     <string name="remember_resize_mode">Se souvenir du mode de redimensionnement</string>
     <string name="bitrate">Débit binaire</string>
     <string name="dropped_frames">Images perdues</string>
-    <string name="audio_track">Piste audio</string>
     <string name="resolution">Résolution</string>
     <string name="video_format">Format vidéo</string>
     <string name="audio_format">Format audio</string>
@@ -99,7 +85,7 @@
     <string name="unknown_bitrate">Débit inconnu</string>
     <string name="unable_to_get_stream_info">Impossible d\'obtenir les infos du flux</string>
     <string name="no_audio_tracks">Aucune piste audio disponible</string>
-    <string name="select_audio_track">Sélectionner la piste audio</string>
+    <string name="audio_track">Piste audio</string>
     <string name="switched_to_audio_track">Passé à : %1$s</string>
     <string name="info">Info</string>
     <string name="more_options">Plus d\'options</string>
@@ -107,11 +93,9 @@
     <string name="failed_to_load_image">Échec du chargement de l\'image</string>
     <string name="application_not_found">Application non trouvée</string>
     <string name="press_back_again_to_exit">Appuyez à nouveau sur retour pour quitter</string>
+    <string name="tap_to_unmute">Tap to unmute</string>
     <string name="threads">Threads</string>
-    <string name="select_audio">Sélectionner l\'audio</string>
-    <string name="select_subtitle">Sélectionner le sous-titre</string>
-    <string name="downloading_subtitle">Téléchargement du sous-titre</string>
-    <string name="app_description">Un wrapper Android WebView léger pour YouTube avec des fonctionnalités supplémentaires telles que le blocage des publicités, la lecture en arrière-plan et le téléchargement de vidéos.</string>
+    <string name="app_description">Un wrapper webview avancé pour YouTube.</string>
     <string name="source_code">Code Source</string>
     <string name="clear_cache">Effacer le cache</string>
     <string name="export_error_log">Exporter le journal d\'erreurs</string>
@@ -126,4 +110,31 @@
     <string name="clear_cache_confirmation">Êtes-vous sûr de vouloir effacer le cache de l\'application ?</string>
     <string name="clear">Effacer</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="about">À propos</string>
+    <string name="download_tasks_added">Tâches de téléchargement ajoutées</string>
+    <string name="download_tasks_added_count">%1$d tâches ajoutées à la file d\'attente</string>
+    <string name="download_history">Historique de téléchargement</string>
+    <string name="no_download_records">Aucun enregistrement de téléchargement</string>
+    <string name="open_file">Ouvrir le fichier</string>
+    <string name="file_not_found">Fichier non trouvé</string>
+    <string name="copy_vid">Copier l\'ID de la vidéo</string>
+    <string name="vid_copied">ID de la vidéo copié</string>
+    <string name="cancel_download">Annuler</string>
+    <string name="retry_download">Réessayer</string>
+    <string name="delete_record">Supprimer</string>
+    <string name="delete_record_confirmation">Voulez-vous supprimer cet enregistrement ?</string>
+    <string name="delete_local_file">Supprimer aussi le fichier local</string>
+    <string name="clear_history">Effacer l\'historique</string>
+    <string name="clear_history_confirmation">Voulez-vous effacer tout l\'historique des téléchargements ?</string>
+    <string name="history_cleared">Historique effacé</string>
+    <string name="status_queued">En attente</string>
+    <string name="status_downloading">Téléchargement (%1$d%%)</string>
+    <string name="status_merging">Fusion en cours...</string>
+    <string name="status_completed">Terminé</string>
+    <string name="status_cancelled">Annulé</string>
+    <string name="status_failed">Échec</string>
+    <string name="type_video">Vidéo</string>
+    <string name="type_audio">Audio</string>
+    <string name="type_subtitle">Sous-titre</string>
+    <string name="type_thumbnail">Miniature</string>
 </resources>

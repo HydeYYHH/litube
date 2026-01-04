@@ -23,6 +23,7 @@ import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.ErrorDialog;
 
 import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
 
 import java.io.InterruptedIOException;
 import java.util.Objects;
@@ -98,6 +99,11 @@ public class LitePlayer {
 				if (state == Player.STATE_READY) {
 					updateServiceProgress(engine.isPlaying());
 				}
+			}
+
+			@Override
+			public void onPlayerError(@NonNull PlaybackException error) {
+				ErrorDialog.show(activity, error.getMessage(), Log.getStackTraceString(error));
 			}
 		});
 	}

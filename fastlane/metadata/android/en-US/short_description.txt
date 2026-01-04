@@ -1,1 +1,1 @@
-a feature-rich Android webview wrapper for YouTube
+An advanced webview wrapper for YouTube

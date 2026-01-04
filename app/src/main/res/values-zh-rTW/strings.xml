@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">封面</string>
     <string name="video">影片</string>
     <string name="cancel">取消</string>
     <string name="download">下載</string>
     <string name="video_quality">影片畫質</string>
     <string name="confirm">確認</string>
-    <string name="downloading">下載中</string>
     <string name="select_something_first">請先選擇項目</string>
-    <string name="download_complete">下載完成</string>
     <string name="download_canceled">下載已取消</string>
-    <string name="thumbnail_has_been_saved_to">封面已保存至: </string>
     <string name="download_finished">下載完成: \"%1$s\" 已保存到 \"%2$s\"</string>
     <string name="failed_to_download">下載失敗</string>
     <string name="failed_to_download_thumbnail">下載封面失敗</string>
-    <string name="delete">刪除</string>
-    <string name="file_deleted">文件已刪除</string>
     <string name="audio_only">音訊</string>
-    <string name="failed_to_delete">刪除文件失敗</string>
     <string name="close">關閉</string>
     <string name="save">保存</string>
     <string name="share">分享</string>
@@ -34,7 +29,6 @@
     <string name="general">通用</string>
     <string name="player">播放器</string>
     <string name="skip_sponsors">跳過贊助商片段</string>
-    <string name="skip_sponsors_sponsor">跳過贊助</string>
     <string name="skip_sponsors_selfpromo">跳過自我宣傳</string>
     <string name="skip_sponsors_highlight">跳過精彩片段</string>
     <string name="failed_to_load_video_formats">加載影片格式失敗</string>
@@ -42,13 +36,8 @@
     <string name="remember_quality">記住影片畫質</string>
     <string name="segments">片段</string>
     <string name="background_play">啟用後台播放</string>
-    <string name="enable_pip">啟用畫中畫</string>
     <string name="pip">畫中畫</string>
     <string name="remember_playback_speed">記住播放速度</string>
-    <string name="downloading_video">正在下載影片</string>
-    <string name="downloading_audio">正在下載音訊</string>
-    <string name="merging">正在合併</string>
-    <string name="merging_audio_video">正在合併音訊和影片</string>
     <string name="reset">重置</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">自動</string>
@@ -75,7 +64,6 @@
     <string name="remember_resize_mode">記住縮放模式</string>
     <string name="bitrate">位元率</string>
     <string name="dropped_frames">丟幀</string>
-    <string name="audio_track">音訊軌道</string>
     <string name="resolution">解析度</string>
     <string name="video_format">影片格式</string>
     <string name="audio_format">音訊格式</string>
@@ -97,6 +85,7 @@
     <string name="unknown_bitrate">未知位元率</string>
     <string name="unable_to_get_stream_info">無法獲取流資訊</string>
     <string name="no_audio_tracks">無可用音訊軌道</string>
+    <string name="audio_track">音訊軌道</string>
     <string name="switched_to_audio_track">已切換至: %1$s</string>
     <string name="info">詳情</string>
     <string name="more_options">更多選項</string>
@@ -106,10 +95,7 @@
     <string name="press_back_again_to_exit">再按一次退出</string>
     <string name="tap_to_unmute">點擊取消靜音</string>
     <string name="threads">線程</string>
-    <string name="select_audio">選擇音訊</string>
-    <string name="select_subtitle">選擇字幕</string>
-    <string name="downloading_subtitle">正在下載字幕</string>
-    <string name="app_description">一個輕量级的 YouTube Android WebView 包裝器，支持廣告攔截、後台播放和影片下載等功能。</string>
+    <string name="app_description">一款高級的 YouTube WebView 封裝客戶端。</string>
     <string name="source_code">源碼地址</string>
     <string name="clear_cache">清除快取</string>
     <string name="export_error_log">匯出錯誤日誌</string>
@@ -124,4 +110,31 @@
     <string name="clear_cache_confirmation">確定要清除快取嗎？</string>
     <string name="clear">清除</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="about">關於</string>
+    <string name="download_tasks_added">下載任務已添加</string>
+    <string name="download_tasks_added_count">已添加 %1$d 個任務到隊列</string>
+    <string name="download_history">下載記錄</string>
+    <string name="no_download_records">暫无下載記錄</string>
+    <string name="open_file">打開文件</string>
+    <string name="file_not_found">文件不存在</string>
+    <string name="copy_vid">複製影片 ID</string>
+    <string name="vid_copied">影片 ID 已複製</string>
+    <string name="cancel_download">取消</string>
+    <string name="retry_download">重新下載</string>
+    <string name="delete_record">刪除</string>
+    <string name="delete_record_confirmation">確定要刪除這條記錄嗎？</string>
+    <string name="delete_local_file">同時刪除本地文件</string>
+    <string name="clear_history">清空記錄</string>
+    <string name="clear_history_confirmation">確定要清空所有下載歷史嗎？</string>
+    <string name="history_cleared">記錄已清空</string>
+    <string name="status_queued">排隊中</string>
+    <string name="status_downloading">下載中 (%1$d%%)</string>
+    <string name="status_merging">合併中…</string>
+    <string name="status_completed">已完成</string>
+    <string name="status_cancelled">已取消</string>
+    <string name="status_failed">下載失敗</string>
+    <string name="type_video">影片</string>
+    <string name="type_audio">音訊</string>
+    <string name="type_subtitle">字幕</string>
+    <string name="type_thumbnail">封面</string>
 </resources>

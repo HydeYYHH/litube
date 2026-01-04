@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">封面</string>
     <string name="video">视频</string>
     <string name="cancel">取消</string>
     <string name="download">下载</string>
     <string name="video_quality">视频质量</string>
     <string name="confirm">确认</string>
-    <string name="downloading">下载中</string>
     <string name="select_something_first">请先选择项目</string>
-    <string name="download_complete">下载完成</string>
     <string name="download_canceled">下载已取消</string>
-    <string name="thumbnail_has_been_saved_to">封面已保存至: </string>
     <string name="download_finished">下载完成: \"%1$s\" 已保存到 \"%2$s\"</string>
     <string name="failed_to_download">下载失败</string>
     <string name="failed_to_download_thumbnail">下载封面失败</string>
-    <string name="delete">删除</string>
-    <string name="file_deleted">文件已删除</string>
     <string name="audio_only">音频</string>
-    <string name="failed_to_delete">删除文件失败</string>
     <string name="close">关闭</string>
     <string name="save">保存</string>
     <string name="share">分享</string>
@@ -43,10 +38,6 @@
     <string name="background_play">后台播放</string>
     <string name="pip">画中画</string>
     <string name="remember_playback_speed">记住播放速度</string>
-    <string name="downloading_video">正在下载视频</string>
-    <string name="downloading_audio">正在下载音频</string>
-    <string name="merging">正在合并</string>
-    <string name="merging_audio_video">正在合并音频和视频</string>
     <string name="reset">重置</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">自动</string>
@@ -104,8 +95,7 @@
     <string name="press_back_again_to_exit">再按一次退出</string>
     <string name="tap_to_unmute">点击取消静音</string>
     <string name="threads">线程</string>
-    <string name="downloading_subtitle">正在下载字幕</string>
-    <string name="app_description">一个轻量级的 YouTube Android WebView 包装器，支持广告拦截、后台播放和视频下载等功能。</string>
+    <string name="app_description">一款高级的 YouTube WebView 封装客户端。</string>
     <string name="source_code">源码地址</string>
     <string name="clear_cache">清除缓存</string>
     <string name="export_error_log">导出错误日志</string>
@@ -117,8 +107,34 @@
     <string name="no_updates_available">当前已是最新版本</string>
     <string name="checking_for_updates">正在检查更新…</string>
     <string name="failed_to_check_for_updates">检查更新失败</string>
-    <string name="download_update">下载更新</string>
     <string name="clear_cache_confirmation">确定要清除缓存吗？</string>
     <string name="clear">清除</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="about">关于</string>
+    <string name="download_tasks_added">下载任务已添加</string>
+    <string name="download_tasks_added_count">已添加 %1$d 个任务到队列</string>
+    <string name="download_history">下载记录</string>
+    <string name="no_download_records">暂无下载记录</string>
+    <string name="open_file">打开文件</string>
+    <string name="file_not_found">文件不存在</string>
+    <string name="copy_vid">复制视频 ID</string>
+    <string name="vid_copied">视频 ID 已复制</string>
+    <string name="cancel_download">取消</string>
+    <string name="retry_download">重新下载</string>
+    <string name="delete_record">删除</string>
+    <string name="delete_record_confirmation">确定要删除这条记录吗？</string>
+    <string name="delete_local_file">同时删除本地文件</string>
+    <string name="clear_history">清空记录</string>
+    <string name="clear_history_confirmation">确定要清空所有下载历史吗？</string>
+    <string name="history_cleared">记录已清空</string>
+    <string name="status_queued">排队中</string>
+    <string name="status_downloading">下载中 (%1$d%%)</string>
+    <string name="status_merging">合并中…</string>
+    <string name="status_completed">已完成</string>
+    <string name="status_cancelled">已取消</string>
+    <string name="status_failed">下载失败</string>
+    <string name="type_video">视频</string>
+    <string name="type_audio">音频</string>
+    <string name="type_subtitle">字幕</string>
+    <string name="type_thumbnail">封面</string>
 </resources>

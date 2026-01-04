@@ -1,0 +1,6 @@
+feat: refactored player and improved multi-thread downloader;
+feat: added about page and multi-tabs support;
+feat: support for downloading subtitles and audio tracks;
+feat: picture-in-picture (PiP) support;
+opt: configurable download thread count;
+fix: resolved various UI bugs and download issues.

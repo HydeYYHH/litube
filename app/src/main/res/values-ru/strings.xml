@@ -1,23 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">Миниатюра</string>
     <string name="video">Видео</string>
     <string name="cancel">Отменить</string>
     <string name="download">Скачать</string>
     <string name="video_quality">Качество видео</string>
     <string name="confirm">Подтвердить</string>
-    <string name="downloading">Скачивание</string>
     <string name="select_something_first">Сначала выберите что-нибудь</string>
-    <string name="download_complete">Скачивание завершено </string>
     <string name="download_canceled">Скачивание отменено </string>
-    <string name="thumbnail_has_been_saved_to">Миниатюра сохранена в:  </string>
     <string name="download_finished">Скачивание завершено:  \"%1$s\" сохранено в \"%2$s\"</string>
     <string name="failed_to_download">Не удалось скачать</string>
     <string name="failed_to_download_thumbnail">Не удалось загрузить миниатюру </string>
-    <string name="delete">Удалить</string>
-    <string name="file_deleted">Файл удален</string>
     <string name="audio_only">Аудио</string>
-    <string name="failed_to_delete">Не удалось удалить файл </string>
     <string name="close">Закрыть</string>
     <string name="save">Сохранить</string>
     <string name="share">Поделиться</string>
@@ -34,7 +29,6 @@
     <string name="general">Общие</string>
     <string name="player">Плеер</string>
     <string name="skip_sponsors">Пропускать спонсоры</string>
-    <string name="skip_sponsors_sponsor">Пропускать спонсоры</string>
     <string name="skip_sponsors_selfpromo">Пропускать самопиар</string>
     <string name="skip_sponsors_highlight">Пропускать выделенные фрагменты</string>
     <string name="failed_to_load_video_formats">Не удалось загрузить форматы видео</string>
@@ -42,13 +36,8 @@
     <string name="remember_quality">Запоминать качество видео</string>
     <string name="segments">Сегменты</string>
     <string name="background_play">Включить воспроизведение в фоновом режиме</string>
-    <string name="enable_pip">Включить режим "Картинка в картинке"</string>
     <string name="pip">Картинка в картинке</string>
     <string name="remember_playback_speed">Запоминать скорость воспроизведения</string>
-    <string name="downloading_video">Скачивание видео</string>
-    <string name="downloading_audio">Скачивание аудио</string>
-    <string name="merging">Объединение</string>
-    <string name="merging_audio_video">Объединение аудио и видео</string>
     <string name="reset">Сброс</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">Авто</string>
@@ -75,7 +64,6 @@
     <string name="remember_resize_mode">Запоминать режим изменения размера</string>
     <string name="bitrate">Битрейт</string>
     <string name="dropped_frames">Пропущенные кадры</string>
-    <string name="audio_track">Аудиодорожка</string>
     <string name="resolution">Разрешение</string>
     <string name="video_format">Формат видео</string>
     <string name="audio_format">Формат аудио</string>
@@ -97,6 +85,7 @@
     <string name="unknown_bitrate">Неизвестный битрейт</string>
     <string name="unable_to_get_stream_info">Не удалось получить информацию о потоке</string>
     <string name="no_audio_tracks">Аудиодорожки недоступны</string>
+    <string name="audio_track">Аудиодорожка</string>
     <string name="switched_to_audio_track">Переключено на: %1$s</string>
     <string name="info">Инфо</string>
     <string name="more_options">Дополнительные параметры</string>
@@ -104,11 +93,9 @@
     <string name="failed_to_load_image">Не удалось загрузить изображение</string>
     <string name="application_not_found">Приложение не найдено</string>
     <string name="press_back_again_to_exit">Нажмите еще раз, чтобы выйти</string>
+    <string name="tap_to_unmute">Tap to unmute</string>
     <string name="threads">Потоки</string>
-    <string name="select_audio">Выбрать аудио</string>
-    <string name="select_subtitle">Выбрать субтитры</string>
-    <string name="downloading_subtitle">Загрузка субтитров</string>
-    <string name="app_description">Легкая оболочка Android WebView для YouTube с дополнительными функциями, такими как блокировка рекламы, фоновое воспроизведение и загрузка видео.</string>
+    <string name="app_description">Продвинутая оболочка WebView для YouTube.</string>
     <string name="source_code">Исходный код</string>
     <string name="clear_cache">Очистить кэш</string>
     <string name="export_error_log">Экспорт журнала ошибок</string>
@@ -120,9 +107,34 @@
     <string name="no_updates_available">Вы используете последнюю версию</string>
     <string name="checking_for_updates">Проверка обновлений...</string>
     <string name="failed_to_check_for_updates">Не удалось проверить обновления</string>
-    <string name="download_update">Скачать обновление</string>
     <string name="clear_cache_confirmation">Вы уверены, что хотите очистить кэш приложения?</string>
     <string name="clear">Очистить</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
-    <string name="tap_to_unmute">Нажмите, чтобы включить звук</string>
+    <string name="about">О программе</string>
+    <string name="download_tasks_added">Задачи на загрузку добавлены</string>
+    <string name="download_tasks_added_count">Добавлено %1$d задач в очередь</string>
+    <string name="download_history">Загрузки</string>
+    <string name="no_download_records">Нет записей о загрузках</string>
+    <string name="open_file">Открыть файл</string>
+    <string name="file_not_found">Файл не найден</string>
+    <string name="copy_vid">Копировать ID видео</string>
+    <string name="vid_copied">ID видео скопирован</string>
+    <string name="cancel_download">Отмена</string>
+    <string name="retry_download">Повторить</string>
+    <string name="delete_record">Удалить</string>
+    <string name="delete_record_confirmation">Удалить эту запись?</string>
+    <string name="delete_local_file">Удалить локальный файл</string>
+    <string name="clear_history">Очистить историю</string>
+    <string name="clear_history_confirmation">Очистить всю историю загрузок?</string>
+    <string name="history_cleared">История очищена</string>
+    <string name="status_queued">В очереди</string>
+    <string name="status_downloading">Загрузка (%1$d%%)</string>
+    <string name="status_merging">Объединение...</string>
+    <string name="status_completed">Завершено</string>
+    <string name="status_cancelled">Отменено</string>
+    <string name="status_failed">Ошибка</string>
+    <string name="type_video">Видео</string>
+    <string name="type_audio">Аудио</string>
+    <string name="type_subtitle">Субтитры</string>
+    <string name="type_thumbnail">Миниатюра</string>
 </resources>

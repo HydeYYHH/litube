@@ -1,29 +1,23 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" ?>
 <resources>
+    <string name="app_name" translatable="false">Litube</string>
     <string name="thumbnail">썸네일</string>
     <string name="video">동영상</string>
     <string name="cancel">취소</string>
     <string name="download">다운로드</string>
     <string name="video_quality">화질</string>
     <string name="confirm">확인</string>
-    <string name="downloading">다운로드 중</string>
     <string name="select_something_first">항목을 먼저 선택하세요</string>
-    <string name="download_complete">다운로드 완료</string>
     <string name="download_canceled">다운로드 취소됨</string>
-    <string name="thumbnail_has_been_saved_to">썸네일이 저장되었습니다: </string>
     <string name="download_finished">다운로드 완료: \"%1$s\"이(가) \"%2$s\"에 저장되었습니다</string>
     <string name="failed_to_download">다운로드 실패</string>
     <string name="failed_to_download_thumbnail">썸네일 다운로드 실패</string>
-    <string name="delete">삭제</string>
-    <string name="file_deleted">파일 삭제됨</string>
     <string name="audio_only">오디오</string>
-    <string name="failed_to_delete">파일 삭제 실패</string>
     <string name="close">닫기</string>
     <string name="save">저장</string>
     <string name="share">공유</string>
     <string name="share_thumbnail">썸네일 공유</string>
     <string name="extension">플러그인</string>
-    <string name="chat">채팅</string>
     <string name="request_restart">설정을 적용하려면 재시작하세요</string>
     <string name="restart">재시작</string>
     <string name="display_dislikes">싫어요 수 표시</string>
@@ -35,7 +29,6 @@
     <string name="general">일반</string>
     <string name="player">플레이어</string>
     <string name="skip_sponsors">스폰서 건너뛰기</string>
-    <string name="skip_sponsors_sponsor">스폰서 건너뛰기</string>
     <string name="skip_sponsors_selfpromo">자기 홍보 건너뛰기</string>
     <string name="skip_sponsors_highlight">하이라이트 건너뛰기</string>
     <string name="failed_to_load_video_formats">동영상 형식을 로드하지 못했습니다</string>
@@ -43,13 +36,8 @@
     <string name="remember_quality">화질 기억</string>
     <string name="segments">세그먼트</string>
     <string name="background_play">백그라운드 재생 활성화</string>
-    <string name="enable_pip">PIP 모드 활성화</string>
     <string name="pip">PIP 모드</string>
     <string name="remember_playback_speed">재생 속도 기억</string>
-    <string name="downloading_video">동영상 다운로드 중</string>
-    <string name="downloading_audio">오디오 다운로드 중</string>
-    <string name="merging">병합 중</string>
-    <string name="merging_audio_video">오디오와 비디오 병합 중</string>
     <string name="reset">초기화</string>
     <string name="player_speed_default">1x</string>
     <string name="player_quality_auto">자동</string>
@@ -76,7 +64,6 @@
     <string name="remember_resize_mode">크기 조정 모드 기억</string>
     <string name="bitrate">비트레이트</string>
     <string name="dropped_frames">드롭된 프레임</string>
-    <string name="audio_track">오디오 트랙</string>
     <string name="resolution">해상도</string>
     <string name="video_format">비디오 형식</string>
     <string name="audio_format">오디오 형식</string>
@@ -98,6 +85,7 @@
     <string name="unknown_bitrate">알 수 없는 비트레이트</string>
     <string name="unable_to_get_stream_info">스트림 정보를 가져올 수 없습니다</string>
     <string name="no_audio_tracks">사용 가능한 오디오 트랙이 없습니다</string>
+    <string name="audio_track">오디오 트랙</string>
     <string name="switched_to_audio_track">%1$s(으)로 전환됨</string>
     <string name="info">정보</string>
     <string name="more_options">추가 옵션</string>
@@ -107,10 +95,7 @@
     <string name="press_back_again_to_exit">종료하려면 뒤로 버튼을 한 번 더 누르세요</string>
     <string name="tap_to_unmute">탭하여 음소거 해제</string>
     <string name="threads">스레드</string>
-    <string name="select_audio">오디오 선택</string>
-    <string name="select_subtitle">자막 선택</string>
-    <string name="downloading_subtitle">자막 다운로드 중</string>
-    <string name="app_description">광고 차단, 백그라운드 재생, 동영상 다운로드 등의 기능을 갖춘 가벼운 YouTube용 Android WebView 래퍼입니다.</string>
+    <string name="app_description">YouTube를 위한 고급 웹뷰 래퍼입니다.</string>
     <string name="source_code">소스 코드</string>
     <string name="clear_cache">캐시 삭제</string>
     <string name="export_error_log">오류 로그 내보내기</string>
@@ -125,4 +110,31 @@
     <string name="clear_cache_confirmation">앱 캐시를 삭제하시겠습니까?</string>
     <string name="clear">삭제</string>
     <string name="source_link">https://github.com/HydeYYHH/litube</string>
+    <string name="about">정보</string>
+    <string name="download_tasks_added">다운로드 작업이 추가되었습니다</string>
+    <string name="download_tasks_added_count">%1$d개의 작업이 대기열에 추가되었습니다</string>
+    <string name="download_history">다운로드 기록</string>
+    <string name="no_download_records">다운로드 기록이 없습니다</string>
+    <string name="open_file">파일 열기</string>
+    <string name="file_not_found">파일을 찾을 수 없습니다</string>
+    <string name="copy_vid">비디오 ID 복사</string>
+    <string name="vid_copied">비디오 ID가 복사되었습니다</string>
+    <string name="cancel_download">취소</string>
+    <string name="retry_download">다시 시도</string>
+    <string name="delete_record">삭제</string>
+    <string name="delete_record_confirmation">이 기록을 삭제하시겠습니까?</string>
+    <string name="delete_local_file">로컬 파일도 삭제</string>
+    <string name="clear_history">기록 삭제</string>
+    <string name="clear_history_confirmation">모든 다운로드 기록을 삭제하시겠습니까?</string>
+    <string name="history_cleared">기록이 삭제되었습니다</string>
+    <string name="status_queued">대기 중</string>
+    <string name="status_downloading">다운로드 중 (%1$d%%)</string>
+    <string name="status_merging">병합 중...</string>
+    <string name="status_completed">완료</string>
+    <string name="status_cancelled">취소됨</string>
+    <string name="status_failed">실패</string>
+    <string name="type_video">비디오</string>
+    <string name="type_audio">오디오</string>
+    <string name="type_subtitle">자막</string>
+    <string name="type_thumbnail">썸네일</string>
 </resources>
