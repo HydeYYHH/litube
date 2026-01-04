@@ -33,17 +33,17 @@ import androidx.media3.ui.AspectRatioFrameLayout;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hhst.youtubelite.player.common.PlayerUtils;
-import com.hhst.youtubelite.util.DeviceUtils;
-import com.hhst.youtubelite.util.ViewUtils;
-import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
+import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.gesture.PlayerGestureListener;
 import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.ViewUtils;
 import com.squareup.picasso.Picasso;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -52,8 +52,8 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.util.List;
 import java.util.Locale;
-
 import java.util.Optional;
+
 import javax.inject.Inject;
 
 import dagger.hilt.android.scopes.ActivityScoped;
@@ -64,6 +64,9 @@ import lombok.Setter;
 @UnstableApi
 public class Controller {
 
+	private static final int HINT_PADDING_DP = 8;
+	private static final int HINT_TOP_MARGIN_DP = 24;
+	private static final int CONTROLS_HIDE_DELAY_MS = 3000;
 	@NonNull
 	private final Activity activity;
 	@NonNull
@@ -78,24 +81,15 @@ public class Controller {
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
 	private TextView hintText;
-
 	@Getter
 	private boolean isControlsVisible = false;
 	@Setter
 	private boolean longPress = false;
 	private boolean isLocked = false;
-
-	private static final int HINT_PADDING_DP = 8;
-	private static final int HINT_TOP_MARGIN_DP = 24;
-	private static final int CONTROLS_HIDE_DELAY_MS = 3000;
-
-	@NonNull
+	private long lastVideoRenderedCount = 0;	@NonNull
 	private final Runnable hideControls = () -> setControlsVisible(false);
-
-	private long lastVideoRenderedCount = 0;
 	private long lastFpsUpdateTime = 0;
 	private float fps = 0;
-
 	@Inject
 	public Controller(@NonNull final Activity activity, @NonNull final LitePlayerView playerView, @NonNull final Engine engine, @NonNull final PlayerPreferences prefs, @NonNull final ZoomTouchListener zoomListener) {
 		this.activity = activity;
@@ -278,7 +272,7 @@ public class Controller {
 
 		speedView.setText(String.format(Locale.getDefault(), "%sx", engine.getPlaybackRate()));
 		speedView.setOnClickListener(v -> {
-			final float[] speeds = {0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f};
+			final float[] speeds = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f};
 			final String[] options = new String[speeds.length];
 			int checked = -1;
 			final float currentSpeed = engine.getPlaybackRate();
@@ -421,6 +415,7 @@ public class Controller {
 			bottomSheetDialog.show();
 		});
 	}
+
 	private void showAudioTrackOptions() {
 		final List<AudioStream> audioTracks = engine.getAvailableAudioTracks();
 		if (audioTracks.isEmpty()) return;
@@ -546,9 +541,12 @@ public class Controller {
 
 		audioFormatOpt.ifPresent(audioFormat -> {
 			info.append(activity.getString(R.string.audio_format)).append(": ").append(audioFormat.sampleMimeType).append("\n");
-			if (audioFormat.bitrate > 0) info.append(activity.getString(R.string.bitrate)).append(": ").append(audioFormat.bitrate / 1000).append(" kbps\n");
-			if (audioFormat.channelCount > 0) info.append(activity.getString(R.string.channels)).append(": ").append(audioFormat.channelCount).append("\n");
-			if (audioFormat.sampleRate > 0) info.append(activity.getString(R.string.sample_rate)).append(": ").append(audioFormat.sampleRate).append(" Hz\n");
+			if (audioFormat.bitrate > 0)
+				info.append(activity.getString(R.string.bitrate)).append(": ").append(audioFormat.bitrate / 1000).append(" kbps\n");
+			if (audioFormat.channelCount > 0)
+				info.append(activity.getString(R.string.channels)).append(": ").append(audioFormat.channelCount).append("\n");
+			if (audioFormat.sampleRate > 0)
+				info.append(activity.getString(R.string.sample_rate)).append(": ").append(audioFormat.sampleRate).append(" Hz\n");
 		});
 
 		final String quality = engine.getQuality();
@@ -564,7 +562,8 @@ public class Controller {
 					break;
 				}
 			}
-			if (!hasActiveVideo) info.append(activity.getString(R.string.no_active_video_stream)).append("\n");
+			if (!hasActiveVideo)
+				info.append(activity.getString(R.string.no_active_video_stream)).append("\n");
 		} else info.append(activity.getString(R.string.no_active_video_stream));
 
 		final int audioIndex = engine.getSelectedAudioTrackIndex();
@@ -657,7 +656,6 @@ public class Controller {
 		ViewUtils.animateViewAlpha(hintText, 0.0f, View.GONE);
 	}
 
-
 	private void showResizeModeOptions() {
 		setControlsVisible(true);
 		final String[] options = {activity.getString(R.string.resize_fit), activity.getString(R.string.resize_fill), activity.getString(R.string.resize_zoom), activity.getString(R.string.resize_fixed_width), activity.getString(R.string.resize_fixed_height)};
@@ -741,7 +739,9 @@ public class Controller {
 					tv.setTextColor(out.data);
 					tv.setTypeface(null, Typeface.BOLD);
 				} else {
-					tv.setTextColor(activity.getColor(android.R.color.white));
+					TypedValue out = new TypedValue();
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, out, true);
+					tv.setTextColor(out.data);
 					tv.setTypeface(null, Typeface.NORMAL);
 				}
 				return tv;
@@ -791,5 +791,7 @@ public class Controller {
 		default void onLongClick(int index, String label) {
 		}
 	}
+
+
 
 }
