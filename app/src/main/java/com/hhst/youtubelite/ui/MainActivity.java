@@ -13,11 +13,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Rational;
-import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -88,6 +88,38 @@ public final class MainActivity extends AppCompatActivity {
 		startPlaybackService();
 
 		handleIntent(getIntent());
+
+		setupBackNavigation();
+	}
+
+	// fixs: back button issue
+	private void setupBackNavigation() {
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackPressed() {
+				if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
+					setEnabled(false);
+					getOnBackPressedDispatcher().onBackPressed();
+					setEnabled(true);
+					return;
+				}
+
+				if (player != null && player.isFullscreen()) {
+					player.exitFullscreen();
+					return;
+				}
+
+				final YoutubeWebview webview = getWebview();
+				if (webview != null && tabManager != null) {
+					tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
+					if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
+						tabManager.evaluateJavascript("document.exitFullscreen()", null);
+						return;
+					}
+				}
+				goBack();
+			}
+		});
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
@@ -165,29 +197,6 @@ public final class MainActivity extends AppCompatActivity {
 	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
 		if (player != null) player.onPictureInPictureModeChanged(isInPictureInPictureMode);
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-	}
-
-	@Override
-	public boolean onKeyDown(final int keyCode, final KeyEvent keyEvent) {
-		if (DeviceUtils.isInPictureInPictureMode(this)) return super.onKeyDown(keyCode, keyEvent);
-		if (keyCode == KeyEvent.KEYCODE_BACK) {
-			if (player != null && player.isFullscreen()) {
-				player.exitFullscreen();
-				return true;
-			}
-
-			final YoutubeWebview webview = getWebview();
-			if (webview != null && tabManager != null) {
-				tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
-				if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
-					tabManager.evaluateJavascript("document.exitFullscreen()", null);
-					return true;
-				}
-			}
-			goBack();
-			return true;
-		}
-		return false;
 	}
 
 	private void startPlaybackService() {

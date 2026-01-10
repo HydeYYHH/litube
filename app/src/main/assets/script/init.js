@@ -32,20 +32,19 @@ try {
         const getPageClass = (url) => {
             const u = new URL(url.toLowerCase());
             if (!u.hostname.includes('youtube.com')) return 'unknown';
-            const path = u.pathname;
-            if (path === '/' ) return 'home';
-            if (path === '/shorts') return 'shorts';
-            if (path === '/watch') return 'watch';
-            if (path === '/channel') return 'channel';
-            if (path === '/gaming') return 'gaming';
-            if (path === '/feed/subscriptions') return 'subscriptions';
-            if (path === '/feed/library') return 'library';
-            if (path === '/feed/history') return 'history';
-            if (path === '/feed/channels') return 'channels';
-            if (path === '/feed/playlists') return 'playlists';
-            if (path === '/select_site') return 'select_site';
-            if (path.startsWith('/@')) return '@';
-            return path.slice(1) || 'home';
+            const segments = u.pathname.split('/').filter(Boolean);
+            if (segments.length === 0) return 'home';
+
+            const s0 = segments[0];
+            if (s0 === 'shorts') return 'shorts';
+            if (s0 === 'watch') return 'watch';
+            if (s0 === 'channel') return 'channel';
+            if (s0 === 'gaming') return 'gaming';
+            if (s0 === 'feed' && segments.length > 1) return segments[1];
+            if (s0 === 'select_site') return 'select_site';
+            if (s0.startsWith('@')) return '@';
+
+            return segments.join('/');
         };
 
         // Observe page type changes and dispatch event
@@ -147,17 +146,22 @@ try {
         document.addEventListener('animationstart', (e) => {
             if (e.animationName !== 'nodeInserted') return;
             const node = e.target;
-            if (getPageClass(location.href) === 'watch') {
-                if (node.id === 'movie_player') {
-                    node.setPlaybackQualityRange('tiny', 'tiny');
+            const pageClass = getPageClass(location.href);
+
+            if (node.id === 'movie_player') {
+                if (pageClass === 'watch') {
                     node.mute();
                     node.seekTo(node.getDuration() / 2);
                     node.addEventListener('onStateChange', (state) => {
                         if (state === 1) node.pauseVideo();
                     });
-                    ro.disconnect();
-                    ro.observe(node);
-                } else if (node.id === 'player') {
+                } else if (pageClass === 'shorts') {
+                    node.unMute();
+                }
+                ro.disconnect();
+                ro.observe(node);
+            } else if (pageClass === 'watch') {
+                if (node.id === 'player') {
                     node.style.visibility = 'hidden';
                 } else if (node.id === 'player-container-id') {
                     node.style.backgroundColor = 'black';
@@ -173,7 +177,8 @@ try {
 
         setInterval(() => {
             // Skip ads
-            if (getPageClass(location.href) === 'watch') {
+            const pageClass = getPageClass(location.href);
+            if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');
                 if (video) video.currentTime = video.duration;
             }

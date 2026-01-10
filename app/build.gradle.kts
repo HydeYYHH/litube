@@ -35,8 +35,8 @@ android {
             )
         }
         debug {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -66,7 +66,6 @@ dependencies {
     annotationProcessor(libs.lombok)
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     implementation(libs.newpipeextractor)
-    implementation(libs.filedownloader)
     implementation(libs.isoparser)
     implementation(libs.gson)
     implementation(libs.commons.io)

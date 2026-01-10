@@ -5,7 +5,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebBackForwardList;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -13,7 +12,6 @@ import androidx.fragment.app.Fragment;
 import androidx.media3.common.util.UnstableApi;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
@@ -35,7 +33,6 @@ public final class YoutubeFragment extends Fragment {
 
 	private static final String ARG_URL = "url";
 	private static final String ARG_TAG = "tag";
-	private static final String LOADED = "loaded";
 
 	@Inject
 	YoutubeExtractor youtubeExtractor;
@@ -54,7 +51,6 @@ public final class YoutubeFragment extends Fragment {
 	private String url;
 	@Nullable
 	private String mTag;
-	private boolean loaded = false;
 	@Nullable
 	private YoutubeWebview webview;
 	@Nullable
@@ -89,7 +85,6 @@ public final class YoutubeFragment extends Fragment {
 			url = args.getString(ARG_URL);
 			mTag = args.getString(ARG_TAG);
 		}
-		if (savedInstanceState != null) loaded = savedInstanceState.getBoolean(LOADED, false);
 	}
 
 	@NonNull
@@ -113,15 +108,7 @@ public final class YoutubeFragment extends Fragment {
 			YoutubeFragment.this.url = url;
 			tabManager.onUrlChanged(this, url);
 		});
-		webview.setOnPageFinishedListener(url -> {
-			takeHistorySnapshot();
-			if (!loaded) {
-				loaded = true;
-				if (mTag != null && mTag.startsWith(Constant.PAGE_SHORTS) && getContext() != null) {
-					Toast.makeText(getContext(), R.string.tap_to_unmute, Toast.LENGTH_SHORT).show();
-				}
-			}
-		});
+		webview.setOnPageFinishedListener(url -> takeHistorySnapshot());
 		webview.init();
 		if (savedInstanceState != null) webview.restoreState(savedInstanceState);
 		else if (url != null) loadUrl(url);
@@ -184,7 +171,6 @@ public final class YoutubeFragment extends Fragment {
 	@Override
 	public void onSaveInstanceState(@NonNull final Bundle outState) {
 		super.onSaveInstanceState(outState);
-		outState.putBoolean(LOADED, loaded);
 		if (webview != null) webview.saveState(outState);
 	}
 

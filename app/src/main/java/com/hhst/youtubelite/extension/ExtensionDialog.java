@@ -95,7 +95,7 @@ public class ExtensionDialog {
 					changed = true;
 				}
 			}
-			if (changed) RestartDialog.show(context);
+			// if (changed) RestartDialog.show(context); // fix: #119
 			dialog.dismiss();
 		}));
 

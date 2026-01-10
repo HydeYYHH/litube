@@ -107,39 +107,48 @@
   
   function getDislikeButton() {
     try {
-      if (getButtons().children[0].tagName === "YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER") {
-        if (getButtons().children[0].children[1] === undefined) {
+      const buttons = getButtons();
+      if (!buttons || !buttons.children || buttons.children.length === 0) return null;
+      const firstChild = buttons.children[0];
+      if (firstChild.tagName === "YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER") {
+        if (firstChild.children[1] === undefined) {
           return document.querySelector("#segmented-dislike-button");
         } else {
-          return getButtons().children[0].children[1];
+          return firstChild.children[1];
         }
       } else {
-        if (getButtons().querySelector("segmented-like-dislike-button-view-model")) {
-          const dislikeViewModel = getButtons().querySelector("dislike-button-view-model");
+        if (buttons.querySelector("segmented-like-dislike-button-view-model")) {
+          const dislikeViewModel = buttons.querySelector("dislike-button-view-model");
           if (!dislikeViewModel) cLog("Dislike button wasn't added to DOM yet...");
           return dislikeViewModel;
         } else {
-          return getButtons().children[1];
+          return buttons.children[1];
         }
       }
     } catch (ignored) {
-  
+
     }
+    return null;
   }
-  
+
   function getLikeButton() {
-    return getButtons().children[0].tagName === "YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER"
+    const buttons = getButtons();
+    if (!buttons || !buttons.children || buttons.children.length === 0) return null;
+    const firstChild = buttons.children[0];
+    return firstChild.tagName === "YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER"
       ? document.querySelector("#segmented-like-button") !== null
         ? document.querySelector("#segmented-like-button")
-        : getButtons().children[0].children[0]
-      : getButtons().querySelector("like-button-view-model") ?? getButtons().children[0];
+        : firstChild.children[0]
+      : buttons.querySelector("like-button-view-model") ?? firstChild;
   }
-  
+
   function getLikeTextContainer() {
+    const likeButton = getLikeButton();
+    if (!likeButton) return null;
     return (
-      getLikeButton().querySelector("#text") ??
-      getLikeButton().getElementsByTagName("yt-formatted-string")[0] ??
-      getLikeButton().querySelector("span[role='text']")
+      likeButton.querySelector("#text") ??
+      likeButton.getElementsByTagName("yt-formatted-string")[0] ??
+      likeButton.querySelector("span[role='text']")
     );
   }
   
@@ -256,10 +265,15 @@
   
   function setLikes(likesCount) {
     if (isMobile) {
-      getButtons().children[0].querySelector(".button-renderer-text").innerText = likesCount;
+      const buttons = getButtons();
+      if (buttons && buttons.children[0]) {
+        const textElement = buttons.children[0].querySelector(".button-renderer-text");
+        if (textElement) textElement.innerText = likesCount;
+      }
       return;
     }
-    getLikeTextContainer().innerText = likesCount;
+    const container = getLikeTextContainer();
+    if (container) container.innerText = likesCount;
   }
   
   function setDislikes(dislikesCount) {

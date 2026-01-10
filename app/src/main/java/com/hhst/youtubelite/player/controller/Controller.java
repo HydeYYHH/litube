@@ -24,6 +24,9 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleEventObserver;
+import androidx.lifecycle.LifecycleOwner;
 import androidx.media3.common.Format;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
@@ -34,6 +37,7 @@ import androidx.media3.ui.AspectRatioFrameLayout;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.common.Constant;
@@ -50,8 +54,11 @@ import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import javax.inject.Inject;
@@ -78,6 +85,8 @@ public class Controller {
 	@NonNull
 	private final PlayerPreferences prefs;
 	@NonNull
+	private final TabManager tabManager;
+	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
 	private TextView hintText;
@@ -86,17 +95,18 @@ public class Controller {
 	@Setter
 	private boolean longPress = false;
 	private boolean isLocked = false;
-	private long lastVideoRenderedCount = 0;	@NonNull
+	private long lastVideoRenderedCount = 0;
+	private long lastFpsUpdateTime = 0;	@NonNull
 	private final Runnable hideControls = () -> setControlsVisible(false);
-	private long lastFpsUpdateTime = 0;
 	private float fps = 0;
 	@Inject
-	public Controller(@NonNull final Activity activity, @NonNull final LitePlayerView playerView, @NonNull final Engine engine, @NonNull final PlayerPreferences prefs, @NonNull final ZoomTouchListener zoomListener) {
+	public Controller(@NonNull final Activity activity, @NonNull final LitePlayerView playerView, @NonNull final Engine engine, @NonNull final PlayerPreferences prefs, @NonNull final ZoomTouchListener zoomListener, @NonNull final TabManager tabManager) {
 		this.activity = activity;
 		this.playerView = playerView;
 		this.engine = engine;
 		this.prefs = prefs;
 		this.zoomListener = zoomListener;
+		this.tabManager = tabManager;
 		this.zoomListener.setOnShowReset(show -> showReset(show && playerView.isFs() && isControlsVisible));
 
 		playerView.post(() -> {
@@ -158,6 +168,7 @@ public class Controller {
 			@Override
 			public void onIsPlayingChanged(boolean isPlaying) {
 				updatePlayPauseButtons(isPlaying);
+				playerView.setKeepScreenOn(isPlaying); // fixs: screen sleep while playing
 				if (!isPlaying && isControlsVisible) hideControlsAutomatically();
 			}
 
@@ -292,14 +303,33 @@ public class Controller {
 			final List<String> available = engine.getAvailableResolutions();
 			if (available.isEmpty()) return;
 
-			final String[] options = available.toArray(new String[0]);
-			final String current = engine.getQuality();
-			int checked = -1;
-			for (int i = 0; i < options.length; i++) if (options[i].equals(current)) checked = i;
-			showSelectionPopup(v, options, checked, (index, label) -> {
-				engine.onQualitySelected(label);
-				prefs.setQuality(label);
+			final Map<String, String> map = new LinkedHashMap<>();
+			for (String s : available) {
+				map.merge(s.replaceAll("(?<=p)\\d+|\\s", ""), s, (o, n) -> n.contains("60") ? n : o);
+			}
+
+			final String[] labels = map.keySet().toArray(new String[0]);
+			final String[] values = map.values().toArray(new String[0]);
+			final int checked = Arrays.asList(values).indexOf(engine.getQuality());
+
+			showSelectionPopup(v, labels, checked, (index, label) -> {
+				final String selected = values[index];
+				engine.onQualitySelected(selected);
+				prefs.setQuality(selected);
 				qualityView.setText(label);
+
+				// fixs: shorts video low quality issue
+				final String js = String.format("""
+						(function(t) {
+							const p = document.querySelector('#movie_player');
+							const ls = p.getAvailableQualityLabels();
+							const v = l => parseInt(l.replace(/\\D/g, ''));
+							const target = v(t);
+							const closest = ls.reduce((b, c, i) => Math.abs(v(c) - target) < Math.abs(v(ls[b]) - target) ? i : b, 0);
+							const quality = p.getAvailableQualityLevels()[closest];
+							p.setPlaybackQualityRange(quality, quality);
+						})('%s')""", label);
+				tabManager.evaluateJavascript(js, null);
 			});
 		});
 	}
@@ -388,8 +418,24 @@ public class Controller {
 			setControlsVisible(true);
 			if (activity.isInPictureInPictureMode()) return;
 			final BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(activity);
+			bottomSheetDialog.setDismissWithAnimation(true);
 			final View bottomSheetView = activity.getLayoutInflater().inflate(R.layout.bottom_sheet_more_options, null);
 			bottomSheetDialog.setContentView(bottomSheetView);
+
+			if (activity instanceof LifecycleOwner lifecycleOwner) {
+				final LifecycleEventObserver observer = (source, event) -> {
+					if (event == Lifecycle.Event.ON_PAUSE && activity.isInPictureInPictureMode()) {
+						bottomSheetDialog.dismiss();
+					}
+				};
+				lifecycleOwner.getLifecycle().addObserver(observer);
+				bottomSheetDialog.setOnDismissListener(dialog -> {
+					lifecycleOwner.getLifecycle().removeObserver(observer);
+					hideControlsAutomatically();
+				});
+			} else {
+				bottomSheetDialog.setOnDismissListener(dialog -> hideControlsAutomatically());
+			}
 
 			setupBottomSheetOption(bottomSheetView, R.id.option_resize_mode, b -> {
 				showResizeModeOptions();
@@ -411,7 +457,6 @@ public class Controller {
 				bottomSheetDialog.dismiss();
 			});
 
-			bottomSheetDialog.setOnDismissListener(dialog -> hideControlsAutomatically());
 			bottomSheetDialog.show();
 		});
 	}
@@ -424,7 +469,9 @@ public class Controller {
 		for (int i = 0; i < audioTracks.size(); i++) {
 			final AudioStream stream = audioTracks.get(i);
 			int bitrate = stream.getAverageBitrate();
-			options[i] = String.format("%s (%s)", stream.getFormat(), bitrate > 0 ? bitrate + " kbps" : "N/A");
+			bitrate = bitrate > 0 ? bitrate : stream.getBitrate();
+			if (stream.getAudioTrackName() == null) options[i] = bitrate + "kbps";
+			else options[i] = String.format("%s (%s)", stream.getAudioTrackName(), bitrate + "kbps");
 		}
 
 		final AudioStream current = engine.getAudioTrack();
@@ -461,14 +508,17 @@ public class Controller {
 				final TextView text = view.findViewById(R.id.text);
 				icon.setImageResource(R.drawable.ic_track);
 				text.setText(getItem(position));
+				final TypedValue tv = new TypedValue();
 				if (position == checkedItem) {
-					final TypedValue tv = new TypedValue();
 					activity.getTheme().resolveAttribute(android.R.attr.colorPrimary, tv, true);
 					icon.setColorFilter(tv.data);
 					text.setTextColor(tv.data);
+					text.setTypeface(null, Typeface.BOLD);
 				} else {
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tv, true);
 					icon.setColorFilter(activity.getColor(android.R.color.darker_gray));
-					text.setTextColor(activity.getColor(android.R.color.primary_text_dark));
+					text.setTextColor(tv.data);
+					text.setTypeface(null, Typeface.NORMAL);
 				}
 				return view;
 			}
@@ -690,14 +740,17 @@ public class Controller {
 				final TextView text = view.findViewById(R.id.text);
 				icon.setImageResource(icons[position]);
 				text.setText(getItem(position));
+				final TypedValue tv = new TypedValue();
 				if (position == checkedItem) {
-					final TypedValue tv = new TypedValue();
 					activity.getTheme().resolveAttribute(android.R.attr.colorPrimary, tv, true);
 					icon.setColorFilter(tv.data);
 					text.setTextColor(tv.data);
+					text.setTypeface(null, Typeface.BOLD);
 				} else {
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tv, true);
 					icon.setColorFilter(activity.getColor(android.R.color.darker_gray));
-					text.setTextColor(activity.getColor(android.R.color.primary_text_dark));
+					text.setTextColor(tv.data);
+					text.setTypeface(null, Typeface.NORMAL);
 				}
 				return view;
 			}
@@ -791,6 +844,7 @@ public class Controller {
 		default void onLongClick(int index, String label) {
 		}
 	}
+
 
 
 

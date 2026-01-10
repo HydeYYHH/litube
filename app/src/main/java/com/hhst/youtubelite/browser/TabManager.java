@@ -45,7 +45,7 @@ public class TabManager {
 	private static final String TAG = "TabManager";
 	private static final String SCRIPT_INIT = "init.js";
 	private static final String SCRIPT_INIT_MIN = "init.min.js";
-	private static final Set<String> NAV_TAGS = Set.of(Constant.PAGE_HOME, Constant.PAGE_SHORTS, Constant.PAGE_SUBSCRIPTIONS, Constant.PAGE_LIBRARY);
+	private static final Set<String> NAV_TAGS = Set.of(Constant.PAGE_HOME, Constant.PAGE_SUBSCRIPTIONS, Constant.PAGE_LIBRARY);
 	private final Activity activity;
 	private final Lazy<LitePlayer> player;
 	private final Deque<YoutubeFragment> tabs = new LinkedList<>();
@@ -80,7 +80,7 @@ public class TabManager {
 	public void openTab(@NonNull final String url, @Nullable String tag) {
 		if (tag == null) tag = UrlUtils.getPageClass(url);
 		// Open in current tab
-		if (tab != null && tag.equals(tab.getMTag()) && NAV_TAGS.contains(tag)) {
+		if (tab != null && (tag.equals(tab.getMTag()) && NAV_TAGS.contains(tag) || tag.equals(Constant.PAGE_SHORTS))) {
 			if (!url.equals(tab.getUrl())) tab.loadUrl(url);
 			return;
 		}
