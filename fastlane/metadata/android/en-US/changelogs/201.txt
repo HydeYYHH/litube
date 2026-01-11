@@ -1,0 +1,7 @@
+- Opt: Enhanced JS null checks and code structure
+- Fix: Screen dimming issue during playback
+- Fix: Low quality issues in Shorts videos
+- Fix: Text display bugs in player controller and audio track titles
+- Fix: Bottom dialog appearing in Picture-in-Picture mode
+- Fix: Improved stability and resolved various crashes
+- Opt: Removed redundant dependencies and dialogs
