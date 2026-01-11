@@ -10,7 +10,6 @@ import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.TrackSelectionOverride;
@@ -51,7 +50,6 @@ import com.hhst.youtubelite.util.StringUtils;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
-import com.hhst.youtubelite.ui.ErrorDialog;
 
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubeProgressiveDashManifestCreator;
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -64,6 +62,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -539,15 +538,17 @@ public class Engine {
 
 	@NonNull
 	public List<AudioStream> getAvailableAudioTracks() {
-		return streamDetails.getAudioStreams();
+		return streamDetails != null ? streamDetails.getAudioStreams() : Collections.emptyList();
 	}
 
 	@Nullable
 	public AudioStream getAudioTrack() {
+		if (streamDetails == null) return null;
 		return PlayerUtils.selectAudioStream(streamDetails.getAudioStreams(), null);
 	}
 
 	public void setAudioTrack(@NonNull final AudioStream stream) {
+		if (streamDetails == null) return;
 		final AudioStream current = PlayerUtils.selectAudioStream(streamDetails.getAudioStreams(), null);
 		if (current != null && current.getContent().equals(stream.getContent())) return;
 
@@ -555,18 +556,16 @@ public class Engine {
 		final long pos = player.getCurrentPosition();
 		final boolean playWhenReady = player.getPlayWhenReady();
 
-		if (streamDetails != null) {
-			final MediaSource source = createFinalMediaSource(vs, stream, streamDetails.getDashUrl(), streamDetails.getStreamType(), videoDetails.getDuration() * 1000, TimeUnit.MILLISECONDS, player.getCurrentMediaItem(), streamDetails.getSubtitles());
-			player.setMediaSource(source);
-			player.seekTo(pos);
-			player.setPlayWhenReady(playWhenReady);
-			player.prepare();
-		}
+		final MediaSource source = createFinalMediaSource(vs, stream, streamDetails.getDashUrl(), streamDetails.getStreamType(), videoDetails.getDuration() * 1000, TimeUnit.MILLISECONDS, player.getCurrentMediaItem(), streamDetails.getSubtitles());
+		player.setMediaSource(source);
+		player.seekTo(pos);
+		player.setPlayWhenReady(playWhenReady);
+		player.prepare();
 	}
 
 	public int getSelectedAudioTrackIndex() {
 		final Format format = player.getAudioFormat();
-		if (format == null) return -1;
+		if (format == null || streamDetails == null) return -1;
 		for (int i = 0; i < streamDetails.getAudioStreams().size(); i++) {
 			if (streamDetails.getAudioStreams().get(i).getCodec().equals(format.codecs)) return i;
 		}
