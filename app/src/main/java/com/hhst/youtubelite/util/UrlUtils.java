@@ -28,8 +28,10 @@ public final class UrlUtils {
 					"googlevideo.com",
 					"ytimg.com",
 					"accounts.google",
+					"accounts.google.com",
 					"googleusercontent.com",
-					"apis.google.com"
+					"apis.google.com",
+					"gstatic.com"
 	);
 
 	public static boolean isAllowedDomain(@Nullable final Uri uri) {
