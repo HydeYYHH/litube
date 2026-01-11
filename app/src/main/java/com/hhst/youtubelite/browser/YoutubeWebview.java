@@ -178,13 +178,28 @@ public class YoutubeWebview extends WebView {
 
 			@Override
 			public void onReceivedError(@NonNull final WebView view, @NonNull final WebResourceRequest request, @NonNull final WebResourceError error) {
-				final int errorCode = error.getErrorCode();
-				final String failingUrl = request.getUrl().toString();
-				final String description = error.getDescription().toString();
-				if (description.contains("CONNECTION_ABORTED")) {
+				if (request.isForMainFrame()) {
+					final int errorCode = error.getErrorCode();
+					final String failingUrl = request.getUrl().toString();
+					final String description = error.getDescription().toString();
+
 					final String encodedDescription = URLEncoder.encode(description, StandardCharsets.UTF_8);
 					final String encodedUrl = URLEncoder.encode(failingUrl, StandardCharsets.UTF_8);
 					final String url = "file:///android_asset/page/error.html?description=" + encodedDescription + "&errorCode=" + errorCode + "&url=" + encodedUrl;
+					post(() -> view.loadUrl(url));
+				}
+			}
+
+			@Override
+			public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+				if (request.isForMainFrame()) {
+					final int statusCode = errorResponse.getStatusCode();
+					final String failingUrl = request.getUrl().toString();
+					final String reason = errorResponse.getReasonPhrase();
+
+					final String encodedDescription = URLEncoder.encode("HTTP Error " + statusCode + ": " + reason, StandardCharsets.UTF_8);
+					final String encodedUrl = URLEncoder.encode(failingUrl, StandardCharsets.UTF_8);
+					final String url = "file:///android_asset/page/error.html?description=" + encodedDescription + "&errorCode=" + statusCode + "&url=" + encodedUrl;
 					post(() -> view.loadUrl(url));
 				}
 			}
@@ -323,7 +338,8 @@ public class YoutubeWebview extends WebView {
 							let style = document.createElement('style');
 							style.type = 'text/css';
 							style.textContent = window.atob('%s');
-							document.head.appendChild(style);
+							let target = document.head || document.documentElement;
+							if (target) target.appendChild(style);
 							})()
 							""", encodedCss);
 			post(() -> scripts.add(js));

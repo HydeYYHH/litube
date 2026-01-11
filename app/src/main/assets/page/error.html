@@ -62,8 +62,13 @@
       color: var(--md-sys-color-outline);
       word-break: break-all;
     }
-    button {
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
       margin-top: 24px;
+    }
+    button {
       padding: 10px 24px;
       border-radius: 20px;
       border: none;
@@ -72,6 +77,11 @@
       cursor: pointer;
       background: var(--md-sys-color-primary);
       color: var(--md-sys-color-on-primary);
+    }
+    button:first-child {
+      background: transparent;
+      border: 1px solid var(--md-sys-color-outline);
+      color: var(--md-sys-color-primary);
     }
     button:active {
       opacity: 0.85;
@@ -86,13 +96,30 @@
       Error code: <span id='errorCode'></span><br>
       <span id='failingUrl'></span>
     </div>
-    <button onclick='window.history.back();'>Go Back</button>
+    <div class='actions'>
+      <button onclick='window.history.back();'>Go Back</button>
+      <button onclick='window.location.reload();'>Reload</button>
+    </div>
   </div>
   <script>
     const params = new URLSearchParams(window.location.search);
-    document.getElementById('description').textContent = decodeURIComponent(params.get('description') || '');
-    document.getElementById('errorCode').textContent = params.get('errorCode') || '';
-    document.getElementById('failingUrl').textContent = decodeURIComponent(params.get('url') || '');
+    const description = decodeURIComponent(params.get('description') || '');
+    const errorCode = params.get('errorCode') || '';
+    const failingUrl = decodeURIComponent(params.get('url') || '');
+
+    document.getElementById('description').textContent = description;
+    document.getElementById('errorCode').textContent = errorCode;
+    document.getElementById('failingUrl').textContent = failingUrl;
+
+    // If it's a reload from the error page itself, we might want to go back to the original URL
+    function reload() {
+      if (failingUrl) {
+        window.location.href = failingUrl;
+      } else {
+        window.location.reload();
+      }
+    }
+    document.querySelectorAll('button')[1].onclick = reload;
   </script>
 </body>
 </html>

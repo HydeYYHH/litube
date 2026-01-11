@@ -20,7 +20,7 @@ try {
                 'ru': { 'download': 'Скачать', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
                 'tr': { 'download': 'İndir', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
-            const lang = (document.querySelector('html').lang || 'en').toLowerCase();
+            const lang = (document.documentElement.lang || 'en').toLowerCase();
             let keyLang = lang.substring(0, 2);
             if (lang.includes('tw') || lang.includes('hk') || lang.includes('mo') || lang.includes('hant')) {
                 keyLang = 'zt';
@@ -46,6 +46,31 @@ try {
 
             return segments.join('/');
         };
+
+        // Extract poToken
+        if (!window.originalFetch) {
+            window.originalFetch = fetch;
+            window.fetch = async (...args) => {
+                const request = args[0] instanceof Request ? args[0] : new Request(...args);
+                if (request.url.includes('youtubei/v1/player') && request.method === 'POST') {
+                    try {
+                        const cloned = request.clone();
+                        const text = await cloned.text();
+                        if (text) {
+                            const json = JSON.parse(text);
+                            const poToken = json?.serviceIntegrityDimensions?.poToken;
+                            const visitorData = json?.context?.client?.visitorData;
+                            if (poToken) {
+                                android.setPoToken(poToken, visitorData);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('poToken extraction error', e);
+                    }
+                }
+                return window.originalFetch(...args);
+            };
+        }
 
         // Observe page type changes and dispatch event
         const observePageClass = () => {
@@ -303,7 +328,7 @@ try {
                                           iframe.src = `https://www.youtube.com/live_chat?v=${videoId}&embed_domain=${location.hostname}${isDarkMode ? '&dark_theme=1' : ''}`;
                                           iframe.style.cssText = 'width: 100%; height: 100%; border: none; flex: 1; background-color: transparent;';
                                           chatContainer.appendChild(iframe);
-                                          panelContainer.insertBefore(chatContainer, panelContainer.firstChild);
+                                          panelContainer?.insertBefore(chatContainer, panelContainer.firstChild);
 
                                           window.addEventListener('popstate', () => {
                                               if (chatContainer && chatContainer.style.display !== 'none' && !location.hash.includes('chat')) {
@@ -316,7 +341,7 @@ try {
                                   }
                               }
                         });
-                        saveButton.parentElement.insertBefore(chatButton, saveButton);
+                        saveButton.parentElement?.insertBefore(chatButton, saveButton);
                     }
                 }
             } else {
@@ -351,7 +376,7 @@ try {
                         // opt: fetch video details
                         android.download(location.href)
                     });
-                    saveButton.parentElement.insertBefore(downloadButton, saveButton);
+                    saveButton.parentElement?.insertBefore(downloadButton, saveButton);
                 }
             }
 
@@ -380,7 +405,7 @@ try {
                         });
                         const children = settings.children;
                         const index = Math.max(0, children.length - 1);
-                        settings.insertBefore(aboutButton, children[index]);
+                        settings?.insertBefore(aboutButton, children[index]);
                     }
                 }
             }
@@ -407,7 +432,7 @@ try {
                         downloadButton.addEventListener('click', () => {
                             android.download();
                         });
-                        settings.insertBefore(downloadButton, button);
+                        settings?.insertBefore(downloadButton, button);
                     }
                 }
             }
@@ -435,38 +460,12 @@ try {
                         extensionButton.addEventListener('click', () => {
                             android.extension();
                         });
-                        settings.insertBefore(extensionButton, button);
+                        settings?.insertBefore(extensionButton, button);
                     }
                 }
             }
 
         }, 500);
-
-        // Extract poToken
-        const originalFetch = window.fetch;
-        window.fetch = async function (input, init) {
-        try {
-            const request = input instanceof Request
-            ? input
-            : new Request(input, init);
-
-            const url = request.url;
-            const method = request.method;
-
-            if (url.includes('/youtubei/v1/player') && method === 'POST') {
-            const cloned = request.clone();
-            const text = await cloned.text();
-
-            if (text) {
-                const json = JSON.parse(text);
-                const poToken = json?.serviceIntegrityDimensions?.poToken;
-                const visitorData = json?.context?.client?.visitorData;
-                android.setPoToken(poToken, visitorData);
-            }
-            }
-        } catch (e) {console.warn('fetch hook error', e);}
-        return originalFetch.call(this, input, init);
-        };
 
         const addTapEvent = (el, handler) => {
             let startX, startY;

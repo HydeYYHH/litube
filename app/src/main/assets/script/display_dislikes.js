@@ -162,8 +162,9 @@
       let textSpan = document.createElement("span");
       textSpan.id = "text";
       textSpan.style.marginLeft = "6px";
-      dislikeButton?.querySelector("button").appendChild(textSpan);
-      if (dislikeButton) dislikeButton.querySelector("button").style.width = "auto";
+      const button = dislikeButton?.querySelector("button");
+      button?.appendChild(textSpan);
+      if (button) button.style.width = "auto";
       result = textSpan;
     }
     return result;
@@ -348,7 +349,8 @@
       }
     `;
   
-    document.head.appendChild(styleNode);
+    const target = document.head || document.documentElement;
+    if (target) target.appendChild(styleNode);
   })();
   
   
@@ -417,15 +419,20 @@
   `,
       );
       let descriptionAndActionsElement = document.getElementById("top-row");
-      descriptionAndActionsElement.style.borderBottom = "1px solid var(--yt-spec-10-percent-layer)";
-      descriptionAndActionsElement.style.paddingBottom = "10px";
+      if (descriptionAndActionsElement) {
+        descriptionAndActionsElement.style.borderBottom = "1px solid var(--yt-spec-10-percent-layer)";
+        descriptionAndActionsElement.style.paddingBottom = "10px";
+      }
     } else {
-      document.querySelector(".ryd-tooltip").style.width = widthPx + "px";
-      document.getElementById("return-youtube-dislike-bar").style.width = widthPercent + "%";
+      const rydTooltip = document.querySelector(".ryd-tooltip");
+      if (rydTooltip) rydTooltip.style.width = widthPx + "px";
+      const rydBar = document.getElementById("return-youtube-dislike-bar");
+      if (rydBar) rydBar.style.width = widthPercent + "%";
   
       if (extConfig.coloredBar) {
-        document.getElementById("return-youtube-dislike-bar-container").style.backgroundColor = getColorFromTheme(false);
-        document.getElementById("return-youtube-dislike-bar").style.backgroundColor = getColorFromTheme(true);
+        const rydBarContainer = document.getElementById("return-youtube-dislike-bar-container");
+        if (rydBarContainer) rydBarContainer.style.backgroundColor = getColorFromTheme(false);
+        if (rydBar) rydBar.style.backgroundColor = getColorFromTheme(true);
       }
     }
   }
@@ -536,7 +543,7 @@
     const urlObject = new URL(window.location.href);
     const pathname = urlObject.pathname;
     if (pathname.startsWith("/clip")) {
-      return (document.querySelector("meta[itemprop='videoId']") || document.querySelector("meta[itemprop='identifier']")).content;
+      return (document.querySelector("meta[itemprop='videoId']") || document.querySelector("meta[itemprop='identifier']"))?.content;
     } else {
       if (pathname.startsWith("/shorts")) {
         return pathname.slice(8);
