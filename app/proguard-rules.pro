@@ -81,3 +81,4 @@
 
 ## Rules for NewPipeExtractor
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+-dontwarn com.google.re2j.**
