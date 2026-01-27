@@ -186,6 +186,7 @@ public class Engine {
 		final MediaItem.Builder builder = new MediaItem.Builder();
 		if (si.getDashUrl() != null && !si.getDashUrl().isEmpty()) builder.setUri(si.getDashUrl());
 		else if (videoStream != null) builder.setUri(videoStream.getContent());
+		else if (audioStream != null) builder.setUri(audioStream.getContent());
 
 		// Subtitle
 		final List<MediaItem.SubtitleConfiguration> configs = new ArrayList<>();
@@ -242,12 +243,21 @@ public class Engine {
 
 		MediaSource baseSource;
 
-		if (!dashUrl.isEmpty())
+		if (dashUrl != null && !dashUrl.isEmpty()) {
 			baseSource = new DashMediaSource.Factory(cacheFactory).createMediaSource(item);
-		else {
+		} else {
 			final MediaSource vSource = createMediaSource(video, duration, unit, cacheFactory);
 			final MediaSource aSource = createMediaSource(audio, duration, unit, cacheFactory);
-			baseSource = new MergingMediaSource(vSource, aSource);
+
+			if (vSource != null && aSource != null) {
+				baseSource = new MergingMediaSource(vSource, aSource);
+			} else if (vSource != null) {
+				baseSource = vSource;
+			} else if (aSource != null) {
+				baseSource = aSource;
+			} else {
+				baseSource = new ProgressiveMediaSource.Factory(cacheFactory).createMediaSource(item.localConfiguration != null ? item : MediaItem.fromUri(Uri.EMPTY));
+			}
 		}
 
 		if (subs == null || subs.isEmpty()) return baseSource;
@@ -280,10 +290,9 @@ public class Engine {
 						.createMediaSource(MediaItem.fromUri(Uri.parse(sub.getContent())));
 	}
 
+	@Nullable
 	private MediaSource createMediaSource(@Nullable final Stream stream, final long duration, TimeUnit unit, @NonNull final CacheDataSource.Factory cacheFactory) {
-		if (stream == null)
-			return new ProgressiveMediaSource.Factory(cacheFactory)
-							.createMediaSource(MediaItem.EMPTY);
+		if (stream == null) return null;
 
 		try {
 			if (stream.getItagItem() != null) {
@@ -359,10 +368,6 @@ public class Engine {
 				}
 			}
 		}
-	}
-
-	public long getDuration() {
-		return this.player.getDuration();
 	}
 
 	public long position() {

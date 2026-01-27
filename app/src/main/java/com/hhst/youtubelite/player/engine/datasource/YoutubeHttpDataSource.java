@@ -8,10 +8,8 @@ import static androidx.media3.datasource.DefaultHttpDataSource.DEFAULT_CONNECT_T
 import static androidx.media3.datasource.DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getAndroidUserAgent;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getIosUserAgent;
-import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getTvHtml5UserAgent;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isAndroidStreamingUrl;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isIosStreamingUrl;
-import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isTvHtml5StreamingUrl;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebEmbeddedPlayerStreamingUrl;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebStreamingUrl;
 
@@ -348,9 +346,8 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 			if (rangeHeader != null) httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
 		}
 
-		final boolean isTvHtml5StreamingUrl = isTvHtml5StreamingUrl(requestUrl);
 
-		if (isWebStreamingUrl(requestUrl) || isTvHtml5StreamingUrl || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
+		if (isWebStreamingUrl(requestUrl) || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
 			httpURLConnection.setRequestProperty(HttpHeaders.ORIGIN, YOUTUBE_BASE_URL);
 			httpURLConnection.setRequestProperty(HttpHeaders.REFERER, YOUTUBE_BASE_URL);
 			httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
@@ -367,8 +364,6 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getAndroidUserAgent(null));
 		else if (isIosStreamingUrl)
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getIosUserAgent(null));
-		else if (isTvHtml5StreamingUrl)
-			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getTvHtml5UserAgent());
 		else
 			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, userAgent);
 

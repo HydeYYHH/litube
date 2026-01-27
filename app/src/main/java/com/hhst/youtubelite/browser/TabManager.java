@@ -86,7 +86,6 @@ public class TabManager {
 		}
 		final String homeTag = Constant.PAGE_HOME;
 		final FragmentTransaction ft = getFm().beginTransaction();
-		ft.setCustomAnimations(R.anim.tab_enter, R.anim.tab_exit, R.anim.tab_pop_enter, R.anim.tab_pop_exit);
 		if (tab != null) ft.hide(tab);
 		if (!NAV_TAGS.contains(tag)) {
 			// Open tab directly and ensure home is on the bottom
@@ -185,7 +184,6 @@ public class TabManager {
 		} else if (hasBackStack) {
 			// Tabs back
 			final FragmentTransaction ft = getFm().beginTransaction();
-			ft.setCustomAnimations(R.anim.tab_pop_enter, R.anim.tab_exit);
 			ft.remove(tabs.pollLast());
 			tab = tabs.peekLast();
 			if (tab != null) ft.show(tab);
