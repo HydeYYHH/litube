@@ -269,12 +269,11 @@
 
         <ImageButton
             android:id="@+id/btn_prev"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_circle_gray"
             android:contentDescription="@string/action_previous"
             android:padding="8dp"
-            android:scaleType="fitCenter"
             android:src="@drawable/ic_previous"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/guide_left"
@@ -291,33 +290,32 @@
 
             <ImageButton
                 android:id="@+id/btn_play"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_gray"
                 android:contentDescription="@string/action_play"
-                android:padding="12dp"
+                android:padding="16dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_play" />
 
             <ImageButton
                 android:id="@+id/btn_pause"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_gray"
                 android:contentDescription="@string/action_pause"
-                android:padding="12dp"
+                android:padding="16dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_pause" />
         </FrameLayout>
 
         <ImageButton
             android:id="@+id/btn_next"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_circle_gray"
             android:contentDescription="@string/action_next"
             android:padding="8dp"
-            android:scaleType="fitCenter"
             android:src="@drawable/ic_next"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toEndOf="@+id/guide_right"

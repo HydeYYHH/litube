@@ -1,33 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme for Light Mode (Red Theme) -->
+    <!-- Base application theme. -->
     <style name="Base.Theme.YoutubeLite" parent="Theme.Material3.DayNight.NoActionBar">
-
-        <!-- 1. Main Branding Colors (FORCING RED) -->
-        <!-- We use standard YouTube Red: #FF0000 -->
-        <item name="colorPrimary">#FF0000</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#FFDAD4</item>
-        <item name="colorOnPrimaryContainer">#410002</item>
-
-        <!-- 2. Secondary/Accent Colors (Controls boxes, switches, progress bars) -->
-        <item name="colorSecondary">#775652</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#FFDAD5</item>
-        <item name="colorOnSecondaryContainer">#2C1512</item>
-
-        <!-- 3. UI Elements (The "Boxes" and Text Highlights) -->
-        <item name="colorOutline">#FF0000</item>
-        <item name="colorControlActivated">#FF0000</item>
-        <item name="colorControlHighlight">#40FF0000</item>
-
-        <!-- 4. System Layout Settings -->
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 
-    <!-- Main Theme used by the Manifest -->
     <style name="Theme.YoutubeLite" parent="Base.Theme.YoutubeLite" />
 
-    <!-- Transparent Theme for Overlays -->
     <style name="Theme.Transparent" parent="Theme.YoutubeLite">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>

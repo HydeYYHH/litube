@@ -31,151 +31,147 @@ import lombok.Getter;
 @UnstableApi
 public final class YoutubeFragment extends Fragment {
 
-    private static final String ARG_URL = "url";
-    private static final String ARG_TAG = "tag";
+	private static final String ARG_URL = "url";
+	private static final String ARG_TAG = "tag";
 
-    @Inject
-    YoutubeExtractor youtubeExtractor;
-    @Inject
-    LitePlayer player;
-    @Inject
-    Controller controller;
-    @Inject
-    ExtensionManager extensionManager;
-    @Inject
-    TabManager tabManager;
-    @Inject
-    PoTokenProviderImpl poTokenProvider;
+	@Inject
+	YoutubeExtractor youtubeExtractor;
+	@Inject
+	LitePlayer player;
+	@Inject
+	Controller controller;
+	@Inject
+	ExtensionManager extensionManager;
+	@Inject
+	TabManager tabManager;
+	@Inject
+	PoTokenProviderImpl poTokenProvider;
 
-    @Nullable
-    private String url;
-    @Nullable
-    private String mTag;
-    @Nullable
-    private YoutubeWebview webview;
-    @Nullable
-    private SwipeRefreshLayout swipeRefreshLayout;
-    @Nullable
-    private WebBackForwardList historySnapshot;
+	@Nullable
+	private String url;
+	@Nullable
+	private String mTag;
+	@Nullable
+	private YoutubeWebview webview;
+	@Nullable
+	private SwipeRefreshLayout swipeRefreshLayout;
+	@Nullable
+	private WebBackForwardList historySnapshot;
 
-    @NonNull
-    public static YoutubeFragment newInstance(@NonNull final String url, @NonNull final String tag) {
-        final YoutubeFragment fragment = new YoutubeFragment();
-        final Bundle args = new Bundle();
-        args.putString(ARG_URL, url);
-        args.putString(ARG_TAG, tag);
-        fragment.setArguments(args);
-        return fragment;
-    }
+	@NonNull
+	public static YoutubeFragment newInstance(@NonNull final String url, @NonNull final String tag) {
+		final YoutubeFragment fragment = new YoutubeFragment();
+		final Bundle args = new Bundle();
+		args.putString(ARG_URL, url);
+		args.putString(ARG_TAG, tag);
+		fragment.setArguments(args);
+		return fragment;
+	}
 
-    public void loadUrl(@Nullable final String url) {
-        if (webview != null && url != null && !Objects.equals(webview.getUrl(), url))
-            webview.loadUrl(url);
-    }
+	public void loadUrl(@Nullable final String url) {
+		if (webview != null && url != null && !Objects.equals(webview.getUrl(), url))
+			webview.loadUrl(url);
+	}
 
-    private void takeHistorySnapshot() {
-        if (webview != null) historySnapshot = webview.copyBackForwardList();
-    }
+	private void takeHistorySnapshot() {
+		if (webview != null) historySnapshot = webview.copyBackForwardList();
+	}
 
-    @Override
-    public void onCreate(@Nullable final Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        final Bundle args = getArguments();
-        if (args != null) {
-            url = args.getString(ARG_URL);
-            mTag = args.getString(ARG_TAG);
-        }
-    }
+	@Override
+	public void onCreate(@Nullable final Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		final Bundle args = getArguments();
+		if (args != null) {
+			url = args.getString(ARG_URL);
+			mTag = args.getString(ARG_TAG);
+		}
+	}
 
-    @NonNull
-    @Override
-    public View onCreateView(@NonNull final LayoutInflater inflater, @Nullable final ViewGroup container, @Nullable final Bundle savedInstanceState) {
-        final View view = inflater.inflate(R.layout.fragment_webview, container, false);
-        webview = view.findViewById(R.id.webview);
-        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+	@NonNull
+	@Override
+	public View onCreateView(@NonNull final LayoutInflater inflater, @Nullable final ViewGroup container, @Nullable final Bundle savedInstanceState) {
+		final View view = inflater.inflate(R.layout.fragment_webview, container, false);
+		webview = view.findViewById(R.id.webview);
+		swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
-        // FIXED: Using standard Android colors instead of missing blue resources
-        swipeRefreshLayout.setColorSchemeColors(
-                getResources().getColor(android.R.color.holo_green_dark, null),
-                getResources().getColor(android.R.color.holo_green_light, null)
-        );
+		swipeRefreshLayout.setColorSchemeResources(R.color.light_blue, R.color.blue, R.color.dark_blue);
+		swipeRefreshLayout.setOnRefreshListener(() -> webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", value -> {
+		}));
+		swipeRefreshLayout.setProgressViewOffset(true, 86, 196);
 
-        swipeRefreshLayout.setOnRefreshListener(() -> webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", value -> {
-        }));
-        swipeRefreshLayout.setProgressViewOffset(true, 86, 196);
+		webview.setYoutubeExtractor(youtubeExtractor);
+		webview.setPlayer(player);
+		webview.setExtensionManager(extensionManager);
+		webview.setTabManager(tabManager);
+		webview.setPoTokenProvider(poTokenProvider);
+		webview.setUpdateVisitedHistory(url -> {
+			YoutubeFragment.this.url = url;
+			tabManager.onUrlChanged(this, url);
+		});
+		webview.setOnPageFinishedListener(url -> takeHistorySnapshot());
+		webview.init();
+		if (savedInstanceState != null) webview.restoreState(savedInstanceState);
+		else if (url != null) loadUrl(url);
 
-        webview.setYoutubeExtractor(youtubeExtractor);
-        webview.setPlayer(player);
-        webview.setExtensionManager(extensionManager);
-        webview.setTabManager(tabManager);
-        webview.setPoTokenProvider(poTokenProvider);
-        webview.setUpdateVisitedHistory(url -> {
-            YoutubeFragment.this.url = url;
-            tabManager.onUrlChanged(this, url);
-        });
-        webview.setOnPageFinishedListener(url -> takeHistorySnapshot());
-        webview.init();
-        if (savedInstanceState != null) webview.restoreState(savedInstanceState);
-        else if (url != null) loadUrl(url);
+		// Load scripts in background
+		new Thread(() -> {
+			if (tabManager != null) {
+				tabManager.injectScripts(webview);
+			}
+		}).start();
 
-        // Load scripts in background
-        new Thread(() -> {
-            if (tabManager != null) {
-                tabManager.injectScripts(webview);
-            }
-        }).start();
+		return view;
+	}
 
-        return view;
-    }
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (webview != null && !isHidden()) {
+			webview.onResume();
+			webview.resumeTimers();
+		}
+	}
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (webview != null && !isHidden()) {
-            webview.onResume();
-            webview.resumeTimers();
-        }
-    }
+	@Override
+	public void onPause() {
+		super.onPause();
+		if (webview != null && !isHidden()) {
+			if (getActivity() != null && getActivity().isInPictureInPictureMode()) return;
+			webview.onPause();
+			webview.pauseTimers();
+		}
+	}
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        if (webview != null && !isHidden()) {
-            if (getActivity() != null && getActivity().isInPictureInPictureMode()) return;
-            webview.onPause();
-            webview.pauseTimers();
-        }
-    }
+	@Override
+	public void onHiddenChanged(final boolean hidden) {
+		super.onHiddenChanged(hidden);
+		if (webview != null) {
+			if (hidden) {
+				webview.onPause();
+				webview.pauseTimers();
+			} else {
+				webview.onResume();
+				webview.resumeTimers();
+			}
+		}
+	}
 
-    @Override
-    public void onHiddenChanged(final boolean hidden) {
-        super.onHiddenChanged(hidden);
-        if (webview != null) {
-            if (hidden) {
-                webview.onPause();
-                webview.pauseTimers();
-            } else {
-                webview.onResume();
-                webview.resumeTimers();
-            }
-        }
-    }
+	@Override
+	public void onDestroyView() {
+		super.onDestroyView();
+		if (webview != null) {
+			webview.stopLoading();
+			webview.clearHistory();
+			webview.removeAllViews();
+			webview.destroy();
+			webview = null;
+		}
+	}
 
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        if (webview != null) {
-            webview.stopLoading();
-            webview.clearHistory();
-            webview.removeAllViews();
-            webview.destroy();
-            webview = null;
-        }
-    }
+	@Override
+	public void onSaveInstanceState(@NonNull final Bundle outState) {
+		super.onSaveInstanceState(outState);
+		if (webview != null) webview.saveState(outState);
+	}
 
-    @Override
-    public void onSaveInstanceState(@NonNull final Bundle outState) {
-        super.onSaveInstanceState(outState);
-        if (webview != null) webview.saveState(outState);
-    }
 }
