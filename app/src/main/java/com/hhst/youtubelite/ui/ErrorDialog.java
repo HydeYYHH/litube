@@ -12,8 +12,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.util.DeviceUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

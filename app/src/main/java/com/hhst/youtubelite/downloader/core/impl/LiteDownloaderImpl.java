@@ -5,11 +5,11 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import com.hhst.youtubelite.downloader.core.LiteDownloader;
+import com.hhst.youtubelite.downloader.core.MediaMuxer;
 import com.hhst.youtubelite.downloader.core.ProgressCallback;
 import com.hhst.youtubelite.downloader.core.ProgressCallback2;
 import com.hhst.youtubelite.downloader.core.StreamDownloader;
 import com.hhst.youtubelite.downloader.core.Task;
-import com.hhst.youtubelite.downloader.core.MediaMuxer;
 
 import org.apache.commons.io.FileUtils;
 import org.schabi.newpipe.extractor.stream.Stream;

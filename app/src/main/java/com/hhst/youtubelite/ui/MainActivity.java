@@ -34,16 +34,17 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
-import com.hhst.youtubelite.player.LitePlayer;
-import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.browser.YoutubeWebview;
-import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.util.UrlUtils;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
+import com.hhst.youtubelite.extension.ExtensionManager;
+import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.UrlUtils;
 
 import javax.inject.Inject;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint

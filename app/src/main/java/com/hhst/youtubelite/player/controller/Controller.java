@@ -2,35 +2,20 @@ package com.hhst.youtubelite.player.controller;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.format.DateUtils;
-import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.ListAdapter;
 import android.widget.ListPopupWindow;
-import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
-import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleEventObserver;
-import androidx.lifecycle.LifecycleOwner;
-import androidx.media3.common.Format;
 import androidx.media3.common.Player;
-import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.exoplayer.DecoderCounters;
 import androidx.media3.ui.AspectRatioFrameLayout;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -38,7 +23,6 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.browser.TabManager;
-import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
@@ -46,20 +30,13 @@ import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.gesture.PlayerGestureListener;
 import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.ViewUtils;
-import com.squareup.picasso.Picasso;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
-import org.schabi.newpipe.extractor.stream.VideoStream;
 
-import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
 
 import javax.inject.Inject;
 

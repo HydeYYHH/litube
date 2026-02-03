@@ -16,6 +16,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -28,31 +29,29 @@ import androidx.annotation.Nullable;
 import androidx.media3.common.util.Consumer;
 import androidx.media3.common.util.UnstableApi;
 
-import com.hhst.youtubelite.util.StreamIOUtils;
-import com.hhst.youtubelite.util.UrlUtils;
-import com.hhst.youtubelite.util.ViewUtils;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.util.StreamIOUtils;
+import com.hhst.youtubelite.util.UrlUtils;
+import com.hhst.youtubelite.util.ViewUtils;
 
-
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.net.URLEncoder;
-import android.webkit.WebResourceResponse;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.SequenceInputStream;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.Arrays;
 import java.net.HttpURLConnection;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.Map;
 import java.util.Objects;
 

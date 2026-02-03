@@ -2,6 +2,8 @@ package com.hhst.youtubelite.player.engine;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -37,19 +39,16 @@ import androidx.media3.extractor.ExtractorsFactory;
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory;
 import androidx.media3.extractor.text.SubtitleExtractor;
 
-import android.os.Handler;
-import android.os.Looper;
-
-import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.Constant;
-import com.hhst.youtubelite.player.LitePlayerView;
-import com.hhst.youtubelite.player.common.PlayerPreferences;
-import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
-import com.hhst.youtubelite.player.common.PlayerUtils;
-import com.hhst.youtubelite.util.StringUtils;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
+import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.player.common.PlayerPreferences;
+import com.hhst.youtubelite.player.common.PlayerUtils;
+import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
+import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
+import com.hhst.youtubelite.util.StringUtils;
 
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubeProgressiveDashManifestCreator;
 import org.schabi.newpipe.extractor.stream.AudioStream;

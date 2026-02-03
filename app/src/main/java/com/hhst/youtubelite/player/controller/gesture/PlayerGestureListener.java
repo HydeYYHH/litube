@@ -14,12 +14,11 @@ import androidx.annotation.NonNull;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 
-import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.LitePlayerView;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.util.DeviceUtils;
 
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;

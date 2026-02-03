@@ -1,8 +1,14 @@
 package com.hhst.youtubelite.extension;
 
-import java.util.Map;
+import static com.hhst.youtubelite.Constant.ENABLE_BACKGROUND_PLAY;
+import static com.hhst.youtubelite.Constant.ENABLE_PIP;
+import static com.hhst.youtubelite.Constant.REMEMBER_LAST_POSITION;
+import static com.hhst.youtubelite.Constant.REMEMBER_RESIZE_MODE;
+import static com.hhst.youtubelite.Constant.SKIP_POI_HIGHLIGHT;
+import static com.hhst.youtubelite.Constant.SKIP_SELF_PROMO;
+import static com.hhst.youtubelite.Constant.SKIP_SPONSORS;
 
-import static com.hhst.youtubelite.Constant.*;
+import java.util.Map;
 
 public class Constant {
 	public static final String ENABLE_DISPLAY_DISLIKES = "enable_display_dislikes";

@@ -1,7 +1,5 @@
 package com.hhst.youtubelite.extractor;
 
-import com.hhst.youtubelite.extractor.DownloaderImpl;
-
 import org.junit.Test;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;

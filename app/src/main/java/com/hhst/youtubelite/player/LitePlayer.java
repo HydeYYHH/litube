@@ -5,24 +5,23 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.ui.DefaultTimeBar;
 
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.extractor.ExtractionException;
+import com.hhst.youtubelite.extractor.StreamDetails;
+import com.hhst.youtubelite.extractor.VideoDetails;
+import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
-import com.hhst.youtubelite.extractor.ExtractionException;
-import com.hhst.youtubelite.extractor.StreamDetails;
-import com.hhst.youtubelite.extractor.VideoDetails;
-import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.ErrorDialog;
-
-import androidx.media3.common.Player;
-import androidx.media3.common.PlaybackException;
 
 import java.io.InterruptedIOException;
 import java.util.Objects;
