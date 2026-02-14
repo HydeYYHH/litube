@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="light_blue">#48CAE4</color>
-    <color name="blue">#00B4D8</color>
-    <color name="dark_blue">#0077B6</color>
+    <color name="yt_red">#FF0000</color>
+    <color name="primary">#0F0F0F</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="secondary">#606060</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="background">#FFFFFF</color>
+    <color name="on_background">#0F0F0F</color>
+    <color name="surface">#F9F9F9</color>
+    <color name="on_surface">#0F0F0F</color>
+    <color name="surface_variant">#F1F1F1</color>
+    <color name="on_surface_variant">#606060</color>
+    <color name="outline">#E5E5E5</color>
 </resources>
