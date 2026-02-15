@@ -2,11 +2,58 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.YoutubeLite" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorSurfaceContainer">@color/surface</item>
+        <item name="colorSurfaceContainerLow">@color/surface</item>
+        <item name="colorSurfaceContainerHigh">@color/surface</item>
+        <item name="colorSurfaceContainerHighest">@color/surface</item>
+        <item name="colorSurfaceContainerLowest">@color/surface</item>
+
+        <item name="materialAlertDialogTheme">@style/Theme.YoutubeLite.AlertDialog</item>
+        <item name="bottomSheetDialogTheme">@style/Theme.YoutubeLite.BottomSheetDialog</item>
+        
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 
     <style name="Theme.YoutubeLite" parent="Base.Theme.YoutubeLite" />
+
+    <style name="Theme.YoutubeLite.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="android:windowBackground">@color/surface</item>
+    </style>
+
+    <style name="Theme.YoutubeLite.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="bottomSheetStyle">@style/Widget.YoutubeLite.BottomSheet</item>
+    </style>
+
+    <style name="Widget.YoutubeLite.BottomSheet" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">@color/surface</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.YoutubeLite.BottomSheet</item>
+    </style>
+
+    <style name="ShapeAppearance.YoutubeLite.BottomSheet" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">16dp</item>
+        <item name="cornerSizeTopRight">16dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
 
     <style name="Theme.Transparent" parent="Theme.YoutubeLite">
         <item name="android:windowBackground">@android:color/transparent</item>

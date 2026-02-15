@@ -2,11 +2,16 @@
 build/
 release/
 /*/build/
-
+.gradle-user/
 local.properties
+*.log
+
 .idea/
 .vscode/
-.trae
+.trae/
+*.iml
+*.iws
+*.ipr
 
 out/
 

@@ -94,7 +94,7 @@ public final class YoutubeFragment extends Fragment {
 		webview = view.findViewById(R.id.webview);
 		swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
-		swipeRefreshLayout.setColorSchemeResources(R.color.light_blue, R.color.blue, R.color.dark_blue);
+		swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
 		swipeRefreshLayout.setOnRefreshListener(() -> webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", value -> {
 		}));
 		swipeRefreshLayout.setProgressViewOffset(true, 86, 196);

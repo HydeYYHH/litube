@@ -515,8 +515,8 @@ public class Controller {
 					text.setTextColor(tv.data);
 					text.setTypeface(null, Typeface.BOLD);
 				} else {
-					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tv, true);
-					icon.setColorFilter(activity.getColor(android.R.color.darker_gray));
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, tv, true);
+					icon.setColorFilter(tv.data);
 					text.setTextColor(tv.data);
 					text.setTypeface(null, Typeface.NORMAL);
 				}
@@ -747,8 +747,8 @@ public class Controller {
 					text.setTextColor(tv.data);
 					text.setTypeface(null, Typeface.BOLD);
 				} else {
-					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tv, true);
-					icon.setColorFilter(activity.getColor(android.R.color.darker_gray));
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, tv, true);
+					icon.setColorFilter(tv.data);
 					text.setTextColor(tv.data);
 					text.setTypeface(null, Typeface.NORMAL);
 				}
@@ -793,7 +793,7 @@ public class Controller {
 					tv.setTypeface(null, Typeface.BOLD);
 				} else {
 					TypedValue out = new TypedValue();
-					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, out, true);
+					activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, out, true);
 					tv.setTextColor(out.data);
 					tv.setTypeface(null, Typeface.NORMAL);
 				}
