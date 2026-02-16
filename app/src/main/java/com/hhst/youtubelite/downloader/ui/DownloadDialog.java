@@ -25,11 +25,9 @@ import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.R.attr;
 import androidx.appcompat.app.AlertDialog;
-
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.Task;
@@ -41,12 +39,10 @@ import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.ui.ErrorDialog;
 import com.squareup.picasso.Picasso;
 import com.tencent.mmkv.MMKV;
-
 import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
-
 import java.io.File;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
@@ -56,471 +52,300 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-
 public class DownloadDialog {
-	private static final String KEY_THREAD_COUNT = "download_thread_count";
-	private final Context context;
-	private final ExecutorService executor;
-	private final CountDownLatch videoLatch;
-	private final CountDownLatch streamLatch;
-	private final View dialogView;
-	private VideoDetails videoDetails;
-	private StreamDetails streamDetails;
-	private boolean videoSel;
-	private boolean thumbSel;
-	private boolean audioSel;
-	private boolean subtitleSel;
-	private VideoStream videoSelStream;
-	private AudioStream audioSelStream;
-	private SubtitlesStream subtitleSelStream;
-	private int threadCount = 4;
+    private static final String KEY_THREAD_COUNT = "download_thread_count";
+    private static final String KEY_LAST_VIDEO_RES = "last_video_res";
+    private static final String KEY_LAST_AUDIO_BITRATE = "last_audio_bitrate";
+    private static final String KEY_SEL_VIDEO = "sel_video";
+    private static final String KEY_SEL_AUDIO = "sel_audio";
+    private static final String KEY_SEL_THUMB = "sel_thumb";
 
-	private DownloadService downloadService;
-	private boolean isBound = false;
+    private final Context context;
+    private final ExecutorService executor;
+    private final CountDownLatch videoLatch;
+    private final CountDownLatch streamLatch;
+    private final View dialogView;
+    private VideoDetails videoDetails;
+    private StreamDetails streamDetails;
+    private boolean videoSel;
+    private boolean thumbSel;
+    private boolean audioSel;
+    private boolean subtitleSel;
+    private VideoStream videoSelStream;
+    private AudioStream audioSelStream;
+    private SubtitlesStream subtitleSelStream;
+    private int threadCount = 4;
+    private DownloadService downloadService;
+    private boolean isBound = false;
+    private final MMKV kv = MMKV.defaultMMKV();
 
-	private final ServiceConnection connection = new ServiceConnection() {
-		@Override
-		public void onServiceConnected(ComponentName name, IBinder service) {
-			DownloadService.DownloadBinder binder = (DownloadService.DownloadBinder) service;
-			downloadService = binder.getService();
-			isBound = true;
-		}
+    private final ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            DownloadService.DownloadBinder binder = (DownloadService.DownloadBinder) service;
+            downloadService = binder.getService();
+            isBound = true;
+        }
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+        }
+    };
 
-		@Override
-		public void onServiceDisconnected(ComponentName name) {
-			isBound = false;
-		}
-	};
+    public DownloadDialog(String url, Context context, YoutubeExtractor youtubeExtractor) {
+        this.context = context;
+        this.dialogView = LayoutInflater.from(context).inflate(R.layout.download_dialog, new FrameLayout(context), false);
+        executor = Executors.newCachedThreadPool();
+        videoLatch = new CountDownLatch(1);
+        streamLatch = new CountDownLatch(1);
+        Intent intent = new Intent(context, DownloadService.class);
+        context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        executor.submit(() -> {
+            try {
+                videoDetails = youtubeExtractor.getVideoInfo(url);
+                videoLatch.countDown();
+                streamDetails = youtubeExtractor.getStreamInfo(url);
+                streamLatch.countDown();
+            } catch (Exception e) {
+                if (e instanceof InterruptedIOException) return;
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(context, R.string.failed_to_load_video_details, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
 
-	public DownloadDialog(String url, Context context, YoutubeExtractor youtubeExtractor) {
-		this.context = context;
-		this.dialogView = LayoutInflater.from(context).inflate(R.layout.download_dialog, new FrameLayout(context), false);
-		executor = Executors.newCachedThreadPool();
-		videoLatch = new CountDownLatch(1);
-		streamLatch = new CountDownLatch(1);
+    public void show() {
+        ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar);
+        ImageView imageView = dialogView.findViewById(R.id.download_image);
+        EditText editText = dialogView.findViewById(R.id.download_edit_text);
+        Button videoButton = dialogView.findViewById(R.id.button_video);
+        Button thumbnailButton = dialogView.findViewById(R.id.button_thumbnail);
+        Button audioButton = dialogView.findViewById(R.id.button_audio);
+        Button subtitleButton = dialogView.findViewById(R.id.button_subtitle);
+        Button downloadButton = dialogView.findViewById(R.id.button_download);
+        Button cancelButton = dialogView.findViewById(R.id.button_cancel);
+        SeekBar threadsSeekBar = dialogView.findViewById(R.id.threads_seekbar);
+        TextView threadsCountText = dialogView.findViewById(R.id.threads_count);
 
-		Intent intent = new Intent(context, DownloadService.class);
-		context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        if (videoDetails == null) progressBar.setVisibility(View.VISIBLE);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.download)).setView(dialogView).setCancelable(true).create();
 
-		executor.submit(() -> {
-			try {
-				// try to get details from cache
-				videoDetails = youtubeExtractor.getVideoInfo(url);
-				videoLatch.countDown();
-				streamDetails = youtubeExtractor.getStreamInfo(url);
-				streamLatch.countDown();
-			} catch (Exception e) {
-				if (e instanceof InterruptedIOException) return;
-				Log.e("DownloadDialog", "Failed to load video details", e);
-				new Handler(Looper.getMainLooper()).post(() -> {
-					Toast.makeText(context, R.string.failed_to_load_video_details, Toast.LENGTH_SHORT).show();
-					ErrorDialog.show(context, e.getMessage(), Log.getStackTraceString(e));
-				});
-			}
-		});
-	}
+        threadCount = kv.decodeInt(KEY_THREAD_COUNT, 4);
+        threadsSeekBar.setProgress(threadCount - 1);
+        threadsCountText.setText(String.valueOf(threadCount));
 
-	public static String formatSize(long length) {
-		if (length <= 0) return "0";
+        videoSel = kv.decodeBool(KEY_SEL_VIDEO, false);
+        audioSel = kv.decodeBool(KEY_SEL_AUDIO, false);
+        thumbSel = kv.decodeBool(KEY_SEL_THUMB, false);
 
-		int unitIndex = 0;
+        TypedValue themeVal = new TypedValue();
+        context.getTheme().resolveAttribute(attr.colorPrimary, themeVal, true);
+        int primaryColor = themeVal.data;
+        int grayColor = context.getColor(android.R.color.darker_gray);
 
-		String[] UNITS = {"B", "KB", "MB", "GB", "TB"};
-		double size = length;
+        videoButton.setBackgroundColor(videoSel ? primaryColor : grayColor);
+        audioButton.setBackgroundColor(audioSel ? primaryColor : grayColor);
+        thumbnailButton.setBackgroundColor(thumbSel ? primaryColor : grayColor);
+        subtitleButton.setBackgroundColor(grayColor);
 
-		while (size >= 1024 && unitIndex < UNITS.length - 1) {
-			size /= 1024.0;
-			unitIndex++;
-		}
+        executor.submit(() -> {
+            try {
+                videoLatch.await();
+                streamLatch.await();
+                dialogView.post(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    if (videoDetails != null) {
+                        Picasso.get().load(videoDetails.getThumbnail()).into(imageView);
+                        editText.setText(String.format("%s-%s", videoDetails.getTitle(), videoDetails.getAuthor()));
+                    }
+                    restoreAutoStreams(videoButton, audioButton, primaryColor);
+                });
+            } catch (InterruptedException ignored) {}
+        });
 
-		return String.format(Locale.US, "%.1f %s", size, UNITS[unitIndex]);
-	}
+        videoButton.setOnClickListener(v -> { if (streamDetails != null) showVideoQualityDialog(videoButton, primaryColor); });
+        audioButton.setOnClickListener(v -> { if (streamDetails != null) showAudioSelectionDialog(audioButton, primaryColor); });
+        subtitleButton.setOnClickListener(v -> { if (streamDetails != null) showSubtitleSelectionDialog(subtitleButton, primaryColor); });
 
-	public void show() {
-		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar);
-		if (videoDetails == null) progressBar.setVisibility(View.VISIBLE);
+        thumbnailButton.setOnClickListener(v -> {
+            thumbSel = !thumbSel;
+            kv.encode(KEY_SEL_THUMB, thumbSel);
+            thumbnailButton.setBackgroundColor(thumbSel ? primaryColor : grayColor);
+        });
 
-		AlertDialog dialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.download)).setView(dialogView).setCancelable(true).create();
+        threadsSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                threadCount = progress + 1;
+                threadsCountText.setText(String.valueOf(threadCount));
+                kv.encode(KEY_THREAD_COUNT, threadCount);
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
 
-		dialog.setOnDismissListener(dialogInterface -> executor.shutdownNow());
+        downloadButton.setOnClickListener(v -> {
+            if (videoDetails == null) { dialog.dismiss(); return; }
+            String fileName = sanitizeFileName(editText.getText().toString().isEmpty() ? videoDetails.getTitle() : editText.getText().toString());
+            if (videoSel || audioSel || subtitleSel || thumbSel) {
+                if (isBound && downloadService != null) downloadService.download(getTasks(fileName));
+            }
+            dialog.dismiss();
+        });
 
-		ImageView imageView = dialogView.findViewById(R.id.download_image);
-		EditText editText = dialogView.findViewById(R.id.download_edit_text);
-		Button videoButton = dialogView.findViewById(R.id.button_video);
-		Button thumbnailButton = dialogView.findViewById(R.id.button_thumbnail);
-		final Button audioButton = dialogView.findViewById(R.id.button_audio);
-		final Button subtitleButton = dialogView.findViewById(R.id.button_subtitle);
-		final Button cancelButton = dialogView.findViewById(R.id.button_cancel);
-		final Button downloadButton = dialogView.findViewById(R.id.button_download);
-		final SeekBar threadsSeekBar = dialogView.findViewById(R.id.threads_seekbar);
-		final TextView threadsCountText = dialogView.findViewById(R.id.threads_count);
+        cancelButton.setOnClickListener(v -> dialog.dismiss());
 
-		// load threadCount from MMKV
-		threadCount = MMKV.defaultMMKV().decodeInt(KEY_THREAD_COUNT, 4);
-		threadsSeekBar.setProgress(threadCount - 1);
-		threadsCountText.setText(String.valueOf(threadCount));
+        dialog.setOnDismissListener(di -> {
+            executor.shutdownNow();
+            if (isBound) { context.unbindService(connection); isBound = false; }
+        });
+        dialog.show();
+    }
 
-		executor.submit(() -> {
-			try {
-				videoLatch.await();
-				if (progressBar.getVisibility() == View.VISIBLE)
-					dialogView.post(() -> progressBar.setVisibility(View.GONE));
-			} catch (InterruptedException ignored) {
-			}
-		});
+    private void showVideoQualityDialog(Button btn, int color) {
+        View v = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
+        LinearLayout container = v.findViewById(R.id.quality_container);
+        Button subCancel = v.findViewById(R.id.button_cancel);
+        AlertDialog d = new MaterialAlertDialogBuilder(context).setTitle(R.string.video_quality).setView(v).create();
+        subCancel.setOnClickListener(v1 -> d.dismiss());
 
-		// state
-		videoSel = false;
-		thumbSel = false;
-		audioSel = false;
-		subtitleSel = false;
-		videoSelStream = null;
-		audioSelStream = null;
-		subtitleSelStream = null;
+        CheckBox[] refs = new CheckBox[1];
+        for (VideoStream s : streamDetails.getVideoStreams()) {
+            if (s.getFormat() != MediaFormat.MPEG_4) continue;
+            CheckBox cb = new CheckBox(context);
+            cb.setText(s.getResolution());
+            cb.setOnCheckedChangeListener((v1, is) -> {
+                if (is) {
+                    if (refs[0] != null && refs[0] != cb) refs[0].setChecked(false);
+                    videoSelStream = s;
+                    refs[0] = cb;
+                } else if (refs[0] == cb) {
+                    videoSelStream = null;
+                    refs[0] = null;
+                }
+            });
+            container.addView(cb);
+            if (videoSelStream != null && videoSelStream.getResolution().equals(s.getResolution())) {
+                cb.setChecked(true);
+                refs[0] = cb;
+            }
+        }
+        v.findViewById(R.id.button_confirm).setOnClickListener(v1 -> {
+            videoSel = refs[0] != null;
+            kv.encode(KEY_SEL_VIDEO, videoSel);
+            if (videoSel && videoSelStream != null) kv.encode(KEY_LAST_VIDEO_RES, videoSelStream.getResolution());
+            btn.setBackgroundColor(videoSel ? color : context.getColor(android.R.color.darker_gray));
+            d.dismiss();
+        });
+        d.show();
+    }
 
-		// set button default background color
-		videoButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-		thumbnailButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-		audioButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-		subtitleButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
+    private void showAudioSelectionDialog(Button btn, int color) {
+        View v = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
+        LinearLayout container = v.findViewById(R.id.quality_container);
+        Button subCancel = v.findViewById(R.id.button_cancel);
+        AlertDialog d = new MaterialAlertDialogBuilder(context).setTitle(R.string.audio_track).setView(v).create();
+        subCancel.setOnClickListener(v1 -> d.dismiss());
 
-		// get theme color
-		TypedValue value = new TypedValue();
-		context.getTheme().resolveAttribute(attr.colorPrimary, value, true);
+        CheckBox[] refs = new CheckBox[1];
+        for (AudioStream s : streamDetails.getAudioStreams()) {
+            if (s.getFormat() != MediaFormat.M4A) continue;
+            CheckBox cb = new CheckBox(context);
+            cb.setText(s.getAverageBitrate() + "kbps");
+            cb.setOnCheckedChangeListener((v1, is) -> {
+                if (is) {
+                    if (refs[0] != null && refs[0] != cb) refs[0].setChecked(false);
+                    audioSelStream = s;
+                    refs[0] = cb;
+                } else if (refs[0] == cb) {
+                    audioSelStream = null;
+                    refs[0] = null;
+                }
+            });
+            container.addView(cb);
+            if (audioSelStream != null && audioSelStream.getAverageBitrate() == s.getAverageBitrate()) {
+                cb.setChecked(true);
+                refs[0] = cb;
+            }
+        }
+        v.findViewById(R.id.button_confirm).setOnClickListener(v1 -> {
+            audioSel = refs[0] != null;
+            kv.encode(KEY_SEL_AUDIO, audioSel);
+            if (audioSel && audioSelStream != null) kv.encode(KEY_LAST_AUDIO_BITRATE, audioSelStream.getAverageBitrate());
+            btn.setBackgroundColor(audioSel ? color : context.getColor(android.R.color.darker_gray));
+            d.dismiss();
+        });
+        d.show();
+    }
 
-		// on video button clicked
-		videoButton.setOnClickListener(v -> showVideoQualityDialog(videoButton, value.data));
+    private void restoreAutoStreams(Button vBtn, Button aBtn, int color) {
+        if (streamDetails == null) return;
+        String lastV = kv.decodeString(KEY_LAST_VIDEO_RES, "");
+        if (videoSel && !lastV.isEmpty()) {
+            for (VideoStream s : streamDetails.getVideoStreams()) {
+                if (s.getResolution().equals(lastV) && s.getFormat() == MediaFormat.MPEG_4) {
+                    videoSelStream = s;
+                    vBtn.setBackgroundColor(color);
+                    break;
+                }
+            }
+        }
+        int lastA = kv.decodeInt(KEY_LAST_AUDIO_BITRATE, -1);
+        if (audioSel && lastA != -1) {
+            for (AudioStream s : streamDetails.getAudioStreams()) {
+                if (s.getAverageBitrate() == lastA && s.getFormat() == MediaFormat.M4A) {
+                    audioSelStream = s;
+                    aBtn.setBackgroundColor(color);
+                    break;
+                }
+            }
+        }
+    }
 
-		// on audio button clicked
-		audioButton.setOnClickListener(v -> showAudioSelectionDialog(audioButton, value.data));
+    private String sanitizeFileName(String f) { return f.replaceAll("[<>:\"/|?*]", "_"); }
 
-		// on subtitle button clicked
-		subtitleButton.setOnClickListener(v -> showSubtitleSelectionDialog(subtitleButton, value.data));
+    private void showSubtitleSelectionDialog(Button btn, int color) {
+        View v = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
+        LinearLayout container = v.findViewById(R.id.quality_container);
+        Button subCancel = v.findViewById(R.id.button_cancel);
+        AlertDialog d = new MaterialAlertDialogBuilder(context).setTitle(R.string.subtitles).setView(v).create();
+        subCancel.setOnClickListener(v1 -> d.dismiss());
+        CheckBox[] refs = new CheckBox[1];
+        for (SubtitlesStream s : streamDetails.getSubtitles()) {
+            CheckBox cb = new CheckBox(context);
+            cb.setText(s.getDisplayLanguageName());
+            cb.setOnCheckedChangeListener((v1, is) -> {
+                if (is) {
+                    if (refs[0] != null && refs[0] != cb) refs[0].setChecked(false);
+                    subtitleSelStream = s;
+                    refs[0] = cb;
+                } else if (refs[0] == cb) {
+                    subtitleSelStream = null;
+                    refs[0] = null;
+                }
+            });
+            container.addView(cb);
+        }
+        v.findViewById(R.id.button_confirm).setOnClickListener(v1 -> {
+            subtitleSel = refs[0] != null;
+            btn.setBackgroundColor(subtitleSel ? color : context.getColor(android.R.color.darker_gray));
+            d.dismiss();
+        });
+        d.show();
+    }
 
-		// on thumbnail button clicked
-		thumbnailButton.setOnClickListener(v -> {
-			if (videoDetails == null) return;
-			thumbSel = !thumbSel;
-			thumbnailButton.setSelected(thumbSel);
-			if (thumbSel) thumbnailButton.setBackgroundColor(value.data);
-			else thumbnailButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-		});
-
-		// threads seekbar
-		threadsSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-			@Override
-			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-				threadCount = progress + 1;
-				threadsCountText.setText(String.valueOf(threadCount));
-				MMKV.defaultMMKV().encode(KEY_THREAD_COUNT, threadCount);
-			}
-
-			@Override
-			public void onStartTrackingTouch(SeekBar seekBar) {
-			}
-
-			@Override
-			public void onStopTrackingTouch(SeekBar seekBar) {
-			}
-		});
-
-		// on download button clicked
-		downloadButton.setOnClickListener(v -> {
-			// fixed in live page
-			if (videoDetails == null) {
-				dialog.dismiss();
-				return;
-			}
-
-			if (!videoSel && !thumbSel && !audioSel && !subtitleSel) {
-				dialogView.post(() -> Toast.makeText(context, R.string.select_something_first, Toast.LENGTH_SHORT).show());
-				return;
-			}
-
-			String fileName = editText.getText().toString();
-			if (fileName.isEmpty()) fileName = videoDetails.getTitle();
-			fileName = sanitizeFileName(fileName);
-
-			// download video/audio/subtitle
-			if (videoSel || audioSel || subtitleSel || thumbSel) {
-				List<Task> tasks = getTasks(fileName);
-				if (isBound && downloadService != null) {
-					downloadService.download(tasks);
-				}
-			}
-
-			dialog.dismiss();
-		});
-
-		// on cancel button clicked
-		cancelButton.setOnClickListener(v -> dialog.dismiss());
-
-		dialog.setOnDismissListener(dialogInterface -> {
-			executor.shutdownNow();
-			if (isBound) {
-				context.unbindService(connection);
-				isBound = false;
-			}
-		});
-
-		dialog.setOnShowListener(l -> {
-			loadImage(imageView);
-			loadVideoName(editText);
-			dialogView.post(() -> bindDeferredImageClick(imageView));
-		});
-		dialog.show();
-	}
-
-	@NonNull
-	private List<Task> getTasks(String fileName) {
-		List<Task> tasks = new ArrayList<>();
-		File outputDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
-		if (!outputDir.exists()) {
-			boolean ignored = outputDir.mkdirs();
-		}
-		final String baseVid = videoDetails.getId();
-
-		if (videoSel) {
-			AudioStream audio = audioSel ? audioSelStream : (streamDetails != null && !streamDetails.getAudioStreams().isEmpty() ? streamDetails.getAudioStreams().get(0) : null);
-			tasks.add(new Task(taskId(baseVid, "video"), videoSelStream, audio, null, null, fileName, outputDir, threadCount));
-		} else if (audioSel) {
-			tasks.add(new Task(taskId(baseVid, "audio"), null, audioSelStream, null, null, fileName, outputDir, threadCount));
-		}
-
-		if (subtitleSel) {
-			tasks.add(new Task(taskId(baseVid, "subtitle"), null, null, subtitleSelStream, null, fileName, outputDir, threadCount));
-		}
-
-		if (thumbSel) {
-			tasks.add(new Task(taskId(baseVid, "thumbnail"), null, null, null, videoDetails.getThumbnail(), fileName, outputDir, threadCount));
-		}
-
-		return tasks;
-	}
-
-	@NonNull
-	private static String taskId(@NonNull final String baseVid, @NonNull final String type) {
-		return baseVid + ":" + type;
-	}
-
-	private void loadImage(ImageView imageView) {
-		if (videoDetails != null && videoDetails.getThumbnail() != null)
-			dialogView.post(() -> Picasso.get().load(videoDetails.getThumbnail()).noFade().placeholder(new ColorDrawable(Color.TRANSPARENT)).error(R.drawable.ic_broken_image).into(imageView));
-	}
-
-	private void bindDeferredImageClick(ImageView imageView) {
-		if (videoDetails == null || videoDetails.getThumbnail() == null) return;
-		imageView.setOnClickListener(view -> executor.submit(() -> {
-			Intent intent = new Intent(context, GalleryActivity.class);
-			ArrayList<String> urls = new ArrayList<>();
-			urls.add(videoDetails.getThumbnail());
-			intent.putStringArrayListExtra("thumbnails", urls);
-			intent.putExtra("filename", String.format("%s-%s", videoDetails.getTitle(), videoDetails.getAuthor()).trim());
-			context.startActivity(intent);
-		}));
-	}
-
-	private void loadVideoName(EditText editText) {
-		if (videoDetails != null)
-			dialogView.post(() -> editText.setText(String.format("%s-%s", videoDetails.getTitle(), videoDetails.getAuthor())));
-	}
-
-	private void showVideoQualityDialog(Button videoButton, int themeColor) {
-		View dialogView = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
-		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar2);
-		if (streamDetails == null) progressBar.setVisibility(View.VISIBLE);
-
-		AlertDialog qualityDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.video_quality)).setView(dialogView).create();
-		LinearLayout qualitySelector = dialogView.findViewById(R.id.quality_container);
-		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
-		Button confirmButton = dialogView.findViewById(R.id.button_confirm);
-
-		CheckBox[] checkedBoxRef = new CheckBox[1];
-		executor.submit(() -> {
-			try {
-				streamLatch.await();
-			} catch (InterruptedException ignored) {
-			}
-			if (videoDetails == null || streamDetails == null || streamDetails.getVideoStreams().isEmpty()) {
-				new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, R.string.failed_to_load_video_formats, Toast.LENGTH_SHORT).show());
-				return;
-			}
-			if (progressBar.getVisibility() == View.VISIBLE)
-				dialogView.post(() -> progressBar.setVisibility(View.GONE));
-
-			// Find a default audio stream to calculate total size
-			AudioStream audioForSize = audioSel ? audioSelStream : (streamDetails.getAudioStreams().isEmpty() ? null : streamDetails.getAudioStreams().get(0));
-			long audioSize = (audioForSize != null && audioForSize.getItagItem() != null) ? audioForSize.getItagItem().getContentLength() : 0;
-
-			new Handler(Looper.getMainLooper()).post(() -> {
-				for (var stream : streamDetails.getVideoStreams()) {
-					// Muxer restriction: filter for compatible video formats (H.264/AVC in MP4)
-					if (stream.getFormat() != MediaFormat.MPEG_4) continue;
-
-					CheckBox choice = new CheckBox(context);
-					String sizeText = formatSize(audioSize + (stream.getItagItem() != null ? stream.getItagItem().getContentLength() : 0));
-					choice.setText(String.format("%s (%s)", stream.getResolution(), sizeText));
-					choice.setLayoutParams(new RadioGroup.LayoutParams(RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT));
-					choice.setOnCheckedChangeListener((v, isChecked) -> {
-						if (isChecked) {
-							if (checkedBoxRef[0] != null) checkedBoxRef[0].setChecked(false);
-							videoSelStream = stream;
-							checkedBoxRef[0] = (CheckBox) v;
-						} else {
-							videoSelStream = null;
-							checkedBoxRef[0] = null;
-						}
-					});
-					qualitySelector.addView(choice);
-					if (videoSelStream != null && videoSelStream.equals(stream)) choice.setChecked(true);
-				}
-			});
-		});
-
-		cancelButton.setOnClickListener(v -> qualityDialog.dismiss());
-		confirmButton.setOnClickListener(v -> {
-			if (checkedBoxRef[0] == null) {
-				videoSelStream = null;
-				videoSel = false;
-				videoButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-			} else {
-				videoSel = true;
-				videoButton.setBackgroundColor(themeColor);
-			}
-			qualityDialog.dismiss();
-		});
-		qualityDialog.show();
-	}
-
-	private void showAudioSelectionDialog(Button audioButton, int themeColor) {
-		View dialogView = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
-		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar2);
-		if (streamDetails == null) progressBar.setVisibility(View.VISIBLE);
-
-		int titleRes = videoSel ? R.string.audio_track : R.string.audio_only;
-		AlertDialog audioDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(titleRes)).setView(dialogView).create();
-		LinearLayout container = dialogView.findViewById(R.id.quality_container);
-		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
-		Button confirmButton = dialogView.findViewById(R.id.button_confirm);
-
-		CheckBox[] checkedBoxRef = new CheckBox[1];
-		executor.submit(() -> {
-			try {
-				streamLatch.await();
-			} catch (InterruptedException ignored) {
-			}
-			if (streamDetails == null || streamDetails.getAudioStreams().isEmpty()) {
-				new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, R.string.no_audio_tracks, Toast.LENGTH_SHORT).show());
-				return;
-			}
-			if (progressBar.getVisibility() == View.VISIBLE)
-				dialogView.post(() -> progressBar.setVisibility(View.GONE));
-
-			new Handler(Looper.getMainLooper()).post(() -> {
-				for (var stream : streamDetails.getAudioStreams()) {
-					// Muxer restriction: filter for compatible audio formats (AAC in M4A)
-					if (stream.getFormat() != MediaFormat.M4A) continue;
-
-					CheckBox choice = new CheckBox(context);
-					int bitrate = stream.getAverageBitrate();
-					if (bitrate <= 0) bitrate = stream.getBitrate();
-					String bitrateStr = bitrate > 0 ? bitrate + "kbps" : context.getString(R.string.unknown_bitrate);
-					String info = stream.getAudioTrackName() != null ? String.format(Locale.getDefault(), "%s (%s - %s)", stream.getAudioTrackName(), stream.getFormat().getName(), bitrateStr) : String.format(Locale.getDefault(), "%s - %s", stream.getFormat().getName(), bitrateStr);
-					choice.setText(info);
-					choice.setLayoutParams(new RadioGroup.LayoutParams(RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT));
-					choice.setOnCheckedChangeListener((v, isChecked) -> {
-						if (isChecked) {
-							if (checkedBoxRef[0] != null) checkedBoxRef[0].setChecked(false);
-							audioSelStream = stream;
-							checkedBoxRef[0] = (CheckBox) v;
-						} else {
-							audioSelStream = null;
-							checkedBoxRef[0] = null;
-						}
-					});
-					container.addView(choice);
-					if (audioSelStream != null && audioSelStream.equals(stream)) choice.setChecked(true);
-				}
-			});
-		});
-
-		cancelButton.setOnClickListener(v -> audioDialog.dismiss());
-		confirmButton.setOnClickListener(v -> {
-			if (checkedBoxRef[0] == null) {
-				audioSelStream = null;
-				audioSel = false;
-				audioButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-			} else {
-				audioSel = true;
-				audioButton.setBackgroundColor(themeColor);
-			}
-			audioDialog.dismiss();
-		});
-		audioDialog.show();
-	}
-
-	private void showSubtitleSelectionDialog(Button subtitleButton, int themeColor) {
-		View dialogView = LayoutInflater.from(context).inflate(R.layout.quality_selector, new FrameLayout(context), false);
-		ProgressBar progressBar = dialogView.findViewById(R.id.loadingBar2);
-		if (streamDetails == null) progressBar.setVisibility(View.VISIBLE);
-
-		AlertDialog subtitleDialog = new MaterialAlertDialogBuilder(context).setTitle(context.getString(R.string.subtitles)).setView(dialogView).create();
-		LinearLayout container = dialogView.findViewById(R.id.quality_container);
-		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
-		Button confirmButton = dialogView.findViewById(R.id.button_confirm);
-
-		CheckBox[] checkedBoxRef = new CheckBox[1];
-		executor.submit(() -> {
-			try {
-				streamLatch.await();
-			} catch (InterruptedException ignored) {
-			}
-			if (streamDetails == null || streamDetails.getSubtitles().isEmpty()) {
-				new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, R.string.no_subtitles, Toast.LENGTH_SHORT).show());
-				return;
-			}
-			if (progressBar.getVisibility() == View.VISIBLE)
-				dialogView.post(() -> progressBar.setVisibility(View.GONE));
-
-			new Handler(Looper.getMainLooper()).post(() -> {
-				for (var stream : streamDetails.getSubtitles()) {
-					CheckBox choice = new CheckBox(context);
-					choice.setText(stream.getDisplayLanguageName());
-					choice.setLayoutParams(new RadioGroup.LayoutParams(RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT));
-					choice.setOnCheckedChangeListener((v, isChecked) -> {
-						if (isChecked) {
-							if (checkedBoxRef[0] != null) checkedBoxRef[0].setChecked(false);
-							subtitleSelStream = stream;
-							checkedBoxRef[0] = (CheckBox) v;
-						} else {
-							subtitleSelStream = null;
-							checkedBoxRef[0] = null;
-						}
-					});
-					container.addView(choice);
-					if (subtitleSelStream != null && subtitleSelStream.equals(stream))
-						choice.setChecked(true);
-				}
-			});
-		});
-
-		cancelButton.setOnClickListener(v -> subtitleDialog.dismiss());
-		confirmButton.setOnClickListener(v -> {
-			if (checkedBoxRef[0] == null) {
-				subtitleSelStream = null;
-				subtitleSel = false;
-				subtitleButton.setBackgroundColor(context.getColor(android.R.color.darker_gray));
-			} else {
-				subtitleSel = true;
-				subtitleButton.setBackgroundColor(themeColor);
-			}
-			subtitleDialog.dismiss();
-		});
-		subtitleDialog.show();
-	}
-
-	private String sanitizeFileName(String fileName) {
-		// Remove invalid characters for file names
-		return fileName.replaceAll("[<>:\"/|?*]", "_");
-	}
+    @NonNull private List<Task> getTasks(String f) {
+        List<Task> t = new ArrayList<>();
+        File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
+        if (!d.exists()) d.mkdirs();
+        if (videoSel && videoSelStream != null) {
+            AudioStream audio = (audioSel && audioSelStream != null) ? audioSelStream : streamDetails.getAudioStreams().get(0);
+            t.add(new Task(videoDetails.getId()+":v", videoSelStream, audio, null, null, f, d, threadCount));
+        } else if (audioSel && audioSelStream != null) {
+            t.add(new Task(videoDetails.getId()+":a", null, audioSelStream, null, null, f, d, threadCount));
+        }
+        if (thumbSel) t.add(new Task(videoDetails.getId()+":t", null, null, null, videoDetails.getThumbnail(), f, d, threadCount));
+        return t;
+    }
 }

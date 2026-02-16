@@ -13,6 +13,7 @@
     <string name="failed_to_download">Failed to download</string>
     <string name="failed_to_download_thumbnail">Failed to download image</string>
     <string name="audio_only">Audio</string>
+    <string name="player_gestures">Player Gestures</string>
     <string name="close">Close</string>
     <string name="save">Save</string>
     <string name="share">Share</string>

@@ -1,21 +1,22 @@
 package com.hhst.youtubelite.ui;
 
 import android.Manifest;
-import android.app.PictureInPictureParams;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
-import android.util.Rational;
+import android.os.Looper;
 import android.view.View;
+import android.webkit.WebView;
 import android.widget.Toast;
-
 import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -27,232 +28,258 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
-
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.browser.YoutubeWebview;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.DeviceUtils;
-
-import javax.inject.Inject;
-
-import dagger.hilt.android.AndroidEntryPoint;
-
-
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
+import com.hhst.youtubelite.downloader.ui.DownloadDialog;
+import com.hhst.youtubelite.extractor.YoutubeExtractor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.inject.Inject;
+import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
 @UnstableApi
 public final class MainActivity extends AppCompatActivity {
+    private static final String YOUTUBE_WWW_HOST = "www.youtube.com";
+    private static final int REQUEST_NOTIFICATION_CODE = 100;
+    private static final int DOUBLE_TAP_EXIT_INTERVAL_MS = 2_000;
 
-	private static final String YOUTUBE_WWW_HOST = "www.youtube.com";
-	private static final int REQUEST_NOTIFICATION_CODE = 100;
-	private static final int REQUEST_STORAGE_CODE = 101;
-	private static final int DOUBLE_TAP_EXIT_INTERVAL_MS = 2_000;
+    @Inject ExtensionManager extensionManager;
+    @Inject TabManager tabManager;
+    @Inject LitePlayer player;
+    @Inject YoutubeExtractor youtubeExtractor;
 
-	@Inject
-	ExtensionManager extensionManager;
-	@Inject
-	TabManager tabManager;
-	@Inject
-	LitePlayer player;
-	@Nullable
-	private PlaybackService playbackService;
-	@Nullable
-	private ServiceConnection playbackServiceConnection;
-	private long lastBackTime = 0;
+    @Nullable private PlaybackService playbackService;
+    @Nullable private ServiceConnection playbackServiceConnection;
+    private long lastBackTime = 0;
 
-	@Override
-	protected void onCreate(@Nullable final Bundle savedInstanceState) {
-		EdgeToEdge.enable(this);
-		setContentView(R.layout.activity_main);
-		super.onCreate(savedInstanceState);
+    @Override
+    protected void onCreate(@Nullable final Bundle savedInstanceState) {
+        EdgeToEdge.enable(this);
+        setContentView(R.layout.activity_main);
+        super.onCreate(savedInstanceState);
+        final View mainView = findViewById(R.id.main);
+        ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
+            final Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
 
-		final View mainView = findViewById(R.id.main);
-		ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
-			final Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-			v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-			return insets;
-		});
+        setupNativeContextMenu();
+        requestPermissions();
+        startPlaybackService();
+        setupBackNavigation();
 
-		if (savedInstanceState == null) {
-			final String initialUrl = getInitialUrl();
-			tabManager.openTab(initialUrl, UrlUtils.getPageClass(initialUrl));
-		}
+        mainView.post(() -> handleIntent(getIntent()));
+    }
 
-		requestPermissions();
-		startPlaybackService();
+    @Override
+    protected void onNewIntent(@NonNull Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntent(intent);
+    }
 
-		handleIntent(getIntent());
+    private void handleIntent(@Nullable Intent intent) {
+        if (intent == null) return;
 
-		setupBackNavigation();
-	}
+        String action = intent.getAction();
+        boolean isDownloadAction = "TRIGGER_DOWNLOAD_FROM_SHARE".equals(action);
+        String urlToLoad = null;
 
-	// fixs: back button issue
-	private void setupBackNavigation() {
-		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-			@Override
-			public void handleOnBackPressed() {
-				if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
-					setEnabled(false);
-					getOnBackPressedDispatcher().onBackPressed();
-					setEnabled(true);
-					return;
-				}
+        if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null) {
+            urlToLoad = intent.getData().toString();
+        }
+        else if (Intent.ACTION_SEND.equals(action) || isDownloadAction) {
+            String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (sharedText != null) {
+                urlToLoad = extractUrlFromText(sharedText);
+            }
+        }
+        else if ("OPEN_DOWNLOADS".equals(action)) {
+            startActivity(new Intent(this, DownloadActivity.class));
+            return;
+        }
 
-				if (player != null && player.isFullscreen()) {
-					player.exitFullscreen();
-					return;
-				}
+        if (urlToLoad != null) {
+            if (isDownloadAction) {
+                triggerDownload(urlToLoad);
+            } else {
+                final String cleanUrl = urlToLoad.replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
+                if (tabManager != null) {
+                    tabManager.openTab(cleanUrl, UrlUtils.getPageClass(cleanUrl));
+                }
+            }
+        } else if (tabManager.getWebview() == null) {
+            tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
+        }
+    }
 
-				final YoutubeWebview webview = getWebview();
-				if (webview != null && tabManager != null) {
-					tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
-					if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
-						tabManager.evaluateJavascript("document.exitFullscreen()", null);
-						return;
-					}
-				}
-				goBack();
-			}
-		});
-	}
+    private String extractUrlFromText(String text) {
+        Pattern pattern = Pattern.compile("https?://[\\w\\d./?=&%#-]+", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(text);
+        if (matcher.find()) return matcher.group();
+        return null;
+    }
 
-	private void handleIntent(@Nullable Intent intent) {
-		if (intent == null) return;
-		if ("OPEN_DOWNLOADS".equals(intent.getAction())) {
-			Intent downloadIntent = new Intent(this, DownloadActivity.class);
-			startActivity(downloadIntent);
-		}
-	}
+    private void setupNativeContextMenu() {
+        findViewById(R.id.main).postDelayed(() -> {
+            final YoutubeWebview webview = getWebview();
+            if (webview != null) {
+                webview.setOnLongClickListener(v -> {
+                    final WebView.HitTestResult result = webview.getHitTestResult();
+                    String url = result.getExtra();
+                    if (url == null) return false;
+                    if (url.contains("/watch") || url.contains("/shorts/") || url.contains("video_id=")) {
+                        if (url.startsWith("/")) url = "https://m.youtube.com" + url;
+                        showVideoOptionsDialog(url);
+                        return true;
+                    }
+                    return false;
+                });
 
-	@NonNull
-	private String getInitialUrl() {
-		final Intent intent = getIntent();
-		final String action = intent.getAction();
-		final String type = intent.getType();
+                final String navFixCss = "var style = document.createElement('style');" +
+                        "style.innerHTML = ' " +
+                        "a { text-decoration: none !important; } " +
+                        "a.yt-simple-endpoint { text-decoration: none !important; color: inherit !important; } " +
+                        "ytm-pivot-bar-renderer { " +
+                        "  display: flex !important; " +
+                        "  align-items: center !important; " +
+                        "  justify-content: center !important; " +
+                        "  height: 48px !important; " +
+                        "  padding-bottom: 0px !important; " +
+                        "  min-height: 48px !important; " +
+                        "  bottom: 0px !important; " +
+                        "} " +
+                        "'; document.head.appendChild(style);";
+                webview.evaluateJavascript(navFixCss, null);
+            }
+        }, 1500);
+    }
 
-		String initialUrl = Constant.HOME_URL;
-		if (Intent.ACTION_SEND.equals(action) && "text/plain".equals(type)) {
-			final String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-			if (sharedText != null && (sharedText.startsWith("http://") || sharedText.startsWith("https://")))
-				initialUrl = sharedText.replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
-		} else {
-			final Uri intentUri = intent.getData();
-			if (intentUri != null)
-				initialUrl = intentUri.toString().replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
-		}
-		return initialUrl;
-	}
+    private void showVideoOptionsDialog(String videoUrl) {
+        String[] options = {"Download Video", "Share Link", "Cancel"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Video Options")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) triggerDownload(videoUrl);
+                    else if (which == 1) shareUrl(videoUrl);
+                })
+                .show();
+    }
 
-	@Nullable
-	private YoutubeWebview getWebview() {
-		if (tabManager != null) return tabManager.getWebview();
-		return null;
-	}
+    private void triggerDownload(String url) {
+        String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
+        final Toast fetchToast = Toast.makeText(this, "Fetching download links...", Toast.LENGTH_SHORT);
+        fetchToast.show();
+        new Handler(Looper.getMainLooper()).postDelayed(fetchToast::cancel, 1000);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            DownloadDialog dialog = new DownloadDialog(cleanUrl, this, youtubeExtractor);
+            dialog.show();
+        }, 800);
+    }
 
-	private void goBack() {
-		if (tabManager != null && !tabManager.goBack()) {
-			// Handle double-tap to exit
-			final long time = System.currentTimeMillis();
-			if (time - lastBackTime < DOUBLE_TAP_EXIT_INTERVAL_MS) finish();
-			else {
-				lastBackTime = time;
-				Toast.makeText(this, R.string.press_back_again_to_exit, Toast.LENGTH_SHORT).show();
-			}
-		}
-	}
+    private void shareUrl(String url) {
+        Intent sendIntent = new Intent(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, url);
+        sendIntent.setType("text/plain");
+        startActivity(Intent.createChooser(sendIntent, "Share Video"));
+    }
 
-	@Override
-	public void onUserLeaveHint() {
-		if (player != null && extensionManager != null) {
-			if (player.isPlaying() && extensionManager.isEnabled(Constant.ENABLE_PIP)) {
-				final Rational aspectRatio = new Rational(16, 9);
-				final PictureInPictureParams params = new PictureInPictureParams.Builder().setAspectRatio(aspectRatio).build();
-				enterPictureInPictureMode(params);
-			}
-		}
-		super.onUserLeaveHint();
-	}
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        final LitePlayerView playerView = findViewById(R.id.playerView);
+        if (playerView != null) {
+            if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                if (playerView.getVisibility() == View.VISIBLE && !playerView.isFs()) {
+                    playerView.enterFullscreen(false);
+                }
+            } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+                if (playerView.isFs()) playerView.exitFullscreen();
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            }
+        }
+    }
 
-	@Override
-	protected void onPause() {
-		// Pause player if background play is disabled
-		if (player != null && extensionManager != null) {
-			if (isInPictureInPictureMode()) {
-				super.onPause();
-				return;
-			}
-			if (player.isPlaying() && !extensionManager.isEnabled(Constant.ENABLE_BACKGROUND_PLAY))
-				player.pause();
-		}
-		super.onPause();
-	}
+    private void setupBackNavigation() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    setEnabled(true);
+                    return;
+                }
+                if (player != null && player.isFullscreen()) {
+                    player.exitFullscreen();
+                    return;
+                }
+                final YoutubeWebview webview = getWebview();
+                if (webview != null && tabManager != null) {
+                    tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
+                    if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
+                        tabManager.evaluateJavascript("document.exitFullscreen()", null);
+                        return;
+                    }
+                }
+                goBack();
+            }
+        });
+    }
 
-	@Override
-	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
-		if (player != null) player.onPictureInPictureModeChanged(isInPictureInPictureMode);
-		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-	}
+    @NonNull
+    private String getInitialUrl() {
+        final Intent intent = getIntent();
+        if (intent.getData() != null) return intent.getData().toString().replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
+        return Constant.HOME_URL;
+    }
 
-	private void startPlaybackService() {
-		// bind
-		playbackServiceConnection = new ServiceConnection() {
-			@Override
-			public void onServiceConnected(final ComponentName componentName, final IBinder binder) {
-				playbackService = ((PlaybackService.PlaybackBinder) binder).getService();
-				if (player != null && playbackService != null) {
-					player.attachPlaybackService(playbackService);
-				}
-			}
+    @Nullable private YoutubeWebview getWebview() { return tabManager != null ? tabManager.getWebview() : null; }
 
-			@Override
-			public void onServiceDisconnected(final ComponentName componentName) {
-				playbackService = null;
-			}
-		};
-		final Intent intent = new Intent(this, PlaybackService.class);
-		bindService(intent, playbackServiceConnection, Context.BIND_AUTO_CREATE);
-	}
+    private void goBack() {
+        if (tabManager != null && !tabManager.goBack()) {
+            final long time = System.currentTimeMillis();
+            if (time - lastBackTime < DOUBLE_TAP_EXIT_INTERVAL_MS) finish();
+            else {
+                lastBackTime = time;
+                Toast.makeText(this, R.string.press_back_again_to_exit, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 
-	@Override
-	protected void onNewIntent(@NonNull final Intent intent) {
-		super.onNewIntent(intent);
-		setIntent(intent);
-		handleIntent(intent);
-		final Uri uri = intent.getData();
-		if (uri != null && tabManager != null) tabManager.loadUrl(uri.toString());
-	}
+    private void startPlaybackService() {
+        playbackServiceConnection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder binder) {
+                playbackService = ((PlaybackService.PlaybackBinder) binder).getService();
+                if (player != null && playbackService != null) player.attachPlaybackService(playbackService);
+            }
+            @Override public void onServiceDisconnected(ComponentName name) { playbackService = null; }
+        };
+        bindService(new Intent(this, PlaybackService.class), playbackServiceConnection, Context.BIND_AUTO_CREATE);
+    }
 
-	private void requestPermissions() {
-		// check and require post-notification permission
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-			ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_CODE);
+    private void requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_CODE);
+    }
 
-		// check storage permission
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
-			ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE_CODE);
-	}
-
-	@Override
-	protected void onDestroy() {
-		super.onDestroy();
-		if (playbackService != null) {
-			playbackService.hideNotification();
-			stopService(new Intent(this, PlaybackService.class));
-		}
-		if (playbackServiceConnection != null) {
-			unbindService(playbackServiceConnection);
-			playbackServiceConnection = null;
-		}
-
-		if (player != null) player.release();
-
-		playbackService = null;
-	}
-
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (playbackServiceConnection != null) unbindService(playbackServiceConnection);
+        if (player != null) player.release();
+    }
 }
