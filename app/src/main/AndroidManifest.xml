@@ -68,7 +68,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- THIS FIXES THE CRASH: Internal link between activities -->
             <intent-filter>
                 <action android:name="TRIGGER_DOWNLOAD_FROM_SHARE" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -87,6 +86,8 @@
                 <data android:pathPrefix="/watch" />
                 <data android:pathPrefix="/live" />
                 <data android:pathPrefix="/shorts" />
+                <data android:pathPrefix="/playlist" />
+                <data android:pathPrefix="/view_all_playlists" />
                 <data android:pathPrefix="/v/" />
                 <data android:pathPrefix="/embed/" />
                 <data android:pathPrefix="/attribution_link" />
