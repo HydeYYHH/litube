@@ -1,7 +1,6 @@
 package com.hhst.youtubelite.ui;
 
 import android.Manifest;
-import android.app.PictureInPictureParams;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -9,7 +8,6 @@ import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -46,6 +44,16 @@ import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 
+import org.schabi.newpipe.extractor.NewPipe;
+import org.schabi.newpipe.extractor.Page;
+import org.schabi.newpipe.extractor.exceptions.ExtractionException;
+import org.schabi.newpipe.extractor.playlist.PlaylistExtractor;
+import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
+import org.schabi.newpipe.extractor.stream.StreamInfoItem;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -69,21 +77,24 @@ public final class MainActivity extends AppCompatActivity {
     @Nullable private ServiceConnection playbackServiceConnection;
     private long lastBackTime = 0;
 
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
     @Override
     protected void onCreate(@Nullable final Bundle savedInstanceState) {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
         super.onCreate(savedInstanceState);
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+
         final View mainView = findViewById(R.id.main);
         ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
             final Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);  // Set bottom padding to 0 to avoid stretching
+            // FIX: Set bottom padding to 0 to ensure the Nav Bar sticks to the bottom edge
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
             return insets;
         });
-        if (savedInstanceState == null) {
-            final String initialUrl = getInitialUrl();
-            tabManager.openTab(initialUrl, UrlUtils.getPageClass(initialUrl));
-        }
+
         setupNativeContextMenu();
         requestPermissions();
         startPlaybackService();
@@ -103,6 +114,12 @@ public final class MainActivity extends AppCompatActivity {
         if (intent == null) return;
         String action = intent.getAction();
         boolean isDownloadAction = "TRIGGER_DOWNLOAD_FROM_SHARE".equals(action);
+
+        if ("OPEN_DOWNLOADS".equals(action)) {
+            startActivity(new Intent(this, DownloadActivity.class));
+            return;
+        }
+
         String urlToLoad = null;
         if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null) {
             urlToLoad = intent.getData().toString();
@@ -111,10 +128,8 @@ public final class MainActivity extends AppCompatActivity {
             if (sharedText != null) {
                 urlToLoad = extractUrlFromText(sharedText);
             }
-        } else if ("OPEN_DOWNLOADS".equals(action)) {
-            startActivity(new Intent(this, DownloadActivity.class));
-            return;
         }
+
         if (urlToLoad != null) {
             if (isDownloadAction) {
                 triggerDownload(urlToLoad);
@@ -132,8 +147,7 @@ public final class MainActivity extends AppCompatActivity {
     private String extractUrlFromText(String text) {
         Pattern pattern = Pattern.compile("https?://[\\w\\d./?=&%#-]+", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) return matcher.group();
-        return null;
+        return matcher.find() ? matcher.group() : null;
     }
 
     private void setupNativeContextMenu() {
@@ -157,11 +171,11 @@ public final class MainActivity extends AppCompatActivity {
                         ":root { --safe-area-inset-bottom: 0px !important; } " +
                         "body { padding-bottom: 0px !important; margin-bottom: 0px !important; } " +
                         "ytm-pivot-bar-renderer { " +
-                        "  height: 56px !important; " +
+                        "  height: 48px !important; " +
                         "  padding-bottom: 0px !important; " +
                         "  bottom: 0px !important; " +
                         "  margin-bottom: 0px !important; " +
-                        "  min-height: 56px !important; " +
+                        "  min-height: 48px !important; " +
                         "} " +
                         "a { text-decoration: none !important; } " +
                         "a.yt-simple-endpoint { text-decoration: none !important; color: inherit !important; } " +
@@ -181,7 +195,8 @@ public final class MainActivity extends AppCompatActivity {
                 .setTitle("Video Options")
                 .setItems(options, (dialog, which) -> {
                     if (isPlaylist) {
-                        if (which == 0 || which == 1) triggerDownload(url);
+                        if (which == 0) triggerDownload(url);
+                        else if (which == 1) triggerPlaylistDownload(url);
                         else if (which == 2) shareUrl(url);
                     } else {
                         if (which == 0) triggerDownload(url);
@@ -195,11 +210,51 @@ public final class MainActivity extends AppCompatActivity {
         String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
         final Toast fetchToast = Toast.makeText(this, "Fetching download links...", Toast.LENGTH_SHORT);
         fetchToast.show();
-        new Handler(Looper.getMainLooper()).postDelayed(fetchToast::cancel, 1000);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+        mainHandler.postDelayed(fetchToast::cancel, 1000);
+        mainHandler.postDelayed(() -> {
             DownloadDialog dialog = new DownloadDialog(cleanUrl, this, youtubeExtractor);
             dialog.show();
-        }, 800);
+        }, 600);
+    }
+
+    private void triggerPlaylistDownload(String url) {
+        String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
+        final Toast fetchToast = Toast.makeText(this, "Fetching playlist...", Toast.LENGTH_SHORT);
+        fetchToast.show();
+
+        new Thread(() -> {
+            List<String> videoUrls = new ArrayList<>();
+            try {
+                PlaylistExtractor extractor = NewPipe.getService(0).getPlaylistExtractor(cleanUrl);
+                extractor.fetchPage();
+                InfoItemsPage<StreamInfoItem> page = extractor.getInitialPage();
+
+                while (page != null) {
+                    for (StreamInfoItem item : page.getItems()) {
+                        videoUrls.add(item.getUrl());
+                    }
+                    if (!Page.isValid(page.getNextPage())) break;
+                    page = extractor.getPage(page.getNextPage());
+                }
+
+                mainHandler.post(fetchToast::cancel);
+
+                if (videoUrls.isEmpty()) {
+                    mainHandler.post(() -> Toast.makeText(this, "Playlist is empty", Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                mainHandler.post(() -> Toast.makeText(this, "Downloading " + videoUrls.size() + " videos...", Toast.LENGTH_LONG).show());
+
+                for (String videoUrl : videoUrls) {
+                    mainHandler.post(() -> triggerDownload(videoUrl));
+                    Thread.sleep(250);
+                }
+
+            } catch (ExtractionException | IOException | InterruptedException e) {
+                mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     private void shareUrl(String url) {
@@ -213,11 +268,15 @@ public final class MainActivity extends AppCompatActivity {
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         final LitePlayerView playerView = findViewById(R.id.playerView);
-        if (playerView != null) {
+
+        if (playerView != null && playerView.getVisibility() == View.VISIBLE) {
             if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                if (playerView.getVisibility() == View.VISIBLE && !playerView.isFs()) playerView.enterFullscreen(false);
+                if (!playerView.isFs()) playerView.enterFullscreen(false);
             } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
                 if (playerView.isFs()) playerView.exitFullscreen();
+            }
+        } else {
+            if (getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
             }
         }

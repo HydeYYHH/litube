@@ -13,12 +13,13 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.util.Log;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.media3.common.util.UnstableApi;
+
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.LiteDownloader;
 import com.hhst.youtubelite.downloader.core.ProgressCallback2;
@@ -28,11 +29,13 @@ import com.hhst.youtubelite.downloader.core.history.DownloadRecord;
 import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
 import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.extractor.YoutubeExtractor;
+
 import java.io.File;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+
 import javax.inject.Inject;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
@@ -42,36 +45,15 @@ public class DownloadService extends Service {
     public static final String EXTRA_TASK_ID = "extra_task_id";
     private static final String CHANNEL_ID = "download_channel";
     private static final int NOTIFICATION_ID = 1001;
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
     @Inject LiteDownloader liteDL;
     @Inject DownloadHistoryRepository historyRepository;
+    @Inject YoutubeExtractor youtubeExtractor;
+
     private NotificationManager notificationManager;
     private NotificationCompat.Builder notificationBuilder;
-    private final Map<String, Integer> lastReportedProgress = new ConcurrentHashMap<>();
-
-    @NonNull
-    private static DownloadType inferType(@NonNull final Task task) {
-        if (task.thumbnail() != null) return DownloadType.THUMBNAIL;
-        if (task.subtitle() != null) return DownloadType.SUBTITLE;
-        if (task.video() != null) return DownloadType.VIDEO;
-        return DownloadType.AUDIO;
-    }
-
-    @NonNull
-    private static String extractBaseVid(@NonNull final String taskId) {
-        final int idx = taskId.indexOf(':');
-        return idx > 0 ? taskId.substring(0, idx) : taskId;
-    }
-
-    @NonNull
-    private static File expectedOutputFile(@NonNull final Task task, @NonNull final DownloadType type) {
-        return switch (type) {
-            case THUMBNAIL -> new File(task.desDir(), task.fileName() + ".jpg");
-            case SUBTITLE -> new File(task.desDir(), task.fileName() + "." + task.subtitle().getExtension());
-            case VIDEO -> new File(task.desDir(), task.fileName() + ".mp4");
-            case AUDIO -> new File(task.desDir(), task.fileName() + ".m4a");
-        };
-    }
 
     @Override
     public void onCreate() {
@@ -81,9 +63,12 @@ public class DownloadService extends Service {
     }
 
     private void createNotificationChannel() {
-        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_DEFAULT);
-        channel.setDescription("Download progress notifications");
-        notificationManager.createNotificationChannel(channel);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription("Download progress notifications");
+            channel.setSound(null, null);
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 
     @Nullable
@@ -93,67 +78,86 @@ public class DownloadService extends Service {
     }
 
     public void download(@NonNull List<Task> tasks) {
-        initNotification(tasks.size());
+        initNotification();
         for (Task task : tasks) {
-            final String taskId = task.vid();
-            final DownloadType type = inferType(task);
-            final String baseVid = extractBaseVid(taskId);
-            final File expectedOut = expectedOutputFile(task, type);
-            final long now = System.currentTimeMillis();
-            final DownloadRecord existing = historyRepository.findByTaskId(taskId);
-            final long createdAt = existing != null ? existing.getCreatedAt() : now;
-            historyRepository.upsert(new DownloadRecord(taskId, baseVid, type, DownloadStatus.RUNNING, 0, task.fileName(), expectedOut.getAbsolutePath(), createdAt, now, null, 0L, 0L));
-            broadcastRecordUpdated(taskId);
-            liteDL.setCallback(taskId, new ProgressCallback2() {
-                @Override
-                public void onProgress(int progress, long downloaded, long total) {
-                    updateRecordProgress(taskId, progress, downloaded, total, DownloadStatus.RUNNING, null, null);
-                    updateNotificationProgress(task.fileName(), progress);
-                }
-                @Override
-                public void onComplete(File file) {
-                    updateRecordProgress(taskId, 100, -1, -1, DownloadStatus.COMPLETED, file.getAbsolutePath(), null);
-                    finalizeNotification(file.getName(), true);
-                    showToast(getString(R.string.download_finished, file.getName(), file.getParent()));
-                    MediaScannerConnection.scanFile(DownloadService.this, new String[]{file.getAbsolutePath()}, null, null);
-                }
-                @Override
-                public void onError(Exception error) {
-                    updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED, null, error.getMessage());
-                    finalizeNotification(task.fileName(), false);
-                }
-                @Override
-                public void onCancel() {
-                    updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.CANCELED, null, null);
-                    finalizeNotification(task.fileName(), false);
-                }
-                @Override
-                public void onMerge() {
-                    updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.MERGING, null, null);
-                    updateNotificationMerging(task.fileName());
-                }
-            });
-            liteDL.download(task);
+            startTask(task);
         }
     }
 
-    private PendingIntent createContentIntent() {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setAction("OPEN_DOWNLOADS");
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        return PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+    private void startTask(@NonNull Task task) {
+        final String taskId = task.vid();
+        final DownloadType type = inferType(task);
+        final File expectedOut = expectedOutputFile(task, type);
+        final long now = System.currentTimeMillis();
+
+        DownloadRecord existing = historyRepository.findByTaskId(taskId);
+        final long createdAt = existing != null ? existing.getCreatedAt() : now;
+
+        DownloadRecord record = new DownloadRecord(taskId, taskId, type, DownloadStatus.RUNNING, 0,
+                task.fileName(), expectedOut.getAbsolutePath(), createdAt, now, null, 0L, 0L);
+        historyRepository.upsert(record);
+        broadcastRecordUpdated(taskId);
+
+        liteDL.setCallback(taskId, new ProgressCallback2() {
+            @Override
+            public void onProgress(int progress, long downloaded, long total) {
+                updateRecordProgress(taskId, progress, downloaded, total, DownloadStatus.RUNNING);
+                updateNotificationProgress(task.fileName(), progress);
+            }
+
+            @Override
+            public void onComplete(File file) {
+                updateRecordProgress(taskId, 100, -1, -1, DownloadStatus.COMPLETED);
+                finalizeNotification(file.getName(), true);
+                MediaScannerConnection.scanFile(DownloadService.this, new String[]{file.getAbsolutePath()}, null, null);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
+                finalizeNotification(task.fileName(), false);
+            }
+
+            @Override
+            public void onCancel() {
+                updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.CANCELED);
+                // Force remove notification immediately on cancel
+                stopForeground(STOP_FOREGROUND_REMOVE);
+                notificationManager.cancel(NOTIFICATION_ID);
+            }
+
+            @Override
+            public void onMerge() {
+                updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.MERGING);
+                updateNotificationMerging(task.fileName());
+            }
+        });
+        liteDL.download(task);
     }
 
-    private void initNotification(int taskCount) {
+    public void cancel(@NonNull String vid) {
+        liteDL.cancel(vid);
+    }
+
+    private void updateRecordProgress(String taskId, int p, long d, long t, DownloadStatus status) {
+        DownloadRecord record = historyRepository.findByTaskId(taskId);
+        if (record == null) return;
+        if (p >= 0) record.setProgress(p);
+        if (d >= 0) record.setDownloadedSize(d);
+        if (t >= 0) record.setTotalSize(t);
+        record.setStatus(status);
+        record.setUpdatedAt(System.currentTimeMillis());
+        historyRepository.upsert(record);
+        broadcastRecordUpdated(taskId);
+    }
+
+    private void initNotification() {
         notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setContentTitle(getString(R.string.download_tasks_added))
-                .setContentText(getString(R.string.download_tasks_added_count, taskCount))
+                .setContentTitle("Initializing...")
                 .setContentIntent(createContentIntent())
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setOnlyAlertOnce(true)
-                .setOngoing(true)
-                .setAutoCancel(false);
+                .setOngoing(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notificationBuilder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
@@ -166,8 +170,8 @@ public class DownloadService extends Service {
         if (notificationBuilder != null) {
             notificationBuilder.setContentTitle("Downloading: " + fileName)
                     .setContentText(progress + "%")
-                    .setProgress(100, progress, false)
-                    .setContentIntent(createContentIntent());
+                    .setOngoing(true)
+                    .setProgress(100, progress, false);
             notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
         }
     }
@@ -175,9 +179,9 @@ public class DownloadService extends Service {
     private void updateNotificationMerging(String fileName) {
         if (notificationBuilder != null) {
             notificationBuilder.setContentTitle("Merging: " + fileName)
-                    .setContentText("Processing high quality video...")
-                    .setProgress(100, 0, true)
-                    .setContentIntent(createContentIntent());
+                    .setContentText("Finalizing file...")
+                    .setOngoing(true)
+                    .setProgress(100, 0, true);
             notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
         }
     }
@@ -188,32 +192,22 @@ public class DownloadService extends Service {
                     .setAutoCancel(true)
                     .setProgress(0, 0, false)
                     .setContentTitle(success ? "Download Finished" : "Download Failed")
-                    .setContentText(fileName)
-                    .setContentIntent(createContentIntent());
+                    .setContentText(fileName);
             notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_DETACH);
+            } else {
+                stopForeground(false);
+            }
         }
     }
 
-    public void cancel(@NonNull String vid) {
-        liteDL.cancel(vid);
-    }
-
-    private void showToast(@NonNull final String content) {
-        mainHandler.post(() -> Toast.makeText(this, content, Toast.LENGTH_SHORT).show());
-    }
-
-    private void updateRecordProgress(@NonNull final String taskId, final int progress, final long downloaded, final long total, @NonNull final DownloadStatus status, @Nullable final String outputPath, @Nullable final String errorMessage) {
-        final DownloadRecord record = historyRepository.findByTaskId(taskId);
-        if (record == null) return;
-        if (progress >= 0) record.setProgress(progress);
-        if (downloaded >= 0) record.setDownloadedSize(downloaded);
-        if (total >= 0) record.setTotalSize(total);
-        record.setStatus(status);
-        record.setUpdatedAt(System.currentTimeMillis());
-        if (outputPath != null) record.setOutputPath(outputPath);
-        record.setErrorMessage(errorMessage);
-        historyRepository.upsert(record);
-        broadcastRecordUpdated(taskId);
+    private PendingIntent createContentIntent() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setAction("OPEN_DOWNLOADS");
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        return PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     private void broadcastRecordUpdated(@NonNull final String taskId) {
@@ -223,9 +217,21 @@ public class DownloadService extends Service {
         sendBroadcast(intent);
     }
 
-    public class DownloadBinder extends Binder {
-        public DownloadService getService() {
-            return DownloadService.this;
-        }
+    private static DownloadType inferType(@NonNull final Task task) {
+        if (task.thumbnail() != null) return DownloadType.THUMBNAIL;
+        if (task.subtitle() != null) return DownloadType.SUBTITLE;
+        if (task.video() != null) return DownloadType.VIDEO;
+        return DownloadType.AUDIO;
     }
+
+    private static File expectedOutputFile(@NonNull final Task task, @NonNull final DownloadType type) {
+        return switch (type) {
+            case THUMBNAIL -> new File(task.desDir(), task.fileName() + ".jpg");
+            case SUBTITLE -> new File(task.desDir(), task.fileName() + "." + task.subtitle().getExtension());
+            case VIDEO -> new File(task.desDir(), task.fileName() + ".mp4");
+            case AUDIO -> new File(task.desDir(), task.fileName() + ".m4a");
+        };
+    }
+
+    public class DownloadBinder extends Binder { public DownloadService getService() { return DownloadService.this; } }
 }
