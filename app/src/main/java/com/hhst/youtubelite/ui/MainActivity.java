@@ -145,7 +145,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private String extractUrlFromText(String text) {
-        Pattern pattern = Pattern.compile("https?://[\\w\\d./?=&%#-]+", Pattern.CASE_INSENSITIVE);
+        Pattern pattern = Pattern.compile("https?://[\\w./?=&%#-]+", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(text);
         return matcher.find() ? matcher.group() : null;
     }

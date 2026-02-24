@@ -87,12 +87,10 @@ public class ExtensionDialog {
 		}).setPositiveButton(R.string.confirm, null).setNegativeButton(R.string.cancel, (dlg, which) -> dlg.dismiss()).create();
 
 		dialog.setOnShowListener(dlg -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-			boolean changed = false;
 			for (int i = 0; i < leaves.size(); i++) {
 				boolean oldState = manager.isEnabled(leaves.get(i).key());
 				if (oldState != checked[i]) {
 					manager.setEnabled(leaves.get(i).key(), checked[i]);
-					changed = true;
 				}
 			}
 			// if (changed) RestartDialog.show(context); // fix: #119

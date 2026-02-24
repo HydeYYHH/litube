@@ -17,7 +17,6 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
-import com.hhst.youtubelite.util.DeviceUtils;
 import java.util.Locale;
 
 @UnstableApi
@@ -25,9 +24,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
     private static final int AUTO_HIDE_DELAY_MS = 200;
     private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
     private static final int HINT_HIDE_FAST_MS = 500;
-    private static final float SCROLL_SENS = 0.1f;
     private static final float SPEED_SENSITIVITY = 0.015f;
-    private static final float GESTURE_SENSITIVITY_BOOST = 8.0f;
 
     private final Activity activity;
     private final LitePlayerView playerView;
@@ -39,7 +36,6 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
     private int gestureMode = 0;
     private float bri = -1, currentSpeed = -1f, preLongPressSpeed = 1.0f;
     private boolean isLongPressing = false, isGesturing = false;
-    private float totalScrollY = 0;
     private long scrollStartPosition = 0;
 
     private int cumulativeSeekAmount = 0;
@@ -82,7 +78,6 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
         vol = -1;
         currentSpeed = -1f;
         isGesturing = false;
-        totalScrollY = 0;
         scrollStartPosition = engine.position();
         return true;
     }
