@@ -6,174 +6,245 @@ import android.media.AudioManager;
 import android.os.Handler;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.provider.Settings;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
-
+import android.view.WindowManager;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
-import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
-
-import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.LitePlayerView;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
-
-import java.util.concurrent.TimeUnit;
-
+import com.hhst.youtubelite.util.DeviceUtils;
+import java.util.Locale;
 
 @UnstableApi
 public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListener {
+    private static final int AUTO_HIDE_DELAY_MS = 200;
+    private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
+    private static final int HINT_HIDE_FAST_MS = 500;
+    private static final float SCROLL_SENS = 0.1f;
+    private static final float SPEED_SENSITIVITY = 0.015f;
+    private static final float GESTURE_SENSITIVITY_BOOST = 8.0f;
 
-	private static final int MODE_NONE = 0;
-	private static final int MODE_VERTICAL = 1;
-	private static final int SEEK_STEP_MS = 10_000;
-	private static final int SEEK_SUBMIT_DELAY_MS = 400;
-	private static final float SCROLL_SENS = 0.1f;
-	private static final float SCROLL_THRESHOLD = 18f;
+    private final Activity activity;
+    private final LitePlayerView playerView;
+    private final Engine engine;
+    private final Controller controller;
+    private final Handler handler;
+    private final Runnable hideHintRunnable;
 
-	private final Activity activity;
-	private final LitePlayerView playerView;
-	private final Engine engine;
-	private final Handler handler;
-	private final Controller controller;
+    private int gestureMode = 0;
+    private float bri = -1, currentSpeed = -1f, preLongPressSpeed = 1.0f;
+    private boolean isLongPressing = false, isGesturing = false;
+    private float totalScrollY = 0;
+    private long scrollStartPosition = 0;
 
-	private int gestureMode = MODE_NONE;
-	private float vol = -1;
-	private float bri = -1;
+    private int cumulativeSeekAmount = 0;
+    private final Runnable resetSeekRunnable = () -> cumulativeSeekAmount = 0;
+    private long lastTapTime = 0;
 
-	private boolean isSeeking = false;
-	private int seekAccumMs = 0;
+    public PlayerGestureListener(Activity activity, LitePlayerView playerView, Engine engine, Controller controller) {
+        this.activity = activity;
+        this.playerView = playerView;
+        this.engine = engine;
+        this.controller = controller;
+        this.handler = new Handler(activity.getMainLooper());
+        this.hideHintRunnable = controller::hideHint;
+    }
 
-	public PlayerGestureListener(Activity activity, LitePlayerView playerView, Engine engine, Controller controller) {
-		this.activity = activity;
-		this.playerView = playerView;
-		this.engine = engine;
-		this.controller = controller;
-		this.handler = new Handler(activity.getMainLooper());
-	}
+    private boolean isEnabled() {
+        return controller.getExtensionManager().isEnabled(com.hhst.youtubelite.extension.Constant.ENABLE_PLAYER_GESTURES);
+    }
 
-	@Override
-	public boolean onDown(@NonNull MotionEvent e) {
-		gestureMode = MODE_NONE;
-		vol = -1;
-		bri = -1;
-		return true;
-	}
+    public void onTouchRelease() {
+        if (!isEnabled()) return;
+        if (isLongPressing) {
+            engine.setPlaybackRate(preLongPressSpeed);
+            updateSpeedButtonUI(preLongPressSpeed);
+            controller.hideHint();
+            isLongPressing = false;
+        }
+        if (isGesturing) {
+            handler.postDelayed(hideHintRunnable, AUTO_HIDE_DELAY_MS);
+            isGesturing = false;
+        }
+    }
 
-	@Override
-	public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-		if (!isSeeking) controller.setControlsVisible(!controller.isControlsVisible());
-		return true;
-	}
+    @Override
+    public boolean onDown(@NonNull MotionEvent e) {
+        if (!isEnabled()) return false;
+        handler.removeCallbacks(hideHintRunnable);
+        gestureMode = 0;
+        bri = -1;
+        vol = -1;
+        currentSpeed = -1f;
+        isGesturing = false;
+        totalScrollY = 0;
+        scrollStartPosition = engine.position();
+        return true;
+    }
 
-	@Override
-	public boolean onDoubleTap(@NonNull MotionEvent e) {
-		vibrate(12, TimeUnit.MILLISECONDS);
-		int playbackState = engine.getPlaybackState();
-		if (playbackState != Player.STATE_READY && playbackState != Player.STATE_ENDED) return true;
+    @Override
+    public boolean onSingleTapUp(@NonNull MotionEvent e) {
+        if (!isEnabled()) return false;
+        long currentTime = System.currentTimeMillis();
+        float x = e.getX();
+        float width = playerView.getWidth();
 
-		float x = e.getX();
-		float width = playerView.getWidth();
-		float third = width / 3;
+        if (cumulativeSeekAmount != 0 && (currentTime - lastTapTime < SEEK_CONTINUATION_WINDOW_MS)) {
+            if ((cumulativeSeekAmount < 0 && x < width * 0.35f) || (cumulativeSeekAmount > 0 && x > width * 0.65f)) {
+                processSeek(x < width * 0.5f);
+                lastTapTime = currentTime;
+                return true;
+            }
+        }
+        return super.onSingleTapUp(e);
+    }
 
-		if (x >= third && x <= 2 * third) {
-			if (engine.isPlaying()) engine.pause();
-			else engine.play();
-			controller.setControlsVisible(true);
-		} else if (x < third) processSeek(-1);
-		else processSeek(1);
-		return true;
-	}
+    @Override
+    public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
+        controller.setControlsVisible(!controller.isControlsVisible());
+        return true;
+    }
 
-	@Override
-	public boolean onSingleTapUp(@NonNull MotionEvent e) {
-		if (isSeeking) {
-			float x = e.getX();
-			float width = playerView.getWidth();
-			float third = width / 3;
+    @Override
+    public boolean onDoubleTap(@NonNull MotionEvent e) {
+        if (!isEnabled()) return false;
+        float x = e.getX();
+        float width = playerView.getWidth();
+        if (x < width * 0.35f || x > width * 0.65f) {
+            processSeek(x < width * 0.5f);
+            lastTapTime = System.currentTimeMillis();
+            return true;
+        }
+        return false;
+    }
 
-			if (seekAccumMs > 0 && x > 2 * third) processSeek(1);
-			else if (seekAccumMs < 0 && x < third) processSeek(-1);
-		}
-		return true;
-	}
+    private void processSeek(boolean isLeft) {
+        handler.removeCallbacks(resetSeekRunnable);
+        long seekStep = 10000;
+        if (isLeft) {
+            cumulativeSeekAmount -= 10;
+            engine.seekBy(-seekStep);
+            controller.showHint(cumulativeSeekAmount + "s", HINT_HIDE_FAST_MS);
+        } else {
+            cumulativeSeekAmount += 10;
+            engine.seekBy(seekStep);
+            controller.showHint("+" + cumulativeSeekAmount + "s", HINT_HIDE_FAST_MS);
+        }
+        handler.postDelayed(resetSeekRunnable, SEEK_CONTINUATION_WINDOW_MS);
+    }
 
-	private final Runnable seek = this::seek;
-	private void processSeek(int direction) {
-		isSeeking = true;
-		seekAccumMs += direction * SEEK_STEP_MS;
-		handler.removeCallbacks(seek);
-		handler.postDelayed(seek, SEEK_SUBMIT_DELAY_MS);
-		String prefix = seekAccumMs > 0 ? "+" : "";
-		controller.showHint(prefix + (seekAccumMs / 1000) + "s", -1);
-	}
+    @Override
+    public boolean onScroll(MotionEvent e1, @NonNull MotionEvent e2, float dx, float dy) {
+        if (!isEnabled() || e1 == null || e2.getPointerCount() > 1 || isLongPressing) return false;
+        if (gestureMode == 0) {
+            if (Math.abs(dy) > Math.abs(dx)) gestureMode = 1;
+            else if (Math.abs(dx) > Math.abs(dy)) gestureMode = 2;
+        }
+        if (gestureMode == 1) {
+            isGesturing = true;
+            handler.removeCallbacks(hideHintRunnable);
+            float x = e1.getX(), width = playerView.getWidth();
+            if (x < width * 0.35f) adjustBrightness(dy);
+            else if (x > width * 0.65f) adjustVolume(dy);
+            else adjustPlaybackSpeed(dy);
+            handler.postDelayed(hideHintRunnable, AUTO_HIDE_DELAY_MS);
+        } else if (gestureMode == 2) {
+            isGesturing = true;
+            handler.removeCallbacks(hideHintRunnable);
+            adjustSeek(e1, e2);
+            handler.postDelayed(hideHintRunnable, AUTO_HIDE_DELAY_MS);
+        }
+        return true;
+    }
 
-	private void seek() {
-		activity.runOnUiThread(() -> {
-			if (seekAccumMs != 0) {
-				engine.seekBy(seekAccumMs);
-				seekAccumMs = 0;
-				isSeeking = false;
-				controller.hideHint();
-			}
-		});
-	}
+    private void adjustSeek(MotionEvent e1, MotionEvent e2) {
+        float distanceX = e2.getX() - e1.getX();
+        float width = playerView.getWidth();
+        long maxSeekRange = 120000;
+        long seekOffset = (long) ((distanceX / width) * maxSeekRange);
+        long targetPosition = scrollStartPosition + seekOffset;
+        engine.seekTo(targetPosition);
+        controller.showHint(formatTime(targetPosition), -1);
+    }
 
-	@Override
-	public boolean onScroll(MotionEvent e1, @NonNull MotionEvent e2, float dx, float dy) {
-		if (e1 == null || e2.getPointerCount() > 1 || isSeeking) return false;
+    private String formatTime(long ms) {
+        if (ms < 0) ms = 0;
+        int seconds = (int) (ms / 1000) % 60;
+        int minutes = (int) ((ms / (1000 * 60)) % 60);
+        int hours = (int) ((ms / (1000 * 60 * 60)) % 24);
+        if (hours > 0) return String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds);
+        return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
+    }
 
-		float absDx = Math.abs(dx);
-		float absDy = Math.abs(dy);
+    private void adjustBrightness(float dy) {
+        WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
+        if (bri == -1) {
+            bri = lp.screenBrightness;
+            if (bri < 0) {
+                try {
+                    float systemBri = Settings.System.getInt(activity.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
+                    bri = systemBri / 255.0f;
+                } catch (Settings.SettingNotFoundException e) {
+                    bri = 0.5f;
+                }
+            }
+        }
+        float delta = (dy / playerView.getHeight()) * 1.5f;
+        bri = Math.min(Math.max(bri + delta, 0.01f), 1.0f);
+        lp.screenBrightness = bri;
+        activity.getWindow().setAttributes(lp);
+        controller.showHint(Math.round(bri * 100) + "%", -1);
+    }
 
-		if (gestureMode == MODE_NONE) {
-			if (absDy > absDx && absDy > SCROLL_THRESHOLD) {
-				gestureMode = MODE_VERTICAL;
-				vibrate(10, TimeUnit.MILLISECONDS);
-			}
-		}
+    private float vol = -1;
 
-		if (gestureMode == MODE_VERTICAL) {
-			if (e1.getX() < playerView.getWidth() / 2f) adjustBrightness(dy);
-			else adjustVolume(dy);
-		}
-		return true;
-	}
+    private void adjustVolume(float dy) {
+        final AudioManager am = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return;
+        final int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        if (vol == -1) vol = (float) am.getStreamVolume(AudioManager.STREAM_MUSIC);
+        float delta = (dy / playerView.getHeight()) * (float) max * 1.2f;
+        vol = Math.min(Math.max(vol + delta, 0), (float) max);
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(vol), 0);
+        int percentage = Math.round((vol / (float) max) * 100);
+        controller.showHint(percentage + "%", -1);
+    }
 
-	private void adjustBrightness(float dy) {
-		if (bri == -1) bri = activity.getWindow().getAttributes().screenBrightness;
-		if (bri < 0) bri = 0.5f;
+    private void adjustPlaybackSpeed(float dy) {
+        if (currentSpeed == -1f) currentSpeed = engine.getPlaybackRate();
+        currentSpeed += (dy * SPEED_SENSITIVITY);
+        currentSpeed = Math.min(Math.max(currentSpeed, 0.25f), 4.0f);
+        float notched = Math.round(currentSpeed * 20) / 20.0f;
+        engine.setPlaybackRate(notched);
+        updateSpeedButtonUI(notched);
+        controller.showHint(notched + "x", -1);
+    }
 
-		bri = DeviceUtils.adjustBrightness(activity, dy, playerView, bri, SCROLL_SENS);
-		int percent = DeviceUtils.getBrightnessPercent(bri);
-		controller.showHint(activity.getString(R.string.hint_brightness, percent), Constant.HINT_HIDE_DELAY_MS);
-	}
+    @Override
+    public void onLongPress(@NonNull MotionEvent e) {
+        if (!isEnabled() || !engine.isPlaying()) return;
+        vibrate();
+        preLongPressSpeed = engine.getPlaybackRate();
+        isLongPressing = true;
+        engine.setPlaybackRate(2.0f);
+        updateSpeedButtonUI(2.0f);
+        controller.showHint("2x", -1);
+    }
 
-	private void adjustVolume(float dy) {
-		final AudioManager am = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
-		final int maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-		if (vol == -1) vol = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+    private void updateSpeedButtonUI(float speed) {
+        final TextView speedView = playerView.findViewById(R.id.btn_speed);
+        if (speedView != null) speedView.setText(String.format(Locale.getDefault(), "%.2fx", speed));
+    }
 
-		vol = DeviceUtils.adjustVolume(activity, dy, playerView, vol, SCROLL_SENS);
-		int percent = DeviceUtils.getVolumePercent(vol, maxVolume);
-		controller.showHint(activity.getString(R.string.hint_volume, percent), Constant.HINT_HIDE_DELAY_MS);
-	}
-
-	@Override
-	public void onLongPress(@NonNull MotionEvent e) {
-		if (!isSeeking && engine.getPlaybackState() == Player.STATE_READY && engine.isPlaying()) {
-			vibrate(15, TimeUnit.MILLISECONDS);
-			controller.setLongPress(true);
-			engine.setPlaybackRate(2.0f);
-			controller.showHint("2x", -1);
-		}
-	}
-
-	private void vibrate(long duration, TimeUnit unit) {
-		Vibrator v = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
-		if (v != null && v.hasVibrator())
-			v.vibrate(VibrationEffect.createOneShot(unit.toMillis(duration), VibrationEffect.DEFAULT_AMPLITUDE));
-	}
+    private void vibrate() {
+        Vibrator v = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+        if (v != null && v.hasVibrator()) {
+            v.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
+        }
+    }
 }

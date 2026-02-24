@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -61,31 +62,51 @@
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
             <intent-filter>
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="www.youtube.com" />
-                <data android:pathPrefix="/watch" />
-                <data android:scheme="https" />
-                <data android:host="m.youtube.com" />
-                <data android:pathPrefix="/watch" />
-                <data android:scheme="https" />
-                <data android:host="youtube.com" />
-                <data android:pathPrefix="/watch" />
-                <data android:scheme="https" />
-                <data android:host="www.youtube.com" />
-                <data android:pathPrefix="/live" />
-                <data android:scheme="https" />
-                <data android:host="m.youtube.com" />
-                <data android:pathPrefix="/live" />
-                <data android:scheme="https" />
-                <data android:host="youtube.com" />
-                <data android:pathPrefix="/live" />
+                <action android:name="TRIGGER_DOWNLOAD_FROM_SHARE" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="www.youtube.com" />
+                <data android:host="m.youtube.com" />
+                <data android:host="youtube.com" />
+                <data android:host="youtu.be" />
+                <data android:pathPrefix="/watch" />
+                <data android:pathPrefix="/live" />
+                <data android:pathPrefix="/shorts" />
+                <data android:pathPrefix="/playlist" />
+                <data android:pathPrefix="/view_all_playlists" />
+                <data android:pathPrefix="/v/" />
+                <data android:pathPrefix="/embed/" />
+                <data android:pathPrefix="/attribution_link" />
+                <data android:pathPattern="/@.*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".downloader.ui.DownloadReceiverActivity"
+            android:label="Download"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@style/Theme.Transparent"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -95,11 +116,13 @@
 
         <activity
             android:name=".gallery.GalleryActivity"
-            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
 
         <activity
             android:name=".ui.AboutActivity"
-            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
 
         <activity
             android:name=".downloader.ui.DownloadActivity"
@@ -107,5 +130,4 @@
             android:exported="false" />
 
     </application>
-
 </manifest>

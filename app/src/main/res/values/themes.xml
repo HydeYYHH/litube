@@ -2,6 +2,7 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.YoutubeLite" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
+        <item name="android:colorControlActivated">@color/yt_red</item>
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
         <item name="colorSecondary">@color/secondary</item>
@@ -22,7 +23,7 @@
 
         <item name="materialAlertDialogTheme">@style/Theme.YoutubeLite.AlertDialog</item>
         <item name="bottomSheetDialogTheme">@style/Theme.YoutubeLite.BottomSheetDialog</item>
-        
+
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 

@@ -5,6 +5,7 @@
     <string name="video">Video</string>
     <string name="cancel">Cancel</string>
     <string name="download">Download</string>
+    <string name="menu_downloads">Downloads</string>
     <string name="video_quality">Video Quality</string>
     <string name="confirm">Confirm</string>
     <string name="select_something_first">Please select an item first</string>
@@ -13,11 +14,12 @@
     <string name="failed_to_download">Failed to download</string>
     <string name="failed_to_download_thumbnail">Failed to download image</string>
     <string name="audio_only">Audio</string>
+    <string name="player_gestures">Player Gestures</string>
     <string name="close">Close</string>
     <string name="save">Save</string>
     <string name="share">Share</string>
     <string name="share_thumbnail">Share Thumbnail</string>
-    <string name="extension">Extension</string>
+    <string name="extension">Extensions</string>
     <string name="request_restart">Restart to apply changes</string>
     <string name="restart">Restart</string>
     <string name="display_dislikes">Show dislikes</string>
@@ -137,4 +139,7 @@
     <string name="type_audio">Audio</string>
     <string name="type_subtitle">Subtitle</string>
     <string name="type_thumbnail">Thumbnail</string>
+    <string name="status_paused">Paused</string>
+    <string name="action_pause_download">Pause</string>
+    <string name="action_resume_download">Resume</string>
 </resources>

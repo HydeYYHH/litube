@@ -1,18 +1,22 @@
 package com.hhst.youtubelite.downloader.ui;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -25,15 +29,17 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
-import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.imageview.ShapeableImageView;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.history.DownloadHistoryRepository;
 import com.hhst.youtubelite.downloader.core.history.DownloadRecord;
@@ -57,356 +63,352 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 @UnstableApi
 public class DownloadActivity extends AppCompatActivity {
-	private static final int MENU_CLEAR_HISTORY = 1;
+    private static final int MENU_CLEAR_HISTORY = 1;
 
-	@Inject
-	DownloadHistoryRepository historyRepository;
-	@Inject
-	YoutubeExtractor youtubeExtractor;
+    @Inject DownloadHistoryRepository historyRepository;
+    @Inject YoutubeExtractor youtubeExtractor;
 
-	private RecyclerView recyclerView;
-	private TextView emptyView;
-	private DownloadService downloadService;
-	private boolean isBound;
+    private RecyclerView recyclerView;
+    private TextView emptyView;
+    private DownloadService downloadService;
+    private boolean isBound;
 
-	private final ServiceConnection connection = new ServiceConnection() {
-		@Override
-		public void onServiceConnected(ComponentName name, IBinder service) {
-			downloadService = ((DownloadService.DownloadBinder) service).getService();
-			isBound = true;
-		}
+    private final ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            downloadService = ((DownloadService.DownloadBinder) service).getService();
+            isBound = true;
+        }
 
-		@Override
-		public void onServiceDisconnected(ComponentName name) {
-			downloadService = null;
-			isBound = false;
-		}
-	};
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            downloadService = null;
+            isBound = false;
+        }
+    };
 
-	@NonNull
-	private static String guessMimeType(@NonNull final File file) {
-		final String name = file.getName();
-		final int dot = name.lastIndexOf('.');
-		if (dot < 0) return "*/*";
-		final String ext = name.substring(dot + 1).toLowerCase(Locale.US);
-		final String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
-		return type != null ? type : "*/*";
-	}
+    @NonNull
+    private static String guessMimeType(@NonNull final File file) {
+        final String name = file.getName();
+        final int dot = name.lastIndexOf('.');
+        if (dot < 0) return "*/*";
+        final String ext = name.substring(dot + 1).toLowerCase(Locale.US);
+        final String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+        return type != null ? type : "*/*";
+    }
 
-	@NonNull
-	private static String buildWatchUrl(@NonNull final String vid) {
-		return "https://m.youtube.com/watch?v=" + vid;
-	}
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        EdgeToEdge.enable(this);
+        setContentView(R.layout.activity_download);
 
-	@Override
-	protected void onCreate(@Nullable Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		EdgeToEdge.enable(this);
-		setContentView(R.layout.activity_download);
+        final View root = findViewById(R.id.root);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            var systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
 
-		final View root = findViewById(R.id.root);
-		ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-			v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-			return insets;
-		});
+        final MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        toolbar.setNavigationOnClickListener(v -> finish());
+        toolbar.getMenu().add(Menu.NONE, MENU_CLEAR_HISTORY, Menu.NONE, R.string.clear_history)
+                .setIcon(R.drawable.ic_clear)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS);
 
-		final com.google.android.material.appbar.MaterialToolbar toolbar = findViewById(R.id.toolbar);
-		toolbar.setNavigationOnClickListener(v -> finish());
-		toolbar.getMenu().add(Menu.NONE, MENU_CLEAR_HISTORY, Menu.NONE, R.string.clear_history).setIcon(R.drawable.ic_clear).setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS);
-		toolbar.setOnMenuItemClickListener(item -> {
-			if (item.getItemId() == MENU_CLEAR_HISTORY) {
-				showClearHistoryDialog();
-				return true;
-			}
-			return false;
-		});
+        toolbar.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == MENU_CLEAR_HISTORY) {
+                showClearHistoryDialog();
+                return true;
+            }
+            return false;
+        });
 
-		recyclerView = findViewById(R.id.recyclerView);
-		emptyView = findViewById(R.id.emptyView);
-		recyclerView.setLayoutManager(new LinearLayoutManager(this));
-		recyclerView.setAdapter(adapter);
-	}	private final android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
-		@Override
-		public void onReceive(Context context, Intent intent) {
-			if (!Objects.equals(intent.getAction(), DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED))
-				return;
-			final String taskId = intent.getStringExtra(DownloadService.EXTRA_TASK_ID);
-			if (taskId == null) return;
-			final DownloadRecord updated = historyRepository.findByTaskId(taskId);
-			if (updated == null) {
-				loadRecords();
-				return;
-			}
-			adapter.upsert(updated);
-			updateEmptyState();
-		}
-	};
+        recyclerView = findViewById(R.id.recyclerView);
+        emptyView = findViewById(R.id.emptyView);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setAdapter(adapter);
+    }
 
-	@Override
-	protected void onStart() {
-		super.onStart();
-		ContextCompat.registerReceiver(this, receiver, new android.content.IntentFilter(DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED), ContextCompat.RECEIVER_NOT_EXPORTED);
-		bindService(new Intent(this, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
-		loadRecords();
-	}
+    private final BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!Objects.equals(intent.getAction(), DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED)) return;
+            final String taskId = intent.getStringExtra(DownloadService.EXTRA_TASK_ID);
+            if (taskId == null) return;
 
-	@Override
-	protected void onStop() {
-		super.onStop();
-		try {
-			unregisterReceiver(receiver);
-		} catch (Exception ignored) {
-		}
-		if (isBound) {
-			unbindService(connection);
-			isBound = false;
-		}
-	}
+            final DownloadRecord updated = historyRepository.findByTaskId(taskId);
+            if (updated != null) {
+                runOnUiThread(() -> {
+                    adapter.upsert(updated);
+                    updateEmptyState();
+                });
+            }
+        }
+    };
 
-	private void loadRecords() {
-		final List<DownloadRecord> list = historyRepository.getAllSorted();
-		adapter.setItems(list);
-		updateEmptyState();
-	}	private final DownloadRecordsAdapter adapter = new DownloadRecordsAdapter(new ArrayList<>(), new DownloadRecordsAdapter.Actions() {
-		@Override
-		public void onOpen(DownloadRecord record) {
-			openRecordFile(record);
-		}
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadRecords();
+    }
 
-		@Override
-		public void onCancel(DownloadRecord record) {
-			if (!isBound || downloadService == null) return;
-			downloadService.cancel(record.getTaskId());
-		}
+    @Override
+    protected void onStart() {
+        super.onStart();
+        ContextCompat.registerReceiver(this, receiver, new IntentFilter(DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED), ContextCompat.RECEIVER_NOT_EXPORTED);
+        bindService(new Intent(this, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
+    }
 
-		@Override
-		public void onRetry(DownloadRecord record) {
-			new DownloadDialog(buildWatchUrl(record.getVid()), DownloadActivity.this, youtubeExtractor).show();
-		}
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try { unregisterReceiver(receiver); } catch (Exception ignored) {}
+        if (isBound) {
+            unbindService(connection);
+            isBound = false;
+        }
+    }
 
-		@Override
-		public void onCopyVid(DownloadRecord record) {
-			final ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-			if (clipboard == null) return;
-			clipboard.setPrimaryClip(ClipData.newPlainText("vid", record.getVid()));
-			Toast.makeText(DownloadActivity.this, R.string.vid_copied, Toast.LENGTH_SHORT).show();
-		}
+    private void loadRecords() {
+        final List<DownloadRecord> list = historyRepository.getAllSorted();
+        adapter.setItems(list);
+        updateEmptyState();
+    }
 
-		@Override
-		public void onDelete(DownloadRecord record) {
-			showDeleteDialog(record);
-		}
-	});
+    private final DownloadRecordsAdapter adapter = new DownloadRecordsAdapter(new ArrayList<>(), new DownloadRecordsAdapter.Actions() {
+        @Override public void onOpen(DownloadRecord record) { openRecordFile(record); }
+        @Override public void onCancel(DownloadRecord record) { if (isBound && downloadService != null) downloadService.cancel(record.getTaskId()); }
 
-	private void updateEmptyState() {
-		final boolean isEmpty = adapter.getItemCount() == 0;
-		emptyView.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
-		recyclerView.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
-	}
+        @Override public void onRedownload(DownloadRecord record) {
+            String cleanVid = record.getVid().split(":")[0];
+            String url = "https://m.youtube.com/watch?v=" + cleanVid;
+            new DownloadDialog(url, DownloadActivity.this, youtubeExtractor).show();
+        }
 
-	private void showDeleteDialog(@NonNull final DownloadRecord record) {
-		final View view = android.view.LayoutInflater.from(this).inflate(R.layout.dialog_delete_record, null);
-		final MaterialCheckBox checkbox = view.findViewById(R.id.checkbox_delete_file);
+        @Override public void onCopyVid(DownloadRecord record) {
+            final ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                String cleanVid = record.getVid().split(":")[0];
+                clipboard.setPrimaryClip(ClipData.newPlainText("vid", cleanVid));
+                Toast.makeText(DownloadActivity.this, R.string.vid_copied, Toast.LENGTH_SHORT).show();
+            }
+        }
+        @Override public void onDelete(DownloadRecord record) { showDeleteDialog(record); }
+    });
 
-		new MaterialAlertDialogBuilder(this).setTitle(R.string.delete_record).setView(view).setNegativeButton(R.string.cancel, null).setPositiveButton(R.string.delete_record, (d, w) -> {
-			if (isBound && downloadService != null) {
-				final DownloadStatus s = record.getStatus();
-				if (s == DownloadStatus.QUEUED || s == DownloadStatus.RUNNING || s == DownloadStatus.MERGING) {
-					downloadService.cancel(record.getTaskId());
-				}
-			}
-			if (checkbox.isChecked()) {
-				FileUtils.deleteQuietly(new File(record.getOutputPath()));
-			}
-			historyRepository.remove(record.getTaskId());
-			loadRecords();
-		}).show();
-	}
+    private void updateEmptyState() {
+        final boolean isEmpty = adapter.getItemCount() == 0;
+        emptyView.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+    }
 
-	private void showClearHistoryDialog() {
-		new MaterialAlertDialogBuilder(this).setTitle(R.string.clear_history).setMessage(R.string.clear_history_confirmation).setNegativeButton(R.string.cancel, null).setPositiveButton(R.string.clear, (d, w) -> {
-			historyRepository.clear();
-			loadRecords();
-			Toast.makeText(this, R.string.history_cleared, Toast.LENGTH_SHORT).show();
-		}).show();
-	}
+    private void showDeleteDialog(@NonNull final DownloadRecord record) {
+        final View view = LayoutInflater.from(this).inflate(R.layout.dialog_delete_record, null);
+        final MaterialCheckBox checkbox = view.findViewById(R.id.checkbox_delete_file);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.delete_record)
+                .setView(view)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.delete_record, (d, w) -> {
+                    if (isBound && downloadService != null) {
+                        downloadService.cancel(record.getTaskId());
+                    }
+                    if (checkbox.isChecked()) {
+                        FileUtils.deleteQuietly(new File(record.getOutputPath()));
+                    }
+                    historyRepository.remove(record.getTaskId());
+                    loadRecords();
+                }).show();
+    }
 
-	private void openRecordFile(@NonNull final DownloadRecord record) {
-		final File file = new File(record.getOutputPath());
-		if (!file.exists()) {
-			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
-			return;
-		}
-		final Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
-		final Intent intent = new Intent(Intent.ACTION_VIEW);
-		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-		intent.setDataAndType(uri, guessMimeType(file));
-		try {
-			startActivity(intent);
-		} catch (Exception e) {
-			Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show();
-		}
-	}
+    private void showClearHistoryDialog() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.clear_history)
+                .setMessage(R.string.clear_history_confirmation)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.clear, (d, w) -> {
+                    historyRepository.clear();
+                    loadRecords();
+                }).show();
+    }
 
-	private static final class DownloadRecordsAdapter extends RecyclerView.Adapter<DownloadRecordsAdapter.VH> {
-		@NonNull
-		private final List<DownloadRecord> items;
-		@NonNull
-		private final Actions actions;
+    private void openRecordFile(@NonNull final DownloadRecord record) {
+        final File file = new File(record.getOutputPath());
+        if (!file.exists()) {
+            Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
+        final String ext = MimeTypeMap.getFileExtensionFromUrl(uri.toString());
+        final String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
 
-		private DownloadRecordsAdapter(@NonNull final List<DownloadRecord> items, @NonNull final Actions actions) {
-			this.items = items;
-			this.actions = actions;
-		}
+        final Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setDataAndType(uri, type != null ? type : "*/*");
+        try {
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show();
+        }
+    }
 
-		@SuppressLint("NotifyDataSetChanged")
-		void setItems(@NonNull final List<DownloadRecord> newItems) {
-			items.clear();
-			items.addAll(newItems);
-			notifyDataSetChanged();
-		}
+    private static final class DownloadRecordsAdapter extends RecyclerView.Adapter<DownloadRecordsAdapter.VH> {
+        @NonNull private final List<DownloadRecord> items;
+        @NonNull private final Actions actions;
 
-		void upsert(@NonNull final DownloadRecord record) {
-			for (int i = 0; i < items.size(); i++) {
-				if (Objects.equals(items.get(i).getTaskId(), record.getTaskId())) {
-					items.set(i, record);
-					notifyItemChanged(i);
-					return;
-				}
-			}
-			items.add(0, record);
-			notifyItemInserted(0);
-		}
+        private DownloadRecordsAdapter(@NonNull List<DownloadRecord> items, Actions actions) {
+            this.items = items;
+            this.actions = actions;
+        }
 
-		@NonNull
-		@Override
-		public VH onCreateViewHolder(@NonNull android.view.ViewGroup parent, int viewType) {
-			final View v = android.view.LayoutInflater.from(parent.getContext()).inflate(R.layout.item_download_record, parent, false);
-			return new VH(v);
-		}
+        @SuppressLint("NotifyDataSetChanged")
+        void setItems(@NonNull List<DownloadRecord> newItems) {
+            items.clear();
+            items.addAll(newItems);
+            notifyDataSetChanged();
+        }
 
-		@Override
-		public void onBindViewHolder(@NonNull VH holder, int position) {
-			holder.bind(items.get(position), actions);
-		}
+        void upsert(@NonNull DownloadRecord record) {
+            for (int i = 0; i < items.size(); i++) {
+                if (Objects.equals(items.get(i).getTaskId(), record.getTaskId())) {
+                    items.set(i, record);
+                    notifyItemChanged(i);
+                    return;
+                }
+            }
+            items.add(0, record);
+            notifyItemInserted(0);
+        }
 
-		@Override
-		public int getItemCount() {
-			return items.size();
-		}
+        @NonNull @Override
+        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_download_record, parent, false);
+            return new VH(v);
+        }
 
-		interface Actions {
-			void onOpen(DownloadRecord record);
+        @Override
+        public void onBindViewHolder(@NonNull VH holder, int position) {
+            holder.bind(items.get(position), actions);
+        }
 
-			void onCancel(DownloadRecord record);
+        @Override public int getItemCount() { return items.size(); }
 
-			void onRetry(DownloadRecord record);
+        interface Actions {
+            void onOpen(DownloadRecord record);
+            void onCancel(DownloadRecord record);
+            void onRedownload(DownloadRecord record);
+            void onCopyVid(DownloadRecord record);
+            void onDelete(DownloadRecord record);
+        }
 
-			void onCopyVid(DownloadRecord record);
+        static final class VH extends RecyclerView.ViewHolder {
+            private final ShapeableImageView thumbnail;
+            private final TextView title, subtitle, sizeDownloaded;
+            private final LinearProgressIndicator progress;
+            private final ImageButton more;
 
-			void onDelete(DownloadRecord record);
-		}
+            VH(@NonNull View itemView) {
+                super(itemView);
+                thumbnail = itemView.findViewById(R.id.thumbnail);
+                title = itemView.findViewById(R.id.title);
+                subtitle = itemView.findViewById(R.id.subtitle);
+                sizeDownloaded = itemView.findViewById(R.id.size_downloaded);
+                progress = itemView.findViewById(R.id.progress);
+                more = itemView.findViewById(R.id.more);
+            }
 
-		static final class VH extends RecyclerView.ViewHolder {
-			private final com.google.android.material.imageview.ShapeableImageView thumbnail;
-			private final TextView title;
-			private final TextView subtitle;
-			private final com.google.android.material.progressindicator.LinearProgressIndicator progress;
-			private final ImageButton more;
+            private String formatVal(long bytes) {
+                return String.format(Locale.US, "%.1f", bytes / 1024.0 / 1024.0);
+            }
 
-			VH(@NonNull View itemView) {
-				super(itemView);
-				thumbnail = itemView.findViewById(R.id.thumbnail);
-				title = itemView.findViewById(R.id.title);
-				subtitle = itemView.findViewById(R.id.subtitle);
-				progress = itemView.findViewById(R.id.progress);
-				more = itemView.findViewById(R.id.more);
-			}
+            void bind(@NonNull final DownloadRecord record, @NonNull final Actions actions) {
+                title.setText(record.getFileName());
 
-			@NonNull
-			private static String buildSubtitle(@NonNull final Context context, @NonNull final DownloadRecord record) {
-				final String status = switch (record.getStatus()) {
-					case QUEUED -> context.getString(R.string.status_queued);
-					case RUNNING -> context.getString(R.string.status_downloading, record.getProgress());
-					case MERGING -> context.getString(R.string.status_merging);
-					case COMPLETED -> context.getString(R.string.status_completed);
-					case CANCELED -> context.getString(R.string.status_cancelled);
-					case FAILED -> context.getString(R.string.status_failed);
-				};
-				final String type = switch (record.getType()) {
-					case VIDEO -> context.getString(R.string.type_video);
-					case AUDIO -> context.getString(R.string.type_audio);
-					case SUBTITLE -> context.getString(R.string.type_subtitle);
-					case THUMBNAIL -> context.getString(R.string.type_thumbnail);
-				};
-				return status + " • " + type;
-			}
+                final DownloadStatus s = record.getStatus();
+                final boolean isCompleted = s == DownloadStatus.COMPLETED;
+                final boolean isActive = s == DownloadStatus.RUNNING || s == DownloadStatus.QUEUED || s == DownloadStatus.MERGING;
 
-			private static void showActions(@NonNull final View anchor, @NonNull final DownloadRecord record, @NonNull final Actions actions) {
-				final PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
-				final android.view.Menu menu = popup.getMenu();
+                subtitle.setText(buildStatusText(s) + " • " + record.getType().name());
 
-				final boolean canOpen = record.getStatus() == DownloadStatus.COMPLETED;
-				final boolean canCancel = record.getStatus() == DownloadStatus.RUNNING || record.getStatus() == DownloadStatus.QUEUED || record.getStatus() == DownloadStatus.MERGING;
+                if (record.getTotalSize() > 0) {
+                    // Logic: current / total MB (%)
+                    String progressStr = String.format(Locale.US, "%s / %s MB (%d%%)",
+                            formatVal(record.getDownloadedSize()),
+                            formatVal(record.getTotalSize()),
+                            record.getProgress());
+                    sizeDownloaded.setText(progressStr);
+                } else {
+                    sizeDownloaded.setText(formatVal(record.getDownloadedSize()) + " MB");
+                }
 
-				if (canOpen) {
-					menu.add(0, 0, 0, R.string.open_file);
-				}
-				if (canCancel) {
-					menu.add(0, 1, 1, R.string.cancel_download);
-				}
+                progress.setVisibility(isActive ? View.VISIBLE : View.GONE);
+                if (isActive) {
+                    progress.setIndeterminate(s == DownloadStatus.MERGING || s == DownloadStatus.QUEUED);
+                    if (!progress.isIndeterminate()) progress.setProgressCompat(record.getProgress(), true);
+                }
 
-				menu.add(0, 2, 2, R.string.copy_vid);
-				menu.add(0, 3, 3, R.string.retry_download);
-				menu.add(0, 4, 4, R.string.delete_record);
+                // FIXED THUMBNAIL: Strips suffix from ID for high-quality MQ endpoint
+                String cleanVid = record.getVid().split(":")[0];
+                String thumbUrl = "https://i.ytimg.com/vi/" + cleanVid + "/mqdefault.jpg";
+                Picasso.get().load(thumbUrl)
+                        .placeholder(R.drawable.ic_launcher_foreground)
+                        .error(R.drawable.ic_launcher_foreground)
+                        .into(thumbnail);
 
-				popup.setOnMenuItemClickListener(item -> {
-					switch (item.getItemId()) {
-						case 0 -> actions.onOpen(record);
-						case 1 -> actions.onCancel(record);
-						case 2 -> actions.onCopyVid(record);
-						case 3 -> actions.onRetry(record);
-						case 4 -> actions.onDelete(record);
-					}
-					return true;
-				});
-				popup.show();
-			}
+                more.setOnClickListener(v -> showPopupMenu(v, record, actions));
+                itemView.setOnClickListener(v -> {
+                    if (isCompleted) actions.onOpen(record);
+                    else showPopupMenu(more, record, actions);
+                });
+            }
 
-			void bind(@NonNull final DownloadRecord record, @NonNull final Actions actions) {
-				title.setText(record.getFileName());
-				subtitle.setText(buildSubtitle(itemView.getContext(), record));
+            private String buildStatusText(DownloadStatus status) {
+                return switch (status) {
+                    case RUNNING -> "Downloading";
+                    case QUEUED -> "Queued";
+                    case MERGING -> "Merging";
+                    case COMPLETED -> "Completed";
+                    case FAILED -> "Failed";
+                    case CANCELED -> "Cancelled";
+                    case PAUSED -> "Paused";
+                };
+            }
 
-				final boolean showProgress = record.getStatus() == DownloadStatus.QUEUED || record.getStatus() == DownloadStatus.RUNNING || record.getStatus() == DownloadStatus.MERGING;
-				progress.setVisibility(showProgress ? View.VISIBLE : View.GONE);
-				if (showProgress) {
-					progress.setIndeterminate(record.getStatus() == DownloadStatus.MERGING);
-					if (record.getStatus() != DownloadStatus.MERGING) {
-						progress.setProgressCompat(record.getProgress(), true);
-					}
-				}
+            private void showPopupMenu(View anchor, DownloadRecord record, Actions actions) {
+                PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
+                Menu menu = popup.getMenu();
+                DownloadStatus s = record.getStatus();
 
-				final String thumbUrl = "https://i.ytimg.com/vi/" + record.getVid() + "/hqdefault.jpg";
-				Picasso.get().load(thumbUrl).placeholder(R.drawable.ic_broken_image).error(R.drawable.ic_broken_image).into(thumbnail);
+                if (s == DownloadStatus.COMPLETED) {
+                    menu.add(0, 0, 0, "Open File");
+                }
 
-				itemView.setOnClickListener(v -> {
-					if (record.getStatus() == DownloadStatus.COMPLETED) {
-						actions.onOpen(record);
-					} else {
-						showActions(more, record, actions);
-					}
-				});
+                if (!isActive(s)) {
+                    menu.add(0, 4, 1, "Redownload");
+                } else {
+                    menu.add(0, 5, 1, "Cancel Download");
+                }
 
-				more.setOnClickListener(v -> showActions(v, record, actions));
-			}
-		}
-	}
+                menu.add(0, 1, 2, "Copy Video ID");
+                menu.add(0, 3, 3, "Delete");
 
+                popup.setOnMenuItemClickListener(item -> {
+                    switch (item.getItemId()) {
+                        case 0 -> actions.onOpen(record);
+                        case 1 -> actions.onCopyVid(record);
+                        case 3 -> actions.onDelete(record);
+                        case 4 -> actions.onRedownload(record);
+                        case 5 -> actions.onCancel(record);
+                    }
+                    return true;
+                });
+                popup.show();
+            }
 
-
-
-
-
+            private boolean isActive(DownloadStatus s) {
+                return s == DownloadStatus.RUNNING || s == DownloadStatus.QUEUED || s == DownloadStatus.MERGING;
+            }
+        }
+    }
 }
-

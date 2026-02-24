@@ -1,13 +1,13 @@
 package com.hhst.youtubelite.player.controller.gesture;
 
 import android.app.Activity;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.view.MotionEvent;import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.ui.R;
+import com.hhst.youtubelite.R;
 
 import com.hhst.youtubelite.player.LitePlayerView;
 
@@ -21,118 +21,145 @@ import lombok.Setter;
 @ActivityScoped
 @UnstableApi
 public class ZoomTouchListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
-	private final ScaleGestureDetector detector;
-	private final LitePlayerView playerView;
-	@Setter
-	private Consumer<Boolean> onShowReset;
-	private float scaleFactor = 1.0f;
-	private float lastX, lastY;
-	private int mode = 0;
+    private final ScaleGestureDetector detector;
+    private final LitePlayerView playerView;
+    @Setter
+    private Consumer<Boolean> onShowReset;
+    private float scaleFactor = 1.0f;
+    private float lastX, lastY;
+    private int mode = 0; // 0: None, 1: Zooming, 2: Panning
 
-	@Inject
-	public ZoomTouchListener(Activity activity, LitePlayerView playerView) {
-		this.playerView = playerView;
-		this.detector = new ScaleGestureDetector(activity, this);
-	}
+    @Inject
+    public ZoomTouchListener(Activity activity, LitePlayerView playerView) {
+        this.playerView = playerView;
+        this.detector = new ScaleGestureDetector(activity, this);
+    }
 
-	public void onTouch(MotionEvent event) {
-		if (event.getPointerCount() < 2) return;
-		detector.onTouchEvent(event);
-		if (detector.isInProgress()) return;
-		switch (event.getActionMasked()) {
-			case MotionEvent.ACTION_DOWN:
-			case MotionEvent.ACTION_UP:
-				mode = 0;
-				break;
-			case MotionEvent.ACTION_POINTER_DOWN:
-				if (scaleFactor > 1.0f) {
-					mode = 2;
-					lastX = centerX(event);
-					lastY = centerY(event);
-				}
-				break;
-			case MotionEvent.ACTION_MOVE:
-				if (mode == 2 && scaleFactor > 1.0f && event.getPointerCount() >= 2) {
-					float cx = centerX(event), cy = centerY(event);
-					applyTranslation(cx - lastX, cy - lastY);
-					lastX = cx;
-					lastY = cy;
-				}
-				break;
-		}
-	}
+    public void onTouch(MotionEvent event) {
+        detector.onTouchEvent(event);
 
-	@Override
-	public boolean onScale(@NonNull ScaleGestureDetector detector) {
-		scaleFactor = Math.max(1.0f, Math.min(scaleFactor * detector.getScaleFactor(), 5.0f));
-		applyScale(scaleFactor);
-		checkResetVisibility();
-		return true;
-	}
+        if (event.getPointerCount() < 2) {
+            if (mode != 0) {
+                mode = 0;
+                checkResetVisibility();
+            }
+            return;
+        }
 
-	public void reset() {
-		scaleFactor = 1.0f;
-		mode = 0;
-		applyScale(1f);
-		applyTranslation(0, 0, true);
-		checkResetVisibility();
-	}
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_POINTER_DOWN:
+                lastX = centerX(event);
+                lastY = centerY(event);
+                mode = 2;
+                break;
 
-	private void checkResetVisibility() {
-		View target = getTargetView();
-		boolean hasTranslation = target.getTranslationX() != 0 || target.getTranslationY() != 0;
-		if (onShowReset != null) onShowReset.accept(scaleFactor > 1.0f || hasTranslation);
-	}
+            case MotionEvent.ACTION_MOVE:
+                if (mode == 2 && scaleFactor > 1.0f) {
+                    float cx = centerX(event);
+                    float cy = centerY(event);
+                    applyTranslation(cx - lastX, cy - lastY, false);
+                    lastX = cx;
+                    lastY = cy;
+                }
+                break;
 
-	public boolean shouldShowReset() {
-		View target = getTargetView();
-		boolean hasTranslation = target.getTranslationX() != 0 || target.getTranslationY() != 0;
-		return scaleFactor > 1.0f || hasTranslation;
-	}
+            case MotionEvent.ACTION_POINTER_UP:
+                if (event.getPointerCount() > 2) {
+                    // Recalculate center if one of three+ fingers is lifted
+                    lastX = centerX(event);
+                    lastY = centerY(event);
+                } else {
+                    mode = 0;
+                }
+                break;
+        }
+    }
 
-	private float centerX(MotionEvent e) {
-		float sum = 0;
-		int c = e.getPointerCount();
-		for (int i = 0; i < c; i++) sum += e.getX(i);
-		return sum / c;
-	}
+    @Override
+    public boolean onScale(@NonNull ScaleGestureDetector detector) {
+        // Allow free zoom up to 500% (5.0f)
+        scaleFactor = Math.max(1.0f, Math.min(scaleFactor * detector.getScaleFactor(), 5.0f));
+        applyScale(scaleFactor);
+        checkResetVisibility();
+        return true;
+    }
 
-	private float centerY(MotionEvent e) {
-		float sum = 0;
-		int c = e.getPointerCount();
-		for (int i = 0; i < c; i++) sum += e.getY(i);
-		return sum / c;
-	}
+    public void reset() {
+        scaleFactor = 1.0f;
+        mode = 0;
+        applyScale(1f);
+        applyTranslation(0, 0, true);
+        checkResetVisibility();
+    }
 
-	private void applyScale(float scale) {
-		View target = getTargetView();
-		target.setScaleX(scale);
-		target.setScaleY(scale);
-	}
+    private void checkResetVisibility() {
+        View target = getTargetView();
+        if (target == null) return;
+        boolean hasTranslation = Math.abs(target.getTranslationX()) > 5 || Math.abs(target.getTranslationY()) > 5;
+        if (onShowReset != null) onShowReset.accept(scaleFactor > 1.01f || hasTranslation);
+    }
 
-	private void applyTranslation(float dx, float dy) {
-		applyTranslation(dx, dy, false);
-	}
+    private float centerX(MotionEvent e) {
+        float sum = 0;
+        int count = e.getPointerCount();
+        for (int i = 0; i < count; i++) sum += e.getX(i);
+        return sum / count;
+    }
 
-	private void applyTranslation(float dx, float dy, boolean reset) {
-		View target = getTargetView();
+    private float centerY(MotionEvent e) {
+        float sum = 0;
+        int count = e.getPointerCount();
+        for (int i = 0; i < count; i++) sum += e.getY(i);
+        return sum / count;
+    }
 
-		if (reset) {
-			target.setTranslationX(0);
-			target.setTranslationY(0);
-		} else {
-			float curX = target.getTranslationX() + dx;
-			float curY = target.getTranslationY() + dy;
-			float maxDx = (target.getWidth() * scaleFactor - target.getWidth()) / 2f;
-			float maxDy = (target.getHeight() * scaleFactor - target.getHeight()) / 2f;
-			target.setTranslationX(Math.min(maxDx, Math.max(-maxDx, curX)));
-			target.setTranslationY(Math.min(maxDy, Math.max(-maxDy, curY)));
-		}
-	}
+    private void applyScale(float scale) {
+        View target = getTargetView();
+        if (target != null) {
+            target.setScaleX(scale);
+            target.setScaleY(scale);
+        }
+    }
 
+    private void applyTranslation(float dx, float dy, boolean isReset) {
+        View target = getTargetView();
+        if (target == null) return;
 
-	private View getTargetView() {
-		View surface = playerView.getVideoSurfaceView();
-		return surface != null ? surface : playerView.findViewById(R.id.exo_content_frame);
-	}
+        if (isReset) {
+            target.setTranslationX(0);
+            target.setTranslationY(0);
+        } else {
+            float nextX = target.getTranslationX() + dx;
+            float nextY = target.getTranslationY() + dy;
+
+            // Calculate movement limits based on scale to keep video edges within view or at crop
+            float limitX = (target.getWidth() * scaleFactor - target.getWidth()) / 2f;
+            float limitY = (target.getHeight() * scaleFactor - target.getHeight()) / 2f;
+
+            target.setTranslationX(Math.max(-limitX, Math.min(limitX, nextX)));
+            target.setTranslationY(Math.max(-limitY, Math.min(limitY, nextY)));
+        }
+    }
+
+    private View getTargetView() {
+        // IMPORTANT: We zoom the content frame so it expands beyond the black bars
+        View contentFrame = playerView.findViewById(androidx.media3.ui.R.id.exo_content_frame);
+        if (contentFrame != null) return contentFrame;
+
+        // Fallback to surface view
+        View surface = playerView.getVideoSurfaceView();
+        if (surface != null) return surface;
+
+        // Ultimate fallback: the first child of the player view
+        if (playerView.getChildCount() > 0) {
+            return playerView.getChildAt(0);
+        }
+
+        return playerView;
+    }
+
+    // Public helper for Controller.java to check zoom state
+    public boolean isZoomed() {
+        return scaleFactor > 1.01f;
+    }
 }

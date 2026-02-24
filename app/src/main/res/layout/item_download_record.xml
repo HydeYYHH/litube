@@ -1,76 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
-	xmlns:app="http://schemas.android.com/apk/res-auto"
-	android:layout_width="match_parent"
-	android:layout_height="wrap_content"
-	android:layout_marginBottom="12dp"
-	app:cardUseCompatPadding="true">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="12dp"
+    android:layout_marginVertical="6dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant">
 
-	<androidx.constraintlayout.widget.ConstraintLayout
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:padding="12dp">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp">
 
-		<com.google.android.material.imageview.ShapeableImageView
-			android:id="@+id/thumbnail"
-			android:layout_width="56dp"
-			android:layout_height="56dp"
-			android:contentDescription="@null"
-			android:scaleType="centerCrop"
-			app:layout_constraintStart_toStartOf="parent"
-			app:layout_constraintTop_toTopOf="parent"
-			app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium" />
+        <!-- 1. Thumbnail (Reset to 110x65 for better fit) -->
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/thumbnail"
+            android:layout_width="110dp"
+            android:layout_height="65dp"
+            android:scaleType="centerCrop"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
 
-		<TextView
-			android:id="@+id/title"
-			android:layout_width="0dp"
-			android:layout_height="wrap_content"
-			android:layout_marginStart="12dp"
-			android:ellipsize="end"
-			android:maxLines="1"
-			android:textAppearance="?attr/textAppearanceBodyLarge"
-			android:textColor="?attr/colorOnSurface"
-			app:layout_constraintEnd_toStartOf="@id/more"
-			app:layout_constraintStart_toEndOf="@id/thumbnail"
-			app:layout_constraintTop_toTopOf="@id/thumbnail" />
+        <!-- 2. More Button (Standard Position) -->
+        <ImageButton
+            android:id="@+id/more"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_more"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="?attr/colorOnSurfaceVariant" />
 
-		<TextView
-			android:id="@+id/subtitle"
-			android:layout_width="0dp"
-			android:layout_height="wrap_content"
-			android:layout_marginStart="12dp"
-			android:layout_marginTop="2dp"
-			android:ellipsize="end"
-			android:maxLines="2"
-			android:textAppearance="?attr/textAppearanceBodyMedium"
-			android:textColor="?attr/colorOnSurfaceVariant"
-			app:layout_constraintEnd_toStartOf="@id/more"
-			app:layout_constraintStart_toEndOf="@id/thumbnail"
-			app:layout_constraintTop_toBottomOf="@id/title" />
+        <!-- 3. Title (Fixed lines to prevent pushing progress bar) -->
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="?attr/colorOnSurface"
+            app:layout_constraintEnd_toStartOf="@id/more"
+            app:layout_constraintStart_toEndOf="@id/thumbnail"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="Video Title Example" />
 
-		<com.google.android.material.progressindicator.LinearProgressIndicator
-			android:id="@+id/progress"
-			android:layout_width="0dp"
-			android:layout_height="wrap_content"
-			android:layout_marginTop="12dp"
-			app:layout_constraintEnd_toEndOf="parent"
-			app:layout_constraintStart_toStartOf="parent"
-			app:layout_constraintTop_toBottomOf="@id/subtitle"
-			app:layout_constraintBottom_toBottomOf="parent"
-			android:layout_marginBottom="4dp" />
+        <!-- 4. Size Info (One line logic) -->
+        <TextView
+            android:id="@+id/size_downloaded"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            app:layout_constraintEnd_toEndOf="@id/title"
+            app:layout_constraintStart_toStartOf="@id/title"
+            app:layout_constraintTop_toBottomOf="@id/title"
+            tools:text="14.0 / 50.0 MB (28%)" />
 
-		<ImageButton
-			android:id="@+id/more"
-			android:layout_width="40dp"
-			android:layout_height="40dp"
-			android:background="?attr/selectableItemBackgroundBorderless"
-			android:contentDescription="@string/more_options"
-			android:src="@drawable/ic_more"
-			app:layout_constraintEnd_toEndOf="parent"
-			app:layout_constraintTop_toTopOf="parent"
-			app:tint="?attr/colorOnSurfaceVariant" />
+        <!-- 5. Progress Bar (Forced spacing to prevent overlap) -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progress"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:indicatorColor="#FF0000"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/thumbnail"
+            app:trackCornerRadius="4dp"
+            app:trackThickness="4dp" />
 
-	</androidx.constraintlayout.widget.ConstraintLayout>
+        <!-- 6. Status Text -->
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:textColor="?attr/colorPrimary"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/progress"
+            tools:text="Downloading • Video" />
 
+    </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>
-
