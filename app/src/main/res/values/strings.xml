@@ -142,4 +142,7 @@
     <string name="status_paused">Paused</string>
     <string name="action_pause_download">Pause</string>
     <string name="action_resume_download">Resume</string>
+    <string name="download_progress_with_total">%1$s / %2$s MB (%3$d%%)</string>
+    <string name="download_progress_simple">%1$s MB</string>
+    <string name="download_status_with_type">%1$s • %2$s</string>
 </resources>

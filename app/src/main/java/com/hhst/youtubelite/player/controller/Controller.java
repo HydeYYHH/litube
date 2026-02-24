@@ -8,7 +8,6 @@ import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.format.DateUtils;
-import android.text.method.ScrollingMovementMethod;
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -43,7 +42,6 @@ import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
-import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.gesture.PlayerGestureListener;
@@ -60,7 +58,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import javax.inject.Inject;
 import dagger.hilt.android.scopes.ActivityScoped;
 import lombok.Getter;
@@ -78,6 +75,7 @@ public class Controller {
     @NonNull private final ZoomTouchListener zoomListener;
     @NonNull private final PlayerPreferences prefs;
     @NonNull private final TabManager tabManager;
+    @Getter
     @NonNull private final ExtensionManager extensionManager;
     @NonNull private final Handler handler = new Handler(Looper.getMainLooper());
     @Nullable private TextView hintText;
@@ -111,7 +109,7 @@ public class Controller {
 
                 if (isPortrait && playerView.isFs()) {
                     exitFullscreen();
-                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                 } else if (isLandscape && !playerView.isFs()) {
                     playerView.enterFullscreen(PlayerUtils.isPortrait(engine));
                     playerView.setResizeMode(prefs.getResizeMode());
@@ -133,11 +131,7 @@ public class Controller {
         });
     }
 
-    public ExtensionManager getExtensionManager() {
-        return extensionManager;
-    }
-
-    private void updatePlayPauseButtons(boolean isPlaying) {
+	private void updatePlayPauseButtons(boolean isPlaying) {
         final View play = playerView.findViewById(R.id.btn_play);
         final View pause = playerView.findViewById(R.id.btn_pause);
         if (play != null) play.setVisibility(!isPlaying ? View.VISIBLE : View.GONE);
@@ -520,7 +514,7 @@ public class Controller {
         playerView.exitFullscreen();
         zoomListener.reset();
         setControlsVisible(true);
-        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
     }
 
     public void onPictureInPictureModeChanged(boolean isInPiP) {

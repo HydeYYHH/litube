@@ -10,10 +10,7 @@ import android.content.pm.ServiceInfo;
 import android.media.MediaScannerConnection;
 import android.os.Binder;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -46,8 +43,6 @@ public class DownloadService extends Service {
     private static final String CHANNEL_ID = "download_channel";
     private static final int NOTIFICATION_ID = 1001;
 
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-
     @Inject LiteDownloader liteDL;
     @Inject DownloadHistoryRepository historyRepository;
     @Inject YoutubeExtractor youtubeExtractor;
@@ -63,12 +58,10 @@ public class DownloadService extends Service {
     }
 
     private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("Download progress notifications");
-            channel.setSound(null, null);
-            notificationManager.createNotificationChannel(channel);
-        }
+	    NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_DEFAULT);
+	    channel.setDescription("Download progress notifications");
+	    channel.setSound(null, null);
+	    notificationManager.createNotificationChannel(channel);
     }
 
     @Nullable
@@ -195,11 +188,7 @@ public class DownloadService extends Service {
                     .setContentText(fileName);
             notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_DETACH);
-            } else {
-                stopForeground(false);
-            }
+	        stopForeground(STOP_FOREGROUND_DETACH);
         }
     }
 

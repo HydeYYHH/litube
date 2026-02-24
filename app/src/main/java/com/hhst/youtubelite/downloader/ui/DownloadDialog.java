@@ -23,7 +23,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.R.attr;
 import androidx.appcompat.app.AlertDialog;
 import androidx.media3.common.util.UnstableApi;
@@ -262,6 +261,9 @@ public class DownloadDialog {
             t.add(new Task(videoDetails.getId()+":v", videoSelStream, audio, null, null, f, d, threadCount));
         } else if (audioSel && audioSelStream != null) {
             t.add(new Task(videoDetails.getId()+":a", null, audioSelStream, null, null, f, d, threadCount));
+        }
+        if (subtitleSel && subtitleSelStream != null) {
+            t.add(new Task(videoDetails.getId()+":s", null, null, subtitleSelStream, null, f, d, threadCount));
         }
         if (thumbSel) t.add(new Task(videoDetails.getId()+":t", null, null, null, videoDetails.getThumbnail(), f, d, threadCount));
         return t;

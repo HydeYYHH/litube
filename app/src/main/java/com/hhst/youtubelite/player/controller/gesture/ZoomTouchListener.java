@@ -3,11 +3,9 @@ package com.hhst.youtubelite.player.controller.gesture;
 import android.app.Activity;
 import android.view.MotionEvent;import android.view.ScaleGestureDetector;
 import android.view.View;
-import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.media3.common.util.UnstableApi;
-import com.hhst.youtubelite.R;
 
 import com.hhst.youtubelite.player.LitePlayerView;
 

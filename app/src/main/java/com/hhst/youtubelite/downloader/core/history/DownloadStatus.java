@@ -6,6 +6,7 @@ public enum DownloadStatus {
 	MERGING,
 	COMPLETED,
 	CANCELED,
-	FAILED
+	FAILED,
+	PAUSED
 }
 

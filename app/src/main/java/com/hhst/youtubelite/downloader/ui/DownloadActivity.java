@@ -44,6 +44,7 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.history.DownloadHistoryRepository;
 import com.hhst.youtubelite.downloader.core.history.DownloadRecord;
 import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
+import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.squareup.picasso.Picasso;
@@ -86,16 +87,6 @@ public class DownloadActivity extends AppCompatActivity {
             isBound = false;
         }
     };
-
-    @NonNull
-    private static String guessMimeType(@NonNull final File file) {
-        final String name = file.getName();
-        final int dot = name.lastIndexOf('.');
-        if (dot < 0) return "*/*";
-        final String ext = name.substring(dot + 1).toLowerCase(Locale.US);
-        final String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
-        return type != null ? type : "*/*";
-    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -257,7 +248,7 @@ public class DownloadActivity extends AppCompatActivity {
         @NonNull private final List<DownloadRecord> items;
         @NonNull private final Actions actions;
 
-        private DownloadRecordsAdapter(@NonNull List<DownloadRecord> items, Actions actions) {
+        private DownloadRecordsAdapter(@NonNull List<DownloadRecord> items, @NonNull Actions actions) {
             this.items = items;
             this.actions = actions;
         }
@@ -329,17 +320,18 @@ public class DownloadActivity extends AppCompatActivity {
                 final boolean isCompleted = s == DownloadStatus.COMPLETED;
                 final boolean isActive = s == DownloadStatus.RUNNING || s == DownloadStatus.QUEUED || s == DownloadStatus.MERGING;
 
-                subtitle.setText(buildStatusText(s) + " • " + record.getType().name());
+                Context ctx = itemView.getContext();
+                String statusText = buildStatusText(ctx, record);
+                String typeText = localizeType(ctx, record.getType());
+                subtitle.setText(ctx.getString(R.string.download_status_with_type, statusText, typeText));
 
-                if (record.getTotalSize() > 0) {
+	            String downloadedStr = formatVal(record.getDownloadedSize());
+	            if (record.getTotalSize() > 0) {
                     // Logic: current / total MB (%)
-                    String progressStr = String.format(Locale.US, "%s / %s MB (%d%%)",
-                            formatVal(record.getDownloadedSize()),
-                            formatVal(record.getTotalSize()),
-                            record.getProgress());
-                    sizeDownloaded.setText(progressStr);
+		            String totalStr = formatVal(record.getTotalSize());
+                    sizeDownloaded.setText(itemView.getContext().getString(R.string.download_progress_with_total, downloadedStr, totalStr, record.getProgress()));
                 } else {
-                    sizeDownloaded.setText(formatVal(record.getDownloadedSize()) + " MB");
+		            sizeDownloaded.setText(itemView.getContext().getString(R.string.download_progress_simple, downloadedStr));
                 }
 
                 progress.setVisibility(isActive ? View.VISIBLE : View.GONE);
@@ -363,15 +355,24 @@ public class DownloadActivity extends AppCompatActivity {
                 });
             }
 
-            private String buildStatusText(DownloadStatus status) {
-                return switch (status) {
-                    case RUNNING -> "Downloading";
-                    case QUEUED -> "Queued";
-                    case MERGING -> "Merging";
-                    case COMPLETED -> "Completed";
-                    case FAILED -> "Failed";
-                    case CANCELED -> "Cancelled";
-                    case PAUSED -> "Paused";
+            private String buildStatusText(Context ctx, DownloadRecord record) {
+                return switch (record.getStatus()) {
+                    case RUNNING -> ctx.getString(R.string.status_downloading, record.getProgress());
+                    case QUEUED -> ctx.getString(R.string.status_queued);
+                    case MERGING -> ctx.getString(R.string.status_merging);
+                    case COMPLETED -> ctx.getString(R.string.status_completed);
+                    case FAILED -> ctx.getString(R.string.status_failed);
+                    case CANCELED -> ctx.getString(R.string.status_cancelled);
+                    case PAUSED -> ctx.getString(R.string.status_paused);
+                };
+            }
+
+            private String localizeType(Context ctx, DownloadType type) {
+                return switch (type) {
+                    case VIDEO -> ctx.getString(R.string.type_video);
+                    case AUDIO -> ctx.getString(R.string.type_audio);
+                    case SUBTITLE -> ctx.getString(R.string.type_subtitle);
+                    case THUMBNAIL -> ctx.getString(R.string.type_thumbnail);
                 };
             }
 
