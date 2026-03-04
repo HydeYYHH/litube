@@ -1,6 +1,5 @@
 package com.hhst.youtubelite.di;
 
-
 import android.content.Context;
 
 import androidx.media3.common.util.UnstableApi;
@@ -24,46 +23,57 @@ import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.android.qualifiers.ApplicationContext;
 import dagger.hilt.components.SingletonComponent;
+import okhttp3.ConnectionPool;
 import okhttp3.OkHttpClient;
 
 @Module
 @InstallIn(SingletonComponent.class)
 public class CommonModule {
-	@Provides
-	@Singleton
-	public OkHttpClient provideOkHttpClient() {
-		return new OkHttpClient();
-	}
 
-	@Provides
-	@Singleton
-	public Executor provideExecutor() {
-		return new ThreadPoolExecutor(
-						4,
-						12,
-						30,
-						TimeUnit.SECONDS,
-						new ArrayBlockingQueue<>(32));
-	}
+    @Provides
+    @Singleton
+    public OkHttpClient provideOkHttpClient() {
+        return new OkHttpClient.Builder()
+                .cache(null)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .retryOnConnectionFailure(true)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(0, TimeUnit.SECONDS)
+                .connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+                .build();
+    }
 
-	@Provides
-	@Singleton
-	public Gson provideGson() {
-		return new Gson();
-	}
+    @Provides
+    @Singleton
+    public Executor provideExecutor() {
+        return new ThreadPoolExecutor(
+                4,
+                12,
+                30,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(32));
+    }
 
-	@Provides
-	@Singleton
-	public MMKV provideMMKV() {
-		return MMKV.defaultMMKV();
-	}
+    @Provides
+    @Singleton
+    public Gson provideGson() {
+        return new Gson();
+    }
 
-	@Provides
-	@Singleton
-	@UnstableApi
-	public SimpleCache provideSimpleCache(@ApplicationContext Context context) {
-		final File cacheDir = new File(context.getCacheDir(), "player");
-		final LeastRecentlyUsedCacheEvictor evictor = new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024);
-		return new SimpleCache(cacheDir, evictor, new StandaloneDatabaseProvider(context));
-	}
+    @Provides
+    @Singleton
+    public MMKV provideMMKV() {
+        return MMKV.defaultMMKV();
+    }
+
+    @Provides
+    @Singleton
+    @UnstableApi
+    public SimpleCache provideSimpleCache(@ApplicationContext Context context) {
+        final File cacheDir = new File(context.getCacheDir(), "player");
+        final LeastRecentlyUsedCacheEvictor evictor = new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024);
+        return new SimpleCache(cacheDir, evictor, new StandaloneDatabaseProvider(context));
+    }
 }

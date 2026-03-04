@@ -2,13 +2,13 @@ package com.hhst.youtubelite.player;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.Player;
 import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.ui.DefaultTimeBar;
 
@@ -24,11 +24,13 @@ import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.ErrorDialog;
+import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -43,6 +45,8 @@ import dagger.hilt.android.scopes.ActivityScoped;
 @UnstableApi
 @ActivityScoped
 public class LitePlayer {
+    private static final String KEY_LAST_AUDIO_LANG = "last_audio_lang";
+
     @NonNull private final Activity activity;
     @NonNull private final YoutubeExtractor extractor;
     @NonNull private final LitePlayerView playerView;
@@ -54,7 +58,7 @@ public class LitePlayer {
     @Nullable private PlaybackService playbackService;
     @Nullable private CompletableFuture<Void> cf;
     @Nullable private String vid = null;
-    private final SharedPreferences cachePrefs;
+    private final MMKV kv = MMKV.defaultMMKV();
 
     @Inject
     public LitePlayer(@NonNull final Activity activity,
@@ -71,7 +75,6 @@ public class LitePlayer {
         this.engine = engine;
         this.sponsor = sponsor;
         this.executor = executor;
-        this.cachePrefs = activity.getSharedPreferences("extraction_cache", Context.MODE_PRIVATE);
         playerView.setup();
         setupEngineListeners();
     }
@@ -82,17 +85,40 @@ public class LitePlayer {
             public void onIsPlayingChanged(boolean isPlaying) {
                 updateServiceProgress(isPlaying);
             }
+
+            @Override
+            public void onTracksChanged(@NonNull Tracks tracks) {
+                saveSelectedTrackLanguage(tracks);
+            }
+
             @Override
             public void onPlaybackStateChanged(int state) {
                 if (state == Player.STATE_READY) {
                     updateServiceProgress(engine.isPlaying());
                 }
             }
+
             @Override
             public void onPlayerError(@NonNull PlaybackException error) {
                 ErrorDialog.show(activity, error.getMessage(), Log.getStackTraceString(error));
             }
         });
+    }
+
+    private void saveSelectedTrackLanguage(Tracks tracks) {
+        try {
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() == androidx.media3.common.C.TRACK_TYPE_AUDIO && group.isSelected()) {
+                    for (int i = 0; i < group.length; i++) {
+                        if (group.isTrackSelected(i)) {
+                            String lang = group.getTrackFormat(i).language;
+                            kv.encode(KEY_LAST_AUDIO_LANG, lang != null ? lang : "und");
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void updateServiceProgress(boolean isPlaying) {
@@ -117,33 +143,38 @@ public class LitePlayer {
         }
     }
 
-    /**
-     * Moves the ORIGINAL audio track (no language code) to the TOP of the list.
-     * This ensures the Engine always picks it as default, even when quality changes.
-     */
-    private void selectOriginalAudioTrack(StreamDetails si) {
+    private void applyAudioPreference(StreamDetails si) {
         List<AudioStream> audioStreams = si.getAudioStreams();
         if (audioStreams == null || audioStreams.isEmpty()) return;
 
-        AudioStream originalTrack = null;
+        String savedLang = kv.decodeString(KEY_LAST_AUDIO_LANG, "und");
+        List<AudioStream> mutableStreams = new ArrayList<>(audioStreams);
 
-        // Find the original track (usually the one with null locale)
-        for (AudioStream stream : audioStreams) {
-            if (stream.getAudioLocale() == null) {
-                originalTrack = stream;
-                break;                    // We only need the first one (original)
-            }
-        }
+        Collections.sort(mutableStreams, (s1, s2) -> {
 
-        if (originalTrack != null) {
-            // Create new list with original at position 0
-            List<AudioStream> newList = new ArrayList<>(audioStreams);
-            newList.remove(originalTrack);
-            newList.add(0, originalTrack);
+            String n1 = s1.getAudioTrackName() != null ? s1.getAudioTrackName().toLowerCase() : "";
+            String n2 = s2.getAudioTrackName() != null ? s2.getAudioTrackName().toLowerCase() : "";
+            boolean s1IsOriginal = n1.contains("original");
+            boolean s2IsOriginal = n2.contains("original");
 
-            // Update the StreamDetails with the reordered list
-            si.setAudioStreams(newList);
-        }
+            if (s1IsOriginal && !s2IsOriginal) return -1;
+            if (!s1IsOriginal && s2IsOriginal) return 1;
+
+
+            String l1 = (s1.getAudioLocale() != null) ? s1.getAudioLocale().getLanguage() : "und";
+            String l2 = (s2.getAudioLocale() != null) ? s2.getAudioLocale().getLanguage() : "und";
+
+            boolean s1Matches = l1.equalsIgnoreCase(savedLang);
+            boolean s2Matches = l2.equalsIgnoreCase(savedLang);
+
+            if (s1Matches && !s2Matches) return -1;
+            if (!s1Matches && s2Matches) return 1;
+
+            return Integer.compare(s2.getAverageBitrate(), s1.getAverageBitrate());
+        });
+
+        si.getAudioStreams().clear();
+        si.getAudioStreams().addAll(mutableStreams);
     }
 
     public void play(String url) {
@@ -168,11 +199,9 @@ public class LitePlayer {
                 sponsor.load(videoId);
                 VideoDetails vi = extractor.getVideoInfo(url);
                 StreamDetails si = extractor.getStreamInfo(url);
-
                 si.setVideoStreams(PlayerUtils.filterBestStreams(si.getVideoStreams()));
 
-                // ← This now guarantees original audio is at the top
-                selectOriginalAudioTrack(si);
+                applyAudioPreference(si);
 
                 return new ExtractionResult(vi, si);
             } catch (InterruptedException | InterruptedIOException e) {
@@ -183,7 +212,6 @@ public class LitePlayer {
         }, executor).thenAccept(er -> {
             activity.runOnUiThread(() -> {
                 if (!Objects.equals(this.vid, videoId)) return;
-
                 playerView.setTitle(er.vi.getTitle());
                 playerView.updateSkipMarkers(er.vi.getDuration(), TimeUnit.SECONDS);
 
