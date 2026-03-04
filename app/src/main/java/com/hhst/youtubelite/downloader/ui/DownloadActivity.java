@@ -2,8 +2,7 @@ package com.hhst.youtubelite.downloader.ui;
 
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
-import android.content.ClipData;
-import android.content.ClipboardManager;
+import android.content.ClipData;import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -44,7 +43,6 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.history.DownloadHistoryRepository;
 import com.hhst.youtubelite.downloader.core.history.DownloadRecord;
 import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
-import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.squareup.picasso.Picasso;
@@ -163,13 +161,29 @@ public class DownloadActivity extends AppCompatActivity {
 
     private void loadRecords() {
         final List<DownloadRecord> list = historyRepository.getAllSorted();
-        adapter.setItems(list);
+        final List<DownloadRecord> verifiedList = new ArrayList<>();
+
+        for (DownloadRecord record : list) {
+            if (record.getStatus() == DownloadStatus.COMPLETED) {
+                File file = new File(record.getOutputPath());
+                if (!file.exists()) {
+                    historyRepository.remove(record.getTaskId());
+                    continue;
+                }
+            }
+            verifiedList.add(record);
+        }
+        adapter.setItems(verifiedList);
         updateEmptyState();
     }
 
     private final DownloadRecordsAdapter adapter = new DownloadRecordsAdapter(new ArrayList<>(), new DownloadRecordsAdapter.Actions() {
         @Override public void onOpen(DownloadRecord record) { openRecordFile(record); }
         @Override public void onCancel(DownloadRecord record) { if (isBound && downloadService != null) downloadService.cancel(record.getTaskId()); }
+
+        @Override public void onRetry(DownloadRecord record) {
+            onRedownload(record);
+        }
 
         @Override public void onRedownload(DownloadRecord record) {
             String cleanVid = record.getVid().split(":")[0];
@@ -228,6 +242,7 @@ public class DownloadActivity extends AppCompatActivity {
         final File file = new File(record.getOutputPath());
         if (!file.exists()) {
             Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+            loadRecords();
             return;
         }
         final Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
@@ -248,7 +263,7 @@ public class DownloadActivity extends AppCompatActivity {
         @NonNull private final List<DownloadRecord> items;
         @NonNull private final Actions actions;
 
-        private DownloadRecordsAdapter(@NonNull List<DownloadRecord> items, @NonNull Actions actions) {
+        private DownloadRecordsAdapter(@NonNull List<DownloadRecord> items, Actions actions) {
             this.items = items;
             this.actions = actions;
         }
@@ -288,6 +303,7 @@ public class DownloadActivity extends AppCompatActivity {
         interface Actions {
             void onOpen(DownloadRecord record);
             void onCancel(DownloadRecord record);
+            void onRetry(DownloadRecord record);
             void onRedownload(DownloadRecord record);
             void onCopyVid(DownloadRecord record);
             void onDelete(DownloadRecord record);
@@ -309,7 +325,7 @@ public class DownloadActivity extends AppCompatActivity {
                 more = itemView.findViewById(R.id.more);
             }
 
-            private String formatVal(long bytes) {
+            private String formatMB(long bytes) {
                 return String.format(Locale.US, "%.1f", bytes / 1024.0 / 1024.0);
             }
 
@@ -320,18 +336,16 @@ public class DownloadActivity extends AppCompatActivity {
                 final boolean isCompleted = s == DownloadStatus.COMPLETED;
                 final boolean isActive = s == DownloadStatus.RUNNING || s == DownloadStatus.QUEUED || s == DownloadStatus.MERGING;
 
-                Context ctx = itemView.getContext();
-                String statusText = buildStatusText(ctx, record);
-                String typeText = localizeType(ctx, record.getType());
-                subtitle.setText(ctx.getString(R.string.download_status_with_type, statusText, typeText));
+                subtitle.setText(buildStatusText(s) + " • " + record.getType().name());
 
-	            String downloadedStr = formatVal(record.getDownloadedSize());
-	            if (record.getTotalSize() > 0) {
-                    // Logic: current / total MB (%)
-		            String totalStr = formatVal(record.getTotalSize());
-                    sizeDownloaded.setText(itemView.getContext().getString(R.string.download_progress_with_total, downloadedStr, totalStr, record.getProgress()));
+                if (record.getTotalSize() > 0) {
+                    String sizeStr = String.format(Locale.US, "%s / %s MB (%d%%)",
+                            formatMB(record.getDownloadedSize()),
+                            formatMB(record.getTotalSize()),
+                            record.getProgress());
+                    sizeDownloaded.setText(sizeStr);
                 } else {
-		            sizeDownloaded.setText(itemView.getContext().getString(R.string.download_progress_simple, downloadedStr));
+                    sizeDownloaded.setText(formatMB(record.getDownloadedSize()) + " MB");
                 }
 
                 progress.setVisibility(isActive ? View.VISIBLE : View.GONE);
@@ -340,7 +354,6 @@ public class DownloadActivity extends AppCompatActivity {
                     if (!progress.isIndeterminate()) progress.setProgressCompat(record.getProgress(), true);
                 }
 
-                // FIXED THUMBNAIL: Strips suffix from ID for high-quality MQ endpoint
                 String cleanVid = record.getVid().split(":")[0];
                 String thumbUrl = "https://i.ytimg.com/vi/" + cleanVid + "/mqdefault.jpg";
                 Picasso.get().load(thumbUrl)
@@ -355,24 +368,15 @@ public class DownloadActivity extends AppCompatActivity {
                 });
             }
 
-            private String buildStatusText(Context ctx, DownloadRecord record) {
-                return switch (record.getStatus()) {
-                    case RUNNING -> ctx.getString(R.string.status_downloading, record.getProgress());
-                    case QUEUED -> ctx.getString(R.string.status_queued);
-                    case MERGING -> ctx.getString(R.string.status_merging);
-                    case COMPLETED -> ctx.getString(R.string.status_completed);
-                    case FAILED -> ctx.getString(R.string.status_failed);
-                    case CANCELED -> ctx.getString(R.string.status_cancelled);
-                    case PAUSED -> ctx.getString(R.string.status_paused);
-                };
-            }
-
-            private String localizeType(Context ctx, DownloadType type) {
-                return switch (type) {
-                    case VIDEO -> ctx.getString(R.string.type_video);
-                    case AUDIO -> ctx.getString(R.string.type_audio);
-                    case SUBTITLE -> ctx.getString(R.string.type_subtitle);
-                    case THUMBNAIL -> ctx.getString(R.string.type_thumbnail);
+            private String buildStatusText(DownloadStatus status) {
+                return switch (status) {
+                    case RUNNING -> "Downloading";
+                    case QUEUED -> "Queued";
+                    case MERGING -> "Merging";
+                    case COMPLETED -> "Completed";
+                    case FAILED -> "Failed";
+                    case CANCELED -> "Cancelled";
+                    case PAUSED -> "Paused";
                 };
             }
 
@@ -383,12 +387,12 @@ public class DownloadActivity extends AppCompatActivity {
 
                 if (s == DownloadStatus.COMPLETED) {
                     menu.add(0, 0, 0, "Open File");
-                }
-
-                if (!isActive(s)) {
+                    menu.add(0, 4, 1, "Redownload");
+                } else if (s == DownloadStatus.FAILED || s == DownloadStatus.CANCELED) {
+                    menu.add(0, 2, 0, "Retry Download");
                     menu.add(0, 4, 1, "Redownload");
                 } else {
-                    menu.add(0, 5, 1, "Cancel Download");
+                    menu.add(0, 5, 0, "Cancel Download");
                 }
 
                 menu.add(0, 1, 2, "Copy Video ID");
@@ -398,6 +402,7 @@ public class DownloadActivity extends AppCompatActivity {
                     switch (item.getItemId()) {
                         case 0 -> actions.onOpen(record);
                         case 1 -> actions.onCopyVid(record);
+                        case 2 -> actions.onRetry(record);
                         case 3 -> actions.onDelete(record);
                         case 4 -> actions.onRedownload(record);
                         case 5 -> actions.onCancel(record);
@@ -405,10 +410,6 @@ public class DownloadActivity extends AppCompatActivity {
                     return true;
                 });
                 popup.show();
-            }
-
-            private boolean isActive(DownloadStatus s) {
-                return s == DownloadStatus.RUNNING || s == DownloadStatus.QUEUED || s == DownloadStatus.MERGING;
             }
         }
     }
