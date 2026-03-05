@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.AttributeSet;
@@ -299,7 +298,6 @@ public class YoutubeWebview extends WebView {
 					fullscreen.setVisibility(View.VISIBLE);
 					// keep screen going on
 					fullscreen.setKeepScreenOn(true);
-					mainActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 					evaluateJavascript("window.dispatchEvent(new Event('onFullScreen'));", null);
 				}
 			}
@@ -312,7 +310,6 @@ public class YoutubeWebview extends WebView {
 				fullscreen.setKeepScreenOn(false);
 				setVisibility(View.VISIBLE);
 				if (getContext() instanceof MainActivity mainActivity) {
-					mainActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 					evaluateJavascript("window.dispatchEvent(new Event('exitFullScreen'));", null);
 				}
 			}
@@ -346,3 +343,4 @@ public class YoutubeWebview extends WebView {
 	}
 
 }
+

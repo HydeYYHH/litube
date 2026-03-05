@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -40,7 +39,6 @@ import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
-import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 
@@ -267,23 +265,6 @@ public final class MainActivity extends AppCompatActivity {
 		startActivity(Intent.createChooser(sendIntent, "Share Video"));
 	}
 
-	@Override
-	public void onConfigurationChanged(@NonNull Configuration newConfig) {
-		super.onConfigurationChanged(newConfig);
-		final LitePlayerView playerView = findViewById(R.id.playerView);
-
-		if (playerView != null && playerView.getVisibility() == View.VISIBLE) {
-			if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-				if (!playerView.isFs()) playerView.enterFullscreen(false);
-			} else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
-				if (playerView.isFs()) playerView.exitFullscreen();
-			}
-		} else {
-			if (getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
-				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-			}
-		}
-	}
 
 	private void setupBackNavigation() {
 		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -365,3 +346,4 @@ public final class MainActivity extends AppCompatActivity {
 		if (player != null) player.release();
 	}
 }
+

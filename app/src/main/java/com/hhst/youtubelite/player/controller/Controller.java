@@ -2,16 +2,13 @@ package com.hhst.youtubelite.player.controller;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.pm.ActivityInfo;
 import android.graphics.Typeface;
-import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.format.DateUtils;
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
-import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -92,7 +89,6 @@ public class Controller {
 	private final ExtensionManager extensionManager;
 	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
-	private final OrientationEventListener orientationListener;
 	@Nullable
 	private TextView hintText;
 	@Getter
@@ -115,27 +111,6 @@ public class Controller {
 		this.extensionManager = extensionManager;
 		this.zoomListener.setOnShowReset(show -> showReset(show && playerView.isFs() && isControlsVisible));
 
-		orientationListener = new OrientationEventListener(activity, SensorManager.SENSOR_DELAY_NORMAL) {
-			@Override
-			public void onOrientationChanged(int orientation) {
-				if (orientation == ORIENTATION_UNKNOWN || isLocked) return;
-				final int TOLERANCE = 10;
-				boolean isPortrait = (orientation >= 360 - TOLERANCE || orientation <= TOLERANCE) || (orientation >= 180 - TOLERANCE && orientation <= 180 + TOLERANCE);
-				boolean isLandscape = (orientation >= 90 - TOLERANCE && orientation <= 90 + TOLERANCE) || (orientation >= 270 - TOLERANCE && orientation <= 270 + TOLERANCE);
-
-				if (isPortrait && playerView.isFs()) {
-					exitFullscreen();
-					activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-				} else if (isLandscape && !playerView.isFs()) {
-					playerView.enterFullscreen(PlayerUtils.isPortrait(engine));
-					playerView.setResizeMode(prefs.getResizeMode());
-					setControlsVisible(true);
-					final ImageButton fsBtn = playerView.findViewById(R.id.btn_fullscreen);
-					if (fsBtn != null) fsBtn.setImageResource(R.drawable.ic_fullscreen_exit);
-					activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-				}
-			}
-		};
 
 		playerView.post(() -> {
 			setupHintOverlay();
@@ -143,7 +118,6 @@ public class Controller {
 			setupButtonListeners();
 			updatePlayPauseButtons(engine.isPlaying());
 			playerView.showController();
-			orientationListener.enable();
 		});
 	}
 
@@ -273,10 +247,7 @@ public class Controller {
 		if (fsBtn != null) {
 			fsBtn.setOnClickListener(v -> {
 				if (!playerView.isFs()) {
-					playerView.enterFullscreen(PlayerUtils.isPortrait(engine));
-					playerView.setResizeMode(prefs.getResizeMode());
-					setControlsVisible(true);
-					fsBtn.setImageResource(R.drawable.ic_fullscreen_exit);
+					enterFullscreen();
 				} else {
 					exitFullscreen();
 				}
@@ -598,12 +569,16 @@ public class Controller {
 			lockBtn.setImageResource(isLocked ? R.drawable.ic_lock : R.drawable.ic_unlock);
 	}
 
+	public void enterFullscreen() {
+		playerView.enterFullscreen(PlayerUtils.isPortrait(engine));
+		playerView.setResizeMode(prefs.getResizeMode());
+		setControlsVisible(true);
+	}
 	public void exitFullscreen() {
 		if (isLocked) toggleLock();
 		playerView.exitFullscreen();
 		zoomListener.reset();
 		setControlsVisible(true);
-		activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 	}
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
@@ -783,3 +758,4 @@ public class Controller {
 
 
 }
+

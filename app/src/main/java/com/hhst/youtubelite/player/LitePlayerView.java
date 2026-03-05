@@ -110,12 +110,14 @@ public class LitePlayerView extends PlayerView {
 	public void enterFullscreen(final boolean isPortraitVideo) {
 		isFs = true;
 		if (!activity.isInPictureInPictureMode()) normalHeight = playerHeight;
-		if (isPortraitVideo)
-			activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-		else activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+		activity.setRequestedOrientation(isPortraitVideo
+				? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+				: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
 		updatePlayerLayout(true);
+		final ImageButton fsBtn = findViewById(R.id.btn_fullscreen);
+		fsBtn.setImageResource(R.drawable.ic_fullscreen_exit);
 	}
 
 	public void exitFullscreen() {
