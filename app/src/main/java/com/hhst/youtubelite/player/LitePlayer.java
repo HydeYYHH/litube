@@ -254,6 +254,10 @@ public class LitePlayer {
 		return playerView.isFs();
 	}
 
+	public void enterFullscreen() {
+		controller.enterFullscreen();
+	}
+
 	public void exitFullscreen() {
 		controller.exitFullscreen();
 	}

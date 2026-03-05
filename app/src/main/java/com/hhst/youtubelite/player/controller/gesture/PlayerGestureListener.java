@@ -27,7 +27,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	private static final int AUTO_HIDE_DELAY_MS = 200;
 	private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
 	private static final int HINT_HIDE_FAST_MS = 500;
-	private static final float SPEED_SENSITIVITY = 0.015f;
+	private static final float FULLSCREEN_SWIPE_THRESHOLD_RATIO = 0.08f;
 
 	private final Activity activity;
 	private final LitePlayerView playerView;
@@ -37,8 +37,8 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	private final Runnable hideHintRunnable;
 
 	private int gestureMode = 0;
-	private float bri = -1, currentSpeed = -1f, preLongPressSpeed = 1.0f;
-	private boolean isLongPressing = false, isGesturing = false;
+	private float bri = -1, preLongPressSpeed = 1.0f;
+	private boolean isLongPressing = false, isGesturing = false, fullscreenSwipeTriggered = false;
 	private long scrollStartPosition = 0;
 
 	private int cumulativeSeekAmount = 0;
@@ -80,8 +80,8 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		gestureMode = 0;
 		bri = -1;
 		vol = -1;
-		currentSpeed = -1f;
 		isGesturing = false;
+		fullscreenSwipeTriggered = false;
 		scrollStartPosition = engine.position();
 		return true;
 	}
@@ -150,7 +150,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 			float x = e1.getX(), width = playerView.getWidth();
 			if (x < width * 0.35f) adjustBrightness(dy);
 			else if (x > width * 0.65f) adjustVolume(dy);
-			else adjustPlaybackSpeed(dy);
+			else handleCenterVerticalFullscreenGesture(e1, e2);
 			handler.postDelayed(hideHintRunnable, AUTO_HIDE_DELAY_MS);
 		} else if (gestureMode == 2) {
 			isGesturing = true;
@@ -213,14 +213,18 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		controller.showHint(percentage + "%", -1);
 	}
 
-	private void adjustPlaybackSpeed(float dy) {
-		if (currentSpeed == -1f) currentSpeed = engine.getPlaybackRate();
-		currentSpeed += (dy * SPEED_SENSITIVITY);
-		currentSpeed = Math.min(Math.max(currentSpeed, 0.25f), 4.0f);
-		float notched = Math.round(currentSpeed * 20) / 20.0f;
-		engine.setPlaybackRate(notched);
-		updateSpeedButtonUI(notched);
-		controller.showHint(notched + "x", -1);
+	private void handleCenterVerticalFullscreenGesture(@NonNull MotionEvent e1, @NonNull MotionEvent e2) {
+		if (fullscreenSwipeTriggered) return;
+		final float deltaY = e2.getY() - e1.getY();
+		final float threshold = playerView.getHeight() * FULLSCREEN_SWIPE_THRESHOLD_RATIO;
+		if (Math.abs(deltaY) < threshold) return;
+
+		fullscreenSwipeTriggered = true;
+		if (deltaY < 0 && !playerView.isFs()) {
+			controller.enterFullscreen();
+		} else if (deltaY > 0 && playerView.isFs()) {
+			controller.exitFullscreen();
+		}
 	}
 
 	@Override
@@ -246,3 +250,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		}
 	}
 }
+
+
+
+

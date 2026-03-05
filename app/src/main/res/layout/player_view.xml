@@ -125,11 +125,12 @@
                     <androidx.media3.ui.DefaultTimeBar
                         android:id="@+id/exo_progress"
                         android:layout_width="match_parent"
-                        android:layout_height="24dp"
+                        android:layout_height="20dp"
                         app:bar_height="2dp"
-                        app:buffered_color="#FFFFFF"
-                        app:played_color="#FF0000"
-                        app:scrubber_color="#FF0000" />
+                        app:played_color="@color/yt_red"
+                        app:unplayed_color="#99FFFFFF"
+                        app:scrubber_color="@color/yt_red"
+                        app:buffered_color="@android:color/white" />
                     <com.hhst.youtubelite.player.sponsor.SponsorOverlayView
                         android:id="@+id/sponsor_overlay"
                         android:layout_width="match_parent"
