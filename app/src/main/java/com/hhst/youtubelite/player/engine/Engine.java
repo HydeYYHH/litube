@@ -2,6 +2,8 @@ package com.hhst.youtubelite.player.engine;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -37,19 +39,16 @@ import androidx.media3.extractor.ExtractorsFactory;
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory;
 import androidx.media3.extractor.text.SubtitleExtractor;
 
-import android.os.Handler;
-import android.os.Looper;
-
-import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.Constant;
-import com.hhst.youtubelite.player.LitePlayerView;
-import com.hhst.youtubelite.player.common.PlayerPreferences;
-import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
-import com.hhst.youtubelite.player.common.PlayerUtils;
-import com.hhst.youtubelite.util.StringUtils;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
+import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.player.common.PlayerPreferences;
+import com.hhst.youtubelite.player.common.PlayerUtils;
+import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
+import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
+import com.hhst.youtubelite.util.StringUtils;
 
 import org.schabi.newpipe.extractor.services.youtube.dashmanifestcreators.YoutubeProgressiveDashManifestCreator;
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -89,15 +88,9 @@ public class Engine {
 	private final TabManager tabManager;
 	@NonNull
 	private final SponsorBlockManager sponsor;
+	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
 	private String vid;
-	@Nullable
-	private VideoDetails videoDetails;
-	@Nullable
-	private StreamDetails streamDetails;
-	@Nullable
-	private VideoStream videoStream;
-	private final Handler handler = new Handler(Looper.getMainLooper());
 	private final Runnable onTimeUpdate = new Runnable() {
 		@Override
 		public void run() {
@@ -121,6 +114,12 @@ public class Engine {
 			handler.postDelayed(this, UPDATE_INTERVAL_MS);
 		}
 	};
+	@Nullable
+	private VideoDetails videoDetails;
+	@Nullable
+	private StreamDetails streamDetails;
+	@Nullable
+	private VideoStream videoStream;
 
 	@Inject
 	public Engine(@NonNull @ApplicationContext final Context context,
@@ -325,12 +324,12 @@ public class Engine {
 		this.player.seekTo(Math.min(this.player.getDuration(), this.player.getCurrentPosition() + offset));
 	}
 
-	public void setPlaybackRate(final float rate) {
-		this.player.setPlaybackParameters(new PlaybackParameters(rate));
-	}
-
 	public float getPlaybackRate() {
 		return this.player.getPlaybackParameters().speed;
+	}
+
+	public void setPlaybackRate(final float rate) {
+		this.player.setPlaybackParameters(new PlaybackParameters(rate));
 	}
 
 	public void addListener(@NonNull final Player.Listener listener) {
@@ -359,10 +358,10 @@ public class Engine {
 					final Format format = group.getTrackFormat(i);
 					if (language.equals(format.label) || language.equals(format.language)) {
 						this.player.setTrackSelectionParameters(this.player.getTrackSelectionParameters().buildUpon()
-							.clearOverrides()
-							.setOverrideForType(new TrackSelectionOverride(group.getMediaTrackGroup(), i))
-							.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-							.build());
+										.clearOverrides()
+										.setOverrideForType(new TrackSelectionOverride(group.getMediaTrackGroup(), i))
+										.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+										.build());
 						return;
 					}
 				}
@@ -403,6 +402,7 @@ public class Engine {
 		}
 		return null;
 	}
+
 	public List<String> getAvailableResolutions() {
 		final List<String> resolutions = new ArrayList<>();
 		if (streamDetails != null) {
@@ -464,9 +464,9 @@ public class Engine {
 	public void setVideoQuality(final int height) {
 		final DefaultTrackSelector trackSelector = (DefaultTrackSelector) this.player.getTrackSelector();
 		trackSelector.setParameters(trackSelector.buildUponParameters()
-			.setMaxVideoSize(Integer.MAX_VALUE, height)
-			.setMinVideoSize(0, height)
-			.build());
+						.setMaxVideoSize(Integer.MAX_VALUE, height)
+						.setMinVideoSize(0, height)
+						.build());
 	}
 
 	public String getQuality() {

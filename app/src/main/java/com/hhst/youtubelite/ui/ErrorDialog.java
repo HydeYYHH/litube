@@ -12,8 +12,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.util.DeviceUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -35,7 +35,8 @@ public final class ErrorDialog {
 		String displayTitle = (title == null) ? context.getString(R.string.error_title) : title;
 
 		// Avoid showing dialog in PIP mode
-		if (context instanceof Activity && DeviceUtils.isInPictureInPictureMode((Activity) context)) return;
+		if (context instanceof Activity && DeviceUtils.isInPictureInPictureMode((Activity) context))
+			return;
 
 		View view = LayoutInflater.from(context).inflate(R.layout.dialog_error, null);
 		TextView titleView = view.findViewById(R.id.error_title);
