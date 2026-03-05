@@ -16,6 +16,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -28,31 +29,29 @@ import androidx.annotation.Nullable;
 import androidx.media3.common.util.Consumer;
 import androidx.media3.common.util.UnstableApi;
 
-import com.hhst.youtubelite.util.StreamIOUtils;
-import com.hhst.youtubelite.util.UrlUtils;
-import com.hhst.youtubelite.util.ViewUtils;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.util.StreamIOUtils;
+import com.hhst.youtubelite.util.UrlUtils;
+import com.hhst.youtubelite.util.ViewUtils;
 
-
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.net.URLEncoder;
-import android.webkit.WebResourceResponse;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.SequenceInputStream;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.Arrays;
 import java.net.HttpURLConnection;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.Map;
 import java.util.Objects;
 
@@ -60,20 +59,6 @@ import lombok.Setter;
 
 @UnstableApi
 public class YoutubeWebview extends WebView {
-
-	@Override
-	public void loadUrl(@NonNull final String url) {
-		if (UrlUtils.isAllowedDomain(Uri.parse(url))) {
-			super.loadUrl(url);
-		} else {
-			final String currentUrl = getUrl();
-			if (currentUrl != null && UrlUtils.isAllowedDomain(Uri.parse(currentUrl))) {
-				super.loadUrl(url);
-			} else {
-				Log.w("YoutubeWebview", "Blocked attempt to load unauthorized URL: " + url);
-			}
-		}
-	}
 
 	private final ArrayList<String> scripts = new ArrayList<>();
 	@Nullable
@@ -94,7 +79,6 @@ public class YoutubeWebview extends WebView {
 	private TabManager tabManager;
 	@Setter
 	private PoTokenProviderImpl poTokenProvider;
-
 	public YoutubeWebview(@NonNull final Context context) {
 		this(context, null);
 	}
@@ -105,6 +89,20 @@ public class YoutubeWebview extends WebView {
 
 	public YoutubeWebview(@NonNull final Context context, @Nullable final AttributeSet attrs, final int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
+	}
+
+	@Override
+	public void loadUrl(@NonNull final String url) {
+		if (UrlUtils.isAllowedDomain(Uri.parse(url))) {
+			super.loadUrl(url);
+		} else {
+			final String currentUrl = getUrl();
+			if (currentUrl != null && UrlUtils.isAllowedDomain(Uri.parse(currentUrl))) {
+				super.loadUrl(url);
+			} else {
+				Log.w("YoutubeWebview", "Blocked attempt to load unauthorized URL: " + url);
+			}
+		}
 	}
 
 	@SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
@@ -247,7 +245,8 @@ public class YoutubeWebview extends WebView {
 
 							return new WebResourceResponse("text/html", encoding, sequenceInputStream);
 						}
-					} catch (Exception ignored){}
+					} catch (Exception ignored) {
+					}
 				}
 				return super.shouldInterceptRequest(view, request);
 			}

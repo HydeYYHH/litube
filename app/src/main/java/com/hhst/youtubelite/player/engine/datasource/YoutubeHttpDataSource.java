@@ -13,8 +13,6 @@ import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebEmbeddedPlayerStreamingUrl;
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebStreamingUrl;
 
-import com.hhst.youtubelite.util.StreamIOUtils;
-
 import android.net.Uri;
 import android.webkit.CookieManager;
 
@@ -36,6 +34,7 @@ import androidx.media3.datasource.HttpUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HttpHeaders;
+import com.hhst.youtubelite.util.StreamIOUtils;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -49,6 +49,25 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		this.executor.allowCoreThreadTimeOut(true);
 	}
 
+	private static long chunkLength(final int idx, final int totalChunks, final long partSize, final long totalLen) {
+		final long start = idx * partSize;
+		final long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
+		if (totalLen <= 0 || end < start) return 0;
+		return end - start + 1;
+	}
+
+	private static void maybeReportProgress(@NonNull final TaskContext ctx, final long totalLen) {
+		if (ctx.cb == null || totalLen <= 0) return;
+		final long downloaded = Math.min(totalLen, Math.max(0, ctx.downloadedBytes.get()));
+		final int progress = (int) Math.min(99, (downloaded * 100) / totalLen);
+		int prev;
+		do {
+			prev = ctx.lastProgress.get();
+			if (progress <= prev) return;
+		} while (!ctx.lastProgress.compareAndSet(prev, progress));
+		ctx.cb.onProgress(progress);
+	}
+
 	@Override
 	public CompletableFuture<File> download(@NonNull String url, @NonNull File out, @Nullable ProgressCallback cb) {
 		CompletableFuture<File> future = new CompletableFuture<>();
@@ -152,25 +171,6 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-	}
-
-	private static long chunkLength(final int idx, final int totalChunks, final long partSize, final long totalLen) {
-		final long start = idx * partSize;
-		final long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
-		if (totalLen <= 0 || end < start) return 0;
-		return end - start + 1;
-	}
-
-	private static void maybeReportProgress(@NonNull final TaskContext ctx, final long totalLen) {
-		if (ctx.cb == null || totalLen <= 0) return;
-		final long downloaded = Math.min(totalLen, Math.max(0, ctx.downloadedBytes.get()));
-		final int progress = (int) Math.min(99, (downloaded * 100) / totalLen);
-		int prev;
-		do {
-			prev = ctx.lastProgress.get();
-			if (progress <= prev) return;
-		} while (!ctx.lastProgress.compareAndSet(prev, progress));
-		ctx.cb.onProgress(progress);
 	}
 
 	@Override

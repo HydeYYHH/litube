@@ -30,50 +30,50 @@ import okhttp3.OkHttpClient;
 @InstallIn(SingletonComponent.class)
 public class CommonModule {
 
-    @Provides
-    @Singleton
-    public OkHttpClient provideOkHttpClient() {
-        return new OkHttpClient.Builder()
-                .cache(null)
-                .followRedirects(true)
-                .followSslRedirects(true)
-                .retryOnConnectionFailure(true)
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(0, TimeUnit.SECONDS)
-                .connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
-                .build();
-    }
+	@Provides
+	@Singleton
+	public OkHttpClient provideOkHttpClient() {
+		return new OkHttpClient.Builder()
+						.cache(null)
+						.followRedirects(true)
+						.followSslRedirects(true)
+						.retryOnConnectionFailure(true)
+						.connectTimeout(30, TimeUnit.SECONDS)
+						.writeTimeout(30, TimeUnit.SECONDS)
+						.readTimeout(0, TimeUnit.SECONDS)
+						.connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+						.build();
+	}
 
-    @Provides
-    @Singleton
-    public Executor provideExecutor() {
-        return new ThreadPoolExecutor(
-                4,
-                12,
-                30,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(32));
-    }
+	@Provides
+	@Singleton
+	public Executor provideExecutor() {
+		return new ThreadPoolExecutor(
+						4,
+						12,
+						30,
+						TimeUnit.SECONDS,
+						new ArrayBlockingQueue<>(32));
+	}
 
-    @Provides
-    @Singleton
-    public Gson provideGson() {
-        return new Gson();
-    }
+	@Provides
+	@Singleton
+	public Gson provideGson() {
+		return new Gson();
+	}
 
-    @Provides
-    @Singleton
-    public MMKV provideMMKV() {
-        return MMKV.defaultMMKV();
-    }
+	@Provides
+	@Singleton
+	public MMKV provideMMKV() {
+		return MMKV.defaultMMKV();
+	}
 
-    @Provides
-    @Singleton
-    @UnstableApi
-    public SimpleCache provideSimpleCache(@ApplicationContext Context context) {
-        final File cacheDir = new File(context.getCacheDir(), "player");
-        final LeastRecentlyUsedCacheEvictor evictor = new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024);
-        return new SimpleCache(cacheDir, evictor, new StandaloneDatabaseProvider(context));
-    }
+	@Provides
+	@Singleton
+	@UnstableApi
+	public SimpleCache provideSimpleCache(@ApplicationContext Context context) {
+		final File cacheDir = new File(context.getCacheDir(), "player");
+		final LeastRecentlyUsedCacheEvictor evictor = new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024);
+		return new SimpleCache(cacheDir, evictor, new StandaloneDatabaseProvider(context));
+	}
 }

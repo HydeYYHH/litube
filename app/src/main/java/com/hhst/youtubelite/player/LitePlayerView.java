@@ -1,8 +1,6 @@
 package com.hhst.youtubelite.player;
 
 
-import com.hhst.youtubelite.util.ViewUtils;
-import com.hhst.youtubelite.player.common.Constant;
 import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.Context;
@@ -26,9 +24,11 @@ import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
 
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
+import com.hhst.youtubelite.util.ViewUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +36,8 @@ import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 
-import dagger.hilt.android.scopes.ActivityScoped;
-
 import dagger.hilt.android.AndroidEntryPoint;
+import dagger.hilt.android.scopes.ActivityScoped;
 import lombok.Getter;
 
 /**
@@ -51,34 +50,28 @@ public class LitePlayerView extends PlayerView {
 
 	private static final float SUBTITLE_LINE_FRACTION = 0.92f;
 	private static final float SUBTITLE_POSITION_FRACTION = 0.5f;
-
-	@Nullable
-	private SubtitleView subtitleView;
-
-	public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-		super(context, attrs, defStyleAttr);
-	}
-
-	public LitePlayerView(Context context, @Nullable AttributeSet attrs) {
-		super(context, attrs);
-	}
-
-	public LitePlayerView(Context context) {
-		super(context);
-	}
-
 	@Inject
 	SponsorBlockManager sponsor;
 	@Inject
 	Activity activity;
 	@Inject
 	PlayerPreferences prefs;
-
+	@Nullable
+	private SubtitleView subtitleView;
 	@Getter
 	private boolean isFs = false;
 	private int playerWidth = 0;
 	private int playerHeight = 0;
 	private int normalHeight = 0;
+	public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+		super(context, attrs, defStyleAttr);
+	}
+	public LitePlayerView(Context context, @Nullable AttributeSet attrs) {
+		super(context, attrs);
+	}
+	public LitePlayerView(Context context) {
+		super(context);
+	}
 
 	public void setup() {
 		setControllerAnimationEnabled(false);
@@ -117,7 +110,8 @@ public class LitePlayerView extends PlayerView {
 	public void enterFullscreen(final boolean isPortraitVideo) {
 		isFs = true;
 		if (!activity.isInPictureInPictureMode()) normalHeight = playerHeight;
-		if (isPortraitVideo) activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+		if (isPortraitVideo)
+			activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 		else activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
