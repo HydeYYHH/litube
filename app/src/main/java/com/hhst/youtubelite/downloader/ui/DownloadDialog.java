@@ -370,13 +370,12 @@ public class DownloadDialog {
             } catch (InterruptedException ignored) {}
         });
         v.findViewById(R.id.button_confirm).setOnClickListener(v1 -> {
-            subtitleSel = true;
-            btn.setBackgroundColor(color);
+            subtitleSel = subtitleSelStream != null;
+            btn.setBackgroundColor(subtitleSel ? color : context.getColor(android.R.color.darker_gray));
             d.dismiss();
         });
         d.show();
     }
-
     private String sanitizeFileName(String f) { return f.replaceAll("[<>:\"/|?*]", "_"); }
     private String formatSize(long bytes) { return bytes <= 0 ? "Unknown" : String.format(Locale.US, "%.1f MB", bytes / 1048576.0); }
 
@@ -389,6 +388,9 @@ public class DownloadDialog {
             t.add(new Task(videoDetails.getId()+":v", videoSelStream, audio, null, null, f, d, threadCount));
         } else if (audioSel && audioSelStream != null) {
             t.add(new Task(videoDetails.getId()+":a", null, audioSelStream, null, null, f, d, threadCount));
+        }
+        if (subtitleSel && subtitleSelStream != null) {
+            t.add(new Task(videoDetails.getId()+":s", null, null, subtitleSelStream, null, f, d, threadCount));
         }
         if (thumbSel) t.add(new Task(videoDetails.getId()+":t", null, null, null, videoDetails.getThumbnail(), f, d, threadCount));
         return t;
