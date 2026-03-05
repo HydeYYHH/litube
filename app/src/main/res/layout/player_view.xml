@@ -128,8 +128,9 @@
                         android:layout_height="20dp"
                         app:bar_height="2dp"
                         app:played_color="@color/yt_red"
-                        app:unplayed_color="@android:color/white"
-                        app:scrubber_color="@color/yt_red" />
+                        app:unplayed_color="#99FFFFFF"
+                        app:scrubber_color="@color/yt_red"
+                        app:buffered_color="@android:color/white" />
                     <com.hhst.youtubelite.player.sponsor.SponsorOverlayView
                         android:id="@+id/sponsor_overlay"
                         android:layout_width="match_parent"
