@@ -145,4 +145,8 @@
     <string name="download_progress_with_total">%1$s / %2$s MB (%3$d%%)</string>
     <string name="download_progress_simple">%1$s MB</string>
     <string name="download_status_with_type">%1$s • %2$s</string>
+    <string name="filename">Filename</string>
+    <string name="reset_extension_title">Reset extensions</string>
+    <string name="reset_extension_message">Reset all extension settings to default?</string>
 </resources>
+

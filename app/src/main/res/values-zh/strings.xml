@@ -137,4 +137,7 @@
     <string name="type_audio">音频</string>
     <string name="type_subtitle">字幕</string>
     <string name="type_thumbnail">封面</string>
+    <string name="filename">文件名</string>
+    <string name="reset_extension_message">将所有扩展设置恢复为默认值？</string>
+    <string name="reset_extension_title">重置扩展</string>
 </resources>

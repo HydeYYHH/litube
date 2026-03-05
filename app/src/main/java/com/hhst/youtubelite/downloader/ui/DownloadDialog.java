@@ -86,7 +86,7 @@ public class DownloadDialog {
 
 	public DownloadDialog(String url, Context context, YoutubeExtractor youtubeExtractor) {
 		this.context = context;
-		this.dialogView = LayoutInflater.from(context).inflate(R.layout.download_dialog, new FrameLayout(context), false);
+		this.dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_download, new FrameLayout(context), false);
 		executor = Executors.newCachedThreadPool();
 		videoLatch = new CountDownLatch(1);
 		streamLatch = new CountDownLatch(1);
@@ -125,6 +125,8 @@ public class DownloadDialog {
 		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
 		SeekBar threadsSeekBar = dialogView.findViewById(R.id.threads_seekbar);
 		TextView threadsCountText = dialogView.findViewById(R.id.threads_count);
+		editText.setHorizontallyScrolling(false);
+		editText.setVerticalScrollBarEnabled(true);
 
 		AlertDialog dialog = new MaterialAlertDialogBuilder(context)
 						.setTitle(context.getString(R.string.download))
@@ -437,3 +439,5 @@ public class DownloadDialog {
 		return t;
 	}
 }
+
+

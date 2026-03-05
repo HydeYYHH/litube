@@ -137,4 +137,7 @@
     <string name="type_audio">音声</string>
     <string name="type_subtitle">字幕</string>
     <string name="type_thumbnail">サムネイル</string>
+    <string name="filename">ファイル名</string>
+    <string name="reset_extension_message">すべての拡張機能の設定をデフォルトに戻しますか？</string>
+    <string name="reset_extension_title">拡張機能をリセット</string>
 </resources>

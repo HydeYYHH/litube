@@ -76,6 +76,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/segments"
                     android:padding="4dp"
                     android:src="@drawable/ic_segment" />
 
@@ -84,6 +85,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/subtitles"
                     android:padding="4dp"
                     android:src="@drawable/ic_subtitles_off" />
 
@@ -92,6 +94,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_repeat"
                     android:padding="4dp"
                     android:src="@drawable/ic_repeat_off" />
 
@@ -100,6 +103,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/more_options"
                     android:padding="4dp"
                     android:src="@drawable/ic_more" />
             </LinearLayout>
@@ -152,7 +156,8 @@
                         android:layout_height="wrap_content"
                         android:text=" / "
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        tools:ignore="HardcodedText" />
 
                     <TextView
                         android:id="@+id/exo_duration"
@@ -176,7 +181,8 @@
                         android:paddingHorizontal="8dp"
                         android:text="1.0x"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        tools:ignore="HardcodedText" />
 
                     <TextView
                         android:id="@+id/btn_quality"
@@ -186,7 +192,7 @@
                         android:gravity="center"
                         android:minWidth="50dp"
                         android:paddingHorizontal="8dp"
-                        android:text="Auto"
+                        android:text="@string/player_quality_auto"
                         android:textColor="@android:color/white"
                         android:textSize="12sp" />
 
@@ -195,6 +201,7 @@
                         android:layout_width="40dp"
                         android:layout_height="40dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/action_fullscreen"
                         android:padding="8dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_fullscreen" />
@@ -215,6 +222,7 @@
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_previous"
             android:padding="12dp"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_previous"
@@ -239,6 +247,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_play"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_play" />
@@ -248,6 +257,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_pause"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_pause" />
@@ -258,6 +268,7 @@
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_next"
             android:padding="12dp"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_next"
@@ -275,7 +286,7 @@
         android:layout_marginBottom="80dp"
         android:background="#B3000000"
         android:padding="8dp"
-        android:text="RESET ZOOM"
+        android:text="@string/reset"
         android:textColor="@android:color/white"
         android:visibility="gone" />
 
@@ -286,8 +297,11 @@
         android:layout_gravity="center_vertical|start"
         android:layout_marginStart="16dp"
         android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/unlock_screen"
         android:padding="12dp"
         android:src="@drawable/ic_unlock"
         android:visibility="gone" />
 
 </FrameLayout>
+
+

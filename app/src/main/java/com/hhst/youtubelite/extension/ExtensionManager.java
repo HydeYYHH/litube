@@ -37,6 +37,12 @@ public class ExtensionManager {
 		return mmkv.decodeBool("preferences:" + key, Constant.DEFAULT_PREFERENCES.getOrDefault(key, false));
 	}
 
+	public void resetToDefault() {
+		for (Map.Entry<String, Boolean> entry : Constant.DEFAULT_PREFERENCES.entrySet()) {
+			mmkv.encode("preferences:" + entry.getKey(), entry.getValue());
+		}
+	}
+
 	public Map<String, Boolean> getAllPreferences() {
 		Map<String, Boolean> allPreferences = new HashMap<>();
 		for (String key : Constant.DEFAULT_PREFERENCES.keySet()) {
@@ -46,3 +52,4 @@ public class ExtensionManager {
 	}
 
 }
+

@@ -22,6 +22,7 @@
             android:layout_width="110dp"
             android:layout_height="65dp"
             android:scaleType="centerCrop"
+            android:contentDescription="@string/thumbnail"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
@@ -32,6 +33,7 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/more_options"
             android:src="@drawable/ic_more"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"

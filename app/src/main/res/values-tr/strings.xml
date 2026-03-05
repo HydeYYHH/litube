@@ -137,4 +137,7 @@
     <string name="type_audio">Ses</string>
     <string name="type_subtitle">Altyazı</string>
     <string name="type_thumbnail">Küçük Resim</string>
+    <string name="filename">Dosya adı</string>
+    <string name="reset_extension_message">Tüm uzantı ayarları varsayılana sıfırlansın mı?</string>
+    <string name="reset_extension_title">Uzantıları sıfırla</string>
 </resources>

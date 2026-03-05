@@ -137,4 +137,7 @@
     <string name="type_audio">Audio</string>
     <string name="type_subtitle">Sous-titre</string>
     <string name="type_thumbnail">Miniature</string>
+    <string name="filename">Nom du fichier</string>
+    <string name="reset_extension_message">Réinitialiser tous les paramètres des extensions par défaut ?</string>
+    <string name="reset_extension_title">Réinitialiser les extensions</string>
 </resources>

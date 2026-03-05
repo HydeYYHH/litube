@@ -137,4 +137,7 @@
     <string name="type_audio">Аудио</string>
     <string name="type_subtitle">Субтитры</string>
     <string name="type_thumbnail">Миниатюра</string>
+    <string name="filename">Имя файла</string>
+    <string name="reset_extension_message">Сбросить все настройки расширений к значениям по умолчанию?</string>
+    <string name="reset_extension_title">Сбросить расширения</string>
 </resources>

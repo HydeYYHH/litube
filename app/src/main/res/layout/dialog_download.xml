@@ -32,13 +32,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp">
 
-                <com.google.android.material.textfield.TextInputEditText
+                <com.hhst.youtubelite.ui.widget.NestedScrollableTextInputEditText
                     android:id="@+id/download_edit_text"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="File Name"
-                    android:maxLines="2"
-                    android:textSize="14sp" />
+                    android:gravity="top|start"
+                    android:hint="@string/filename"
+                    android:inputType="textMultiLine"
+                    android:maxLines="4"
+                    android:minLines="2"
+                    android:overScrollMode="ifContentScrolls"
+                    android:scrollbars="vertical"
+                    android:textSize="14sp"
+                    android:verticalScrollbarPosition="right" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <HorizontalScrollView
@@ -121,7 +127,8 @@
                         android:layout_marginStart="8dp"
                         android:minWidth="24dp"
                         android:text="4"
-                        android:textAppearance="?attr/textAppearanceBodySmall" />
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        tools:ignore="HardcodedText" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -133,7 +140,7 @@
 
                 <Button
                     android:id="@+id/button_cancel"
-                    style="@style/Widget.Material3.Button.TextButton"
+                    style="@style/Widget.Material3.Button"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/cancel" />
@@ -160,3 +167,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+
+
