@@ -89,8 +89,7 @@ public class ExtensionDialog {
 			// Just update checked array, apply on confirm
 			checked[which] = isChecked;
 		}).setPositiveButton(R.string.confirm, null)
-						.setNegativeButton(R.string.reset, (dlg, which) -> showResetConfirmation())
-						.setNeutralButton(R.string.cancel, (dlg, which) -> dlg.dismiss()).create();
+						.setNegativeButton(R.string.cancel, (dlg, which) -> dlg.dismiss()).create();
 
 		dialog.setOnShowListener(dlg -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
 			for (int i = 0; i < leaves.size(); i++) {
@@ -115,8 +114,3 @@ public class ExtensionDialog {
 				.show();
 	}
 }
-
-
-
-
-
