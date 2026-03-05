@@ -137,4 +137,7 @@
     <string name="type_audio">오디오</string>
     <string name="type_subtitle">자막</string>
     <string name="type_thumbnail">썸네일</string>
+    <string name="filename">파일 이름</string>
+    <string name="reset_extension_message">모든 확장 기능 설정을 기본값으로 재설정할까요?</string>
+    <string name="reset_extension_title">확장 기능 재설정</string>
 </resources>

@@ -137,4 +137,7 @@
     <string name="type_audio">音訊</string>
     <string name="type_subtitle">字幕</string>
     <string name="type_thumbnail">封面</string>
+    <string name="filename">檔案名稱</string>
+    <string name="reset_extension_message">要將所有擴充功能設定還原為預設值嗎？</string>
+    <string name="reset_extension_title">重設擴充功能</string>
 </resources>
