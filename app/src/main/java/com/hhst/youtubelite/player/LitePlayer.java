@@ -4,13 +4,12 @@ import android.app.Activity;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.media3.common.PlaybackException;import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.ui.DefaultTimeBar;
+
 import com.hhst.youtubelite.PlaybackService;
-import com.hhst.youtubelite.R;
-import com.hhst.youtubelite.extractor.ExtractionException;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
@@ -18,11 +17,10 @@ import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
-import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
 import com.tencent.mmkv.MMKV;
 import org.schabi.newpipe.extractor.stream.AudioStream;
-import java.io.InterruptedIOException;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,8 +29,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Executors;
 import javax.inject.Inject;
 import dagger.hilt.android.scopes.ActivityScoped;
 
@@ -40,7 +36,6 @@ import dagger.hilt.android.scopes.ActivityScoped;
 @ActivityScoped
 public class LitePlayer {
     private static final String KEY_LAST_AUDIO_LANG = "last_audio_lang";
-    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @NonNull private final Activity activity;
     @NonNull private final YoutubeExtractor extractor;
@@ -123,7 +118,7 @@ public class LitePlayer {
         activity.runOnUiThread(() -> { engine.clear(); playerView.setTitle(null); playerView.show(); });
         if (cf != null) cf.cancel(true);
 
-        CompletableFuture<ExtractionResult> extractionFuture = CompletableFuture.supplyAsync(() -> {
+        cf = CompletableFuture.supplyAsync(() -> {
             try {
                 sponsor.load(videoId);
                 VideoDetails vi = extractor.getVideoInfo(url);
@@ -132,15 +127,7 @@ public class LitePlayer {
                 applyAudioPreference(si);
                 return new ExtractionResult(vi, si);
             } catch (Exception e) { throw new CompletionException(e); }
-        }, executor);
-
-        scheduler.schedule(() -> {
-            if (!extractionFuture.isDone()) {
-                extractionFuture.completeExceptionally(new java.util.concurrent.TimeoutException("Timeout"));
-            }
-        }, 10, TimeUnit.SECONDS);
-
-        cf = extractionFuture.thenAccept(er -> activity.runOnUiThread(() -> {
+        }, executor).thenAccept(er -> activity.runOnUiThread(() -> {
             if (!Objects.equals(this.vid, videoId)) return;
             playerView.setTitle(er.vi.getTitle());
             playerView.updateSkipMarkers(er.vi.getDuration(), TimeUnit.SECONDS);
@@ -161,9 +148,6 @@ public class LitePlayer {
     public void setHeight(int h) { playerView.post(() -> playerView.setHeight(h)); }
     public void release() { if (cf != null) cf.cancel(true); engine.release(); }
 
-    private static class ExtractionResult {
-        final VideoDetails vi;
-        final StreamDetails si;
-        ExtractionResult(VideoDetails vi, StreamDetails si) { this.vi = vi; this.si = si; }
+    private record ExtractionResult(VideoDetails vi, StreamDetails si) {
     }
 }
