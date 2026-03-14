@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/windowBackground"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btn_speed_minus"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/hint_seek_minus"
+            android:src="@drawable/ic_remove"
+            app:tint="?android:attr/textColorPrimary" />
+
+        <TextView
+            android:id="@+id/speed_value_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            tools:text="1.00x" />
+
+        <ImageButton
+            android:id="@+id/btn_speed_plus"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/hint_seek_plus"
+            android:src="@drawable/ic_add"
+            app:tint="?android:attr/textColorPrimary" />
+
+    </LinearLayout>
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/speed_slider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:stepSize="0"
+        android:value="1.0"
+        android:valueFrom="0.25"
+        android:valueTo="4.0"
+        app:labelBehavior="gone"
+        app:thumbRadius="6dp"
+        app:trackHeight="3dp"
+        app:trackTint="@android:color/white"
+        app:thumbTint="@android:color/white"
+        app:tickVisible="false" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/preset_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="0.25"
+                android:text="0.25x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="0.5"
+                android:text="0.5x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="0.75"
+                android:text="0.75x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="1.0"
+                android:text="Normal"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="1.25"
+                android:text="1.25x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="1.5"
+                android:text="1.5x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="1.75"
+                android:text="1.75x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="2.0"
+                android:text="2.0x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="3.0"
+                android:text="3.0x"
+                android:textSize="11sp" />
+
+            <Button style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:tag="4.0"
+                android:text="4.0x"
+                android:textSize="11sp"
+                tools:ignore="HardcodedText" />
+
+        </LinearLayout>
+
+    </HorizontalScrollView>
+</LinearLayout>
