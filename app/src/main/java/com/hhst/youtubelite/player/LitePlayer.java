@@ -1,7 +1,6 @@
 package com.hhst.youtubelite.player;
 
 import android.app.Activity;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -9,13 +8,16 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.ui.DefaultTimeBar;
 
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.extractor.ExtractionSession;
 import com.hhst.youtubelite.extractor.ExtractionException;
+import com.hhst.youtubelite.extractor.PlaybackInfo;
 import com.hhst.youtubelite.extractor.StreamDetails;
-import com.hhst.youtubelite.extractor.VideoDetails;
+import com.hhst.youtubelite.player.common.AudioPreferenceUtils;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.Controller;
@@ -66,6 +68,10 @@ public class LitePlayer {
 	private CompletableFuture<Void> cf;
 	@Nullable
 	private String vid = null;
+	@Nullable
+	private String loadedVideoId;
+	@Nullable
+	private ExtractionSession extractionSession;
 
 	@Inject
 	public LitePlayer(@NonNull final Activity activity,
@@ -107,7 +113,8 @@ public class LitePlayer {
 
 			@Override
 			public void onPlayerError(@NonNull PlaybackException error) {
-				ErrorDialog.show(activity, error.getMessage(), Log.getStackTraceString(error));
+				invalidatePlaybackCacheIfSourceOpenFailure(error);
+				ErrorDialog.show(activity, error.getMessage(), error);
 			}
 		});
 	}
@@ -146,34 +153,7 @@ public class LitePlayer {
 		List<AudioStream> audioStreams = si.getAudioStreams();
 		if (audioStreams == null || audioStreams.isEmpty()) return;
 
-		String savedLang = kv.decodeString(KEY_LAST_AUDIO_LANG, "und");
-		List<AudioStream> mutableStreams = new ArrayList<>(audioStreams);
-
-		mutableStreams.sort((s1, s2) -> {
-
-			String n1 = s1.getAudioTrackName() != null ? s1.getAudioTrackName().toLowerCase() : "";
-			String n2 = s2.getAudioTrackName() != null ? s2.getAudioTrackName().toLowerCase() : "";
-			boolean s1IsOriginal = n1.contains("original");
-			boolean s2IsOriginal = n2.contains("original");
-
-			if (s1IsOriginal && !s2IsOriginal) return -1;
-			if (!s1IsOriginal && s2IsOriginal) return 1;
-
-
-			String l1 = (s1.getAudioLocale() != null) ? s1.getAudioLocale().getLanguage() : "und";
-			String l2 = (s2.getAudioLocale() != null) ? s2.getAudioLocale().getLanguage() : "und";
-
-			boolean s1Matches = l1.equalsIgnoreCase(savedLang);
-			boolean s2Matches = l2.equalsIgnoreCase(savedLang);
-
-			if (s1Matches && !s2Matches) return -1;
-			if (!s1Matches && s2Matches) return 1;
-
-			return Integer.compare(s2.getAverageBitrate(), s1.getAverageBitrate());
-		});
-
-		si.getAudioStreams().clear();
-		si.getAudioStreams().addAll(mutableStreams);
+		si.setAudioStreams(AudioPreferenceUtils.reorder(audioStreams, kv.decodeString(KEY_LAST_AUDIO_LANG, "und")));
 	}
 
 	public void play(String url) {
@@ -191,39 +171,47 @@ public class LitePlayer {
 			playerView.show();
 		});
 
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
+		final ExtractionSession session = new ExtractionSession();
+		extractionSession = session;
 
 		cf = CompletableFuture.supplyAsync(() -> {
 			try {
 				sponsor.load(videoId);
-				VideoDetails vi = extractor.getVideoInfo(url);
-				StreamDetails si = extractor.getStreamInfo(url);
-				si.setVideoStreams(PlayerUtils.filterBestStreams(si.getVideoStreams()));
-
-				applyAudioPreference(si);
-
-				return new ExtractionResult(vi, si);
-			} catch (InterruptedException | InterruptedIOException e) {
-				throw new CompletionException("interrupted", e);
+				if (session.isCancelled()) throw new InterruptedException("Extraction canceled");
+				PlaybackInfo playbackInfo = extractor.getPlaybackInfo(url, session);
+				StreamDetails streamDetails = playbackInfo.getStreamDetails();
+				streamDetails.setVideoStreams(PlayerUtils.filterBestStreams(streamDetails.getVideoStreams()));
+				applyAudioPreference(streamDetails);
+				return playbackInfo;
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new CompletionException("Interrupted", e);
+			} catch (InterruptedIOException e) {
+				throw new CompletionException("Interrupted", e);
 			} catch (Exception e) {
-				throw new ExtractionException("extract failed", e);
+				throw new ExtractionException("Extract failed", e);
 			}
 		}, executor).thenAccept(er -> activity.runOnUiThread(() -> {
+			if (this.extractionSession == session) this.extractionSession = null;
 			if (!Objects.equals(this.vid, videoId)) return;
-			playerView.setTitle(er.vi.getTitle());
-			playerView.updateSkipMarkers(er.vi.getDuration(), TimeUnit.SECONDS);
+			this.loadedVideoId = videoId;
+			playerView.setTitle(er.getVideoDetails().getTitle());
+			playerView.updateSkipMarkers(er.getVideoDetails().getDuration(), TimeUnit.SECONDS);
 
-			engine.play(er.vi, er.si);
+			engine.play(er.getVideoDetails(), er.getStreamDetails());
 
 			if (playbackService != null) {
-				playbackService.showNotification(er.vi.getTitle(), er.vi.getAuthor(), er.vi.getThumbnail(), er.vi.getDuration() * 1000);
+				playbackService.showNotification(er.getVideoDetails().getTitle(), er.getVideoDetails().getAuthor(), er.getVideoDetails().getThumbnail(), er.getVideoDetails().getDuration() * 1000);
 			}
 		})).exceptionally(e -> {
+			if (this.extractionSession == session) this.extractionSession = null;
 			Throwable cause = e instanceof CompletionException ? e.getCause() : e;
 			if (cause instanceof ExtractionException) {
 				activity.runOnUiThread(() -> {
 					if (!Objects.equals(this.vid, videoId)) return;
-					ErrorDialog.show(activity, cause.getMessage(), Log.getStackTraceString(cause));
+					ErrorDialog.show(activity, cause.getMessage(), cause);
 				});
 			}
 			return null;
@@ -232,6 +220,8 @@ public class LitePlayer {
 
 	public void hide() {
 		this.vid = null;
+		this.loadedVideoId = null;
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		activity.runOnUiThread(() -> {
 			playerView.hide();
@@ -271,10 +261,33 @@ public class LitePlayer {
 	}
 
 	public void release() {
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
+		loadedVideoId = null;
 		engine.release();
 	}
 
-	private record ExtractionResult(VideoDetails vi, StreamDetails si) {
+	void invalidatePlaybackCacheIfSourceOpenFailure(@NonNull final PlaybackException error) {
+		if (loadedVideoId == null) return;
+		if (!isPlaybackSourceOpenFailure(error)) return;
+		extractor.invalidatePlaybackCacheByVideoId(loadedVideoId);
+	}
+
+	static boolean isPlaybackSourceOpenFailure(@Nullable final Throwable throwable) {
+		Throwable current = throwable;
+		while (current != null) {
+			if (current instanceof HttpDataSource.HttpDataSourceException httpException
+							&& httpException.type == HttpDataSource.HttpDataSourceException.TYPE_OPEN) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
+	}
+
+	private void cancelCurrentExtraction() {
+		if (extractionSession == null) return;
+		extractionSession.cancel();
+		extractionSession = null;
 	}
 }

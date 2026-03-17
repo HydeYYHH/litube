@@ -17,7 +17,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.MimeTypeMap;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -28,7 +27,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
@@ -47,11 +45,9 @@ import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
 import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
+import com.hhst.youtubelite.util.DownloadStorageUtils;
 import com.squareup.picasso.Picasso;
 
-import org.apache.commons.io.FileUtils;
-
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -127,6 +123,13 @@ public class DownloadActivity extends AppCompatActivity {
 	protected void onResume() {
 		super.onResume();
 		loadRecords();
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		ContextCompat.registerReceiver(this, receiver, new IntentFilter(DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED), ContextCompat.RECEIVER_NOT_EXPORTED);
+		bindService(new Intent(this, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
 	}	private final BroadcastReceiver receiver = new BroadcastReceiver() {
 		@Override
 		public void onReceive(Context context, Intent intent) {
@@ -144,13 +147,6 @@ public class DownloadActivity extends AppCompatActivity {
 			}
 		}
 	};
-
-	@Override
-	protected void onStart() {
-		super.onStart();
-		ContextCompat.registerReceiver(this, receiver, new IntentFilter(DownloadService.ACTION_DOWNLOAD_RECORD_UPDATED), ContextCompat.RECEIVER_NOT_EXPORTED);
-		bindService(new Intent(this, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
-	}
 
 	@Override
 	protected void onStop() {
@@ -171,8 +167,7 @@ public class DownloadActivity extends AppCompatActivity {
 
 		for (DownloadRecord record : list) {
 			if (record.getStatus() == DownloadStatus.COMPLETED) {
-				File file = new File(record.getOutputPath());
-				if (!file.exists()) {
+				if (!DownloadStorageUtils.exists(this, record.getOutputPath())) {
 					historyRepository.remove(record.getTaskId());
 					continue;
 				}
@@ -201,11 +196,46 @@ public class DownloadActivity extends AppCompatActivity {
 								downloadService.cancel(record.getTaskId());
 							}
 							if (checkbox.isChecked()) {
-								FileUtils.deleteQuietly(new File(record.getOutputPath()));
+								DownloadStorageUtils.delete(DownloadActivity.this, record.getOutputPath());
 							}
 							historyRepository.remove(record.getTaskId());
 							loadRecords();
 						}).show();
+	}
+
+	private void showClearHistoryDialog() {
+		new MaterialAlertDialogBuilder(this)
+						.setTitle(R.string.clear_history)
+						.setMessage(R.string.clear_history_confirmation)
+						.setNegativeButton(R.string.cancel, null)
+						.setPositiveButton(R.string.clear, (d, w) -> {
+							historyRepository.clear();
+							loadRecords();
+						}).show();
+	}
+
+	private void openRecordFile(@NonNull final DownloadRecord record) {
+		if (!DownloadStorageUtils.exists(this, record.getOutputPath())) {
+			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+			loadRecords();
+			return;
+		}
+		final Uri uri = DownloadStorageUtils.getOpenUri(this, record.getOutputPath());
+		if (uri == null) {
+			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+			loadRecords();
+			return;
+		}
+		final String type = DownloadStorageUtils.getMimeType(this, record.getOutputPath(), record.getFileName());
+
+		final Intent intent = new Intent(Intent.ACTION_VIEW);
+		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		intent.setDataAndType(uri, type != null ? type : "*/*");
+		try {
+			startActivity(intent);
+		} catch (Exception e) {
+			Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show();
+		}
 	}	private final DownloadRecordsAdapter adapter = new DownloadRecordsAdapter(new ArrayList<>(), new DownloadRecordsAdapter.Actions() {
 		@Override
 		public void onOpen(DownloadRecord record) {
@@ -244,38 +274,6 @@ public class DownloadActivity extends AppCompatActivity {
 			showDeleteDialog(record);
 		}
 	});
-
-	private void showClearHistoryDialog() {
-		new MaterialAlertDialogBuilder(this)
-						.setTitle(R.string.clear_history)
-						.setMessage(R.string.clear_history_confirmation)
-						.setNegativeButton(R.string.cancel, null)
-						.setPositiveButton(R.string.clear, (d, w) -> {
-							historyRepository.clear();
-							loadRecords();
-						}).show();
-	}
-
-	private void openRecordFile(@NonNull final DownloadRecord record) {
-		final File file = new File(record.getOutputPath());
-		if (!file.exists()) {
-			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
-			loadRecords();
-			return;
-		}
-		final Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
-		final String ext = MimeTypeMap.getFileExtensionFromUrl(uri.toString());
-		final String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
-
-		final Intent intent = new Intent(Intent.ACTION_VIEW);
-		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-		intent.setDataAndType(uri, type != null ? type : "*/*");
-		try {
-			startActivity(intent);
-		} catch (Exception e) {
-			Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show();
-		}
-	}
 
 	private static final class DownloadRecordsAdapter extends RecyclerView.Adapter<DownloadRecordsAdapter.VH> {
 		@NonNull
@@ -454,6 +452,8 @@ public class DownloadActivity extends AppCompatActivity {
 			}
 		}
 	}
+
+
 
 
 

@@ -1,0 +1,110 @@
+package com.hhst.youtubelite.player;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import android.app.Activity;
+
+import androidx.media3.common.PlaybackException;
+import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.HttpDataSource;
+
+import com.hhst.youtubelite.extractor.YoutubeExtractor;
+import com.hhst.youtubelite.player.controller.Controller;
+import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
+import com.tencent.mmkv.MMKV;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockedStatic;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.concurrent.Executor;
+
+public class LitePlayerTest {
+	private LitePlayer player;
+	private YoutubeExtractor extractor;
+	private MockedStatic<MMKV> mmkvStatic;
+
+	@Before
+	public void setUp() throws Exception {
+		final Activity activity = mock(Activity.class);
+		extractor = mock(YoutubeExtractor.class);
+		final LitePlayerView playerView = mock(LitePlayerView.class);
+		final Controller controller = mock(Controller.class);
+		final Engine engine = mock(Engine.class);
+		final SponsorBlockManager sponsor = mock(SponsorBlockManager.class);
+		final Executor executor = Runnable::run;
+		final MMKV kv = mock(MMKV.class);
+
+		mmkvStatic = org.mockito.Mockito.mockStatic(MMKV.class);
+		mmkvStatic.when(MMKV::defaultMMKV).thenReturn(kv);
+		player = new LitePlayer(activity, extractor, playerView, controller, engine, sponsor, executor);
+		setField(player, "loadedVideoId", "video-id");
+	}
+
+	@After
+	public void tearDown() {
+		if (mmkvStatic != null) {
+			mmkvStatic.close();
+		}
+	}
+
+	@Test
+	public void playerSourceError_invalidatesCachedPlaybackEntryForCurrentVideo() {
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+
+		verify(extractor).invalidatePlaybackCacheByVideoId("video-id");
+	}
+
+	@Test
+	public void nonOpenFailure_doesNotInvalidateCachedPlaybackEntry() {
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceReadFailure());
+
+		verify(extractor, never()).invalidatePlaybackCacheByVideoId("video-id");
+	}
+
+	@Test
+	public void sourceError_usesLoadedVideoIdInsteadOfRequestedVideoId() throws Exception {
+		setField(player, "vid", "requested-video");
+		setField(player, "loadedVideoId", "loaded-video");
+
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+
+		verify(extractor).invalidatePlaybackCacheByVideoId("loaded-video");
+		verify(extractor, never()).invalidatePlaybackCacheByVideoId("requested-video");
+	}
+
+	private static PlaybackException sourceOpenFailure() {
+		final HttpDataSource.HttpDataSourceException cause = new HttpDataSource.HttpDataSourceException(
+						new IOException("GET 403"),
+						mock(DataSpec.class),
+						PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+						HttpDataSource.HttpDataSourceException.TYPE_OPEN);
+		final PlaybackException error = mock(PlaybackException.class);
+		when(error.getCause()).thenReturn(cause);
+		return error;
+	}
+
+	private static PlaybackException sourceReadFailure() {
+		final HttpDataSource.HttpDataSourceException cause = new HttpDataSource.HttpDataSourceException(
+						new IOException("socket"),
+						mock(DataSpec.class),
+						PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+						HttpDataSource.HttpDataSourceException.TYPE_READ);
+		final PlaybackException error = mock(PlaybackException.class);
+		when(error.getCause()).thenReturn(cause);
+		return error;
+	}
+
+	private static void setField(final Object target, final String fieldName, final Object value) throws Exception {
+		final Field field = LitePlayer.class.getDeclaredField(fieldName);
+		field.setAccessible(true);
+		field.set(target, value);
+	}
+}

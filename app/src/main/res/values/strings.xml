@@ -146,6 +146,9 @@
     <string name="download_progress_simple">%1$s MB</string>
     <string name="download_status_with_type">%1$s • %2$s</string>
     <string name="filename">Filename</string>
+    <string name="preparing_download">Preparing download…</string>
+    <string name="downloading_file">Downloading: %1$s</string>
+    <string name="downloads_running">%1$d downloads in progress</string>
     <string name="reset_extension_title">Reset extensions</string>
     <string name="reset_extension_message">Reset all extension settings to default?</string>
 </resources>

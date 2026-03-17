@@ -81,10 +81,13 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		RandomAccessFile raf = null;
 		try {
 			// 1. fetch metadata
-			Response head = client.newCall(new Request.Builder().url(ctx.url).head().build()).execute();
-			long total = Long.parseLong(head.header("Content-Length", "-1"));
-			boolean range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
-			head.close();
+			final long total;
+			final boolean range;
+			try (Response head = client.newCall(new Request.Builder().url(ctx.url).head().build()).execute()) {
+				if (!head.isSuccessful()) throw new IOException("HEAD " + head.code());
+				total = Long.parseLong(head.header("Content-Length", "-1"));
+				range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
+			}
 
 			// 2. calculate chunk count
 			int chunks;
@@ -148,25 +151,28 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		Request.Builder rb = new Request.Builder().url(ctx.url);
 		if (range != null) rb.header("Range", range);
 
-		try (Response resp = client.newCall(rb.build()).execute(); InputStream is = resp.body().byteStream()) {
-			byte[] buf = new byte[8192];
-			int read;
-			long offset = start;
-			while ((read = is.read(buf)) != -1) {
-				if (ctx.isInactive()) throw new IOException("Stop");
-				synchronized (ctx.lock) {
-					raf.seek(offset);
-					raf.write(buf, 0, read);
+		try (Response resp = client.newCall(rb.build()).execute()) {
+			if (!resp.isSuccessful()) throw new IOException("GET " + resp.code());
+			try (InputStream is = resp.body().byteStream()) {
+				byte[] buf = new byte[8192];
+				int read;
+				long offset = start;
+				while ((read = is.read(buf)) != -1) {
+					if (ctx.isInactive()) throw new IOException("Stop");
+					synchronized (ctx.lock) {
+						raf.seek(offset);
+						raf.write(buf, 0, read);
+					}
+					if (totalLen > 0) {
+						ctx.downloadedBytes.addAndGet(read);
+						maybeReportProgress(ctx, totalLen);
+					}
+					offset += read;
 				}
-				if (totalLen > 0) {
-					ctx.downloadedBytes.addAndGet(read);
-					maybeReportProgress(ctx, totalLen);
+				if (range != null) synchronized (ctx.lock) {
+					bits.set(idx);
+					mmkv.encode(ctx.key, bits.toByteArray());
 				}
-				offset += read;
-			}
-			if (range != null) synchronized (ctx.lock) {
-				bits.set(idx);
-				mmkv.encode(ctx.key, bits.toByteArray());
 			}
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -196,9 +202,15 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	}
 
 	@Override
-	public void setMaxThreadCount(int count) {
-		executor.setCorePoolSize(count);
-		executor.setMaximumPoolSize(count);
+	public synchronized void setMaxThreadCount(int count) {
+		final int targetCount = Math.max(1, count);
+		if (targetCount > executor.getMaximumPoolSize()) {
+			executor.setMaximumPoolSize(targetCount);
+			executor.setCorePoolSize(targetCount);
+		} else {
+			executor.setCorePoolSize(targetCount);
+			executor.setMaximumPoolSize(targetCount);
+		}
 	}
 
 	private String md5(String s) {
