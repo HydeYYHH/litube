@@ -128,6 +128,21 @@ try {
         window.__liteDomDebug = Object.freeze({
             getSnapshot: () => DomLiteEngine.debugSnapshot(),
         });
+        const TimerCoordinator = {
+            tick() {
+                const pageClass = getPageClass(location.href);
+                DomLiteEngine.updateCurrentPageClass();
+                DomLiteEngine.incrementTaskRun('global');
+                if (pageClass === 'watch') {
+                    DomLiteEngine.incrementTaskRun('watch');
+                } else if (pageClass === 'select_site') {
+                    DomLiteEngine.incrementTaskRun('settings');
+                } else if (pageClass === 'unknown') {
+                    DomLiteEngine.incrementTaskRun('fallback');
+                }
+                runTimedTasks(pageClass);
+            }
+        };
         // Observe page type changes and dispatch event
         const observePageClass = () => {
             const currentPageClass = getPageClass(location.href);
@@ -205,6 +220,7 @@ try {
         history.pushState = function (data, title, url) {
             originalPushState.call(this, data, title, url);
             handlePlayerVisibility();
+            TimerCoordinator.tick();
         };
 
         // Override replaceState to trigger player visibility changes
@@ -212,6 +228,7 @@ try {
         history.replaceState = function (data, title, url) {
             originalReplaceState.call(this, data, title, url);
             handlePlayerVisibility();
+            TimerCoordinator.tick();
         };
 
 
@@ -257,9 +274,8 @@ try {
             }
         }, false);
 
-        setInterval(() => {
+        function runTimedTasks(pageClass) {
             // Skip ads
-            const pageClass = getPageClass(location.href);
             if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');
                 if (video) video.currentTime = video.duration;
@@ -522,6 +538,10 @@ try {
                 }
             }
 
+        }
+
+        setInterval(() => {
+            TimerCoordinator.tick();
         }, 500);
 
         const addTapEvent = (el, handler) => {
