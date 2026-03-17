@@ -82,7 +82,7 @@ public final class MainActivity extends AppCompatActivity {
     private static final int DOUBLE_TAP_EXIT_INTERVAL_MS = 2_000;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final MMKV kv = MMKV.defaultMMKV();
+    private MMKV kv;
 
     @Inject ExtensionManager extensionManager;
     @Inject TabManager tabManager;
@@ -115,6 +115,8 @@ public final class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         super.onCreate(savedInstanceState);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+
+        kv = MMKV.defaultMMKV();
 
         final View mainView = findViewById(R.id.main);
         ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
@@ -154,7 +156,7 @@ public final class MainActivity extends AppCompatActivity {
         if (url != null) {
             final String clean = url.replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
             if (tabManager != null) tabManager.openTab(clean, UrlUtils.getPageClass(clean));
-        } else if (tabManager.getWebview() == null) {
+        } else if (tabManager != null && tabManager.getWebview() == null) {
             tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
         }
     }
@@ -303,6 +305,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void processBulkDownload(List<PlaylistDownloadItem> items) {
+        if (kv == null) return;
         Toast.makeText(this, "Enqueuing " + items.size() + " items...", Toast.LENGTH_LONG).show();
         String lastRes = kv.decodeString("last_download_res", "720p");
         int lastBitrate = kv.decodeInt("last_download_audio_bitrate", -1);
