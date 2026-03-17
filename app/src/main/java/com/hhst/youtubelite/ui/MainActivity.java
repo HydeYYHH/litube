@@ -180,11 +180,12 @@ public final class MainActivity extends AppCompatActivity {
                     return false;
                 });
                 webview.evaluateJavascript("if(!window.location.pathname.startsWith('/shorts/')){var s=document.createElement('style');s.innerHTML=':root{--safe-area-inset-bottom:0px!important}body{padding-bottom:0px!important;margin-bottom:0px!important}ytm-pivot-bar-renderer{height:48px!important;padding-bottom:0px!important;bottom:0px!important;margin-bottom:0px!important;min-height:48px!important}a{text-decoration:none!important}a.yt-simple-endpoint{text-decoration:none!important;color:inherit!important}';document.head.appendChild(s)}", null);
+                webview.evaluateJavascript("document.addEventListener('contextmenu', e => { const a = e.target.closest('a'); if (a && a.href && (a.href.includes('/watch') || a.href.includes('/shorts/'))) { e.preventDefault(); android.showVideoOptions(a.href); } }, true);", null);
             }
         }, 1500);
     }
 
-    private void showVideoOptionsDialog(String url) {
+    public void showVideoOptionsDialog(String url) {
         boolean isPl = url.contains("list=");
         String[] opts = isPl ? new String[]{"Download Video", "Download Playlist", "Share Link", "Open Downloads", "Cancel"}
                 : new String[]{"Download Video", "Share Link", "Open Downloads", "Cancel"};
