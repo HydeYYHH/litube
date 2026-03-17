@@ -1,28 +1,484 @@
 package com.hhst.youtubelite.extractor;
 
-import com.hhst.youtubelite.extractor.DownloaderImpl;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.google.gson.Gson;
+import com.tencent.mmkv.MMKV;
 
 import org.junit.Test;
-import org.schabi.newpipe.extractor.NewPipe;
-import org.schabi.newpipe.extractor.ServiceList;
-import org.schabi.newpipe.extractor.exceptions.ExtractionException;
+import org.mockito.Answers;
+import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
+import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.extractor.stream.SubtitlesStream;
+import org.schabi.newpipe.extractor.stream.VideoStream;
 
-import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 
 public class YoutubeExtractorTest {
+	private static final String VIDEO_ID = "mAdodMaERp0";
+	private static final String WATCH_URL = "https://m.youtube.com/watch?v=" + VIDEO_ID;
+	private static final String FINGERPRINT = "fp-a";
 
 	@Test
-	public void test_info() throws ExtractionException, IOException {
-		final DownloaderImpl downloader = new DownloaderImpl(new okhttp3.OkHttpClient());
-		NewPipe.init(downloader);
-		var info = StreamInfo.getInfo(ServiceList.YouTube, "https://m.youtube.com/watch?v=mAdodMaERp0");
-		System.out.println(info.getAudioStreams().size()); // 72
-		System.out.println(info.getAudioStreams().stream().map(AudioStream::getAudioTrackName).toList());//[German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original, German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original, German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original, German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original, German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original, German (DE), Spanish (US), French (FR), Hindi, Indonesian, Italian, Japanese, Malayalam, Polish, Portuguese (BR), Ukrainian, English (US) original]
-		System.out.println(info.getAudioStreams().stream().map(AudioStream::getAudioTrackType).toList());//[DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, DUBBED, ORIGINAL]
-		System.out.println(info.getAudioStreams().stream().map(AudioStream::getAudioTrackId).toList());//[de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4, de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4, de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4, de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4, de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4, de-DE.10, es-US.10, fr-FR.10, hi.10, id.10, it.10, ja.10, ml.10, pl.10, pt-BR.10, uk.10, en-US.4]
-		System.out.println(info.getAudioStreams().stream().map(AudioStream::getFormat).toList());//[M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, M4A, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS, WEBMA_OPUS]
-		System.out.println(info.getAudioStreams().stream().map(AudioStream::getAverageBitrate).toList());//[48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35]
+	public void getVideoId_supportsCommonYoutubeUrlShapes() {
+		assertEquals(VIDEO_ID, YoutubeExtractor.getVideoId("https://m.youtube.com/watch?v=" + VIDEO_ID));
+		assertEquals(VIDEO_ID, YoutubeExtractor.getVideoId("https://youtu.be/" + VIDEO_ID));
+		assertEquals(VIDEO_ID, YoutubeExtractor.getVideoId("https://www.youtube.com/shorts/" + VIDEO_ID));
+	}
+
+	@Test
+	public void getVideoId_returnsNullForUnsupportedUrls() {
+		assertNull(YoutubeExtractor.getVideoId("https://example.com/video"));
+		assertNull(YoutubeExtractor.getVideoId("https://youtu.be/too-short"));
+		assertNull(YoutubeExtractor.getVideoId(null));
+	}
+
+	@Test
+	public void getPlaybackInfo_fetchesOnceAndCachesVideoDetailsWhenCacheMisses() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final AtomicInteger fetchCount = new AtomicInteger();
+		final StreamInfo streamInfo = mockStreamInfo("fresh-title", "https://example.com/dash.mpd", StreamType.VIDEO_STREAM);
+		when(cache.contains(VIDEO_ID)).thenReturn(false);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return streamInfo;
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(1, fetchCount.get());
+		assertEquals("fresh-title", playbackInfo.getVideoDetails().getTitle());
+		assertEquals("https://example.com/dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+		verify(cache).encode(eq(VIDEO_ID), anyString(), eq(3600));
+		assertEquals("https://example.com/dash.mpd", memoryCache.get(VIDEO_ID, FINGERPRINT, 10_001L).getDashUrl());
+	}
+
+	@Test
+	public void getPlaybackInfo_usesCachedVideoDetailsAndStillFetchesFreshStreamInfo() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final AtomicInteger fetchCount = new AtomicInteger();
+		final VideoDetails cachedVideoDetails = cachedVideoDetails("cached-title");
+		final StreamInfo streamInfo = mockStreamInfo("fresh-title", "https://example.com/fresh-dash.mpd", StreamType.VIDEO_STREAM);
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails));
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 20_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return streamInfo;
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(1, fetchCount.get());
+		assertSame(StreamType.VIDEO_STREAM, playbackInfo.getStreamDetails().getStreamType());
+		assertEquals("cached-title", playbackInfo.getVideoDetails().getTitle());
+		assertEquals("https://example.com/fresh-dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+		verify(cache, never()).encode(eq(VIDEO_ID), anyString(), eq(3600));
+		assertEquals("https://example.com/fresh-dash.mpd", memoryCache.get(VIDEO_ID, FINGERPRINT, 20_001L).getDashUrl());
+	}
+
+	@Test
+	public void getPlaybackInfo_usesPersistentVideoCacheAndMemoryStreamCacheWithoutFetching() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final AtomicInteger fetchCount = new AtomicInteger();
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails("cached-title")));
+		memoryCache.put(VIDEO_ID, FINGERPRINT, streamDetails("https://example.com/cached-dash.mpd", StreamType.VIDEO_STREAM), 5_000L);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 6_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("fresh-title", "https://example.com/fresh-dash.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(0, fetchCount.get());
+		assertEquals("cached-title", playbackInfo.getVideoDetails().getTitle());
+		assertEquals("https://example.com/cached-dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+		verify(cache, never()).encode(eq(VIDEO_ID), anyString(), eq(3600));
+	}
+
+	@Test
+	public void getPlaybackInfo_videoMissStreamHit_forcesFreshExtraction() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final AtomicInteger fetchCount = new AtomicInteger();
+		when(cache.contains(VIDEO_ID)).thenReturn(false);
+		memoryCache.put(VIDEO_ID, FINGERPRINT, streamDetails("https://example.com/stale-dash.mpd", StreamType.VIDEO_STREAM), 8_000L);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 9_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("fresh-title", "https://example.com/fresh-dash.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(1, fetchCount.get());
+		assertEquals("https://example.com/fresh-dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+		verify(cache).encode(eq(VIDEO_ID), anyString(), eq(3600));
+	}
+
+	@Test
+	public void getPlaybackInfo_fingerprintChange_skipsPreviousStreamCacheEntry() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, "fp-new");
+		final AtomicInteger fetchCount = new AtomicInteger();
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails("cached-title")));
+		memoryCache.put(VIDEO_ID, "fp-old", streamDetails("https://example.com/stale-dash.mpd", StreamType.VIDEO_STREAM), 9_000L);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("fresh-title", "https://example.com/fresh-dash.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(1, fetchCount.get());
+		assertEquals("https://example.com/fresh-dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+	}
+
+	@Test
+	public void getPlaybackInfo_nonCacheableContext_bypassesMemoryCache() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(false, false, FINGERPRINT);
+		final AtomicInteger fetchCount = new AtomicInteger();
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails("cached-title")));
+		memoryCache.put(VIDEO_ID, FINGERPRINT, streamDetails("https://example.com/stale-dash.mpd", StreamType.VIDEO_STREAM), 9_000L);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("fresh-title", "https://example.com/fresh-dash.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertEquals(1, fetchCount.get());
+		assertEquals("https://example.com/fresh-dash.mpd", playbackInfo.getStreamDetails().getDashUrl());
+		assertEquals("https://example.com/stale-dash.mpd", memoryCache.get(VIDEO_ID, FINGERPRINT, 10_001L).getDashUrl());
+	}
+
+	@Test
+	public void getVideoInfo_returnsCachedDetailsWithoutFetching() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final AtomicInteger fetchCount = new AtomicInteger();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final VideoDetails cachedVideoDetails = cachedVideoDetails("cached-only");
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails));
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("unused", "https://example.com/unused.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		final VideoDetails videoDetails = extractor.getVideoInfo(WATCH_URL);
+
+		assertEquals(0, fetchCount.get());
+		assertEquals("cached-only", videoDetails.getTitle());
+	}
+
+	@Test
+	public void getPlaybackInfo_doesNotFetchWhenSessionAlreadyCancelled() {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final AtomicInteger fetchCount = new AtomicInteger();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final ExtractionSession session = new ExtractionSession();
+		session.cancel();
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, ignoredSession) -> {
+							fetchCount.incrementAndGet();
+							return mockStreamInfo("unused", "https://example.com/unused.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		assertThrows(InterruptedException.class, () -> extractor.getPlaybackInfo(WATCH_URL, session));
+		assertEquals(0, fetchCount.get());
+		assertNull(memoryCache.get(VIDEO_ID, FINGERPRINT, 10_001L));
+		verify(cache, never()).encode(eq(VIDEO_ID), anyString(), eq(3600));
+	}
+
+	@Test
+	public void getPlaybackInfo_cancelledAfterStreamCacheHitBeforeReturn_throws() {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final ExtractionSession session = new ExtractionSession();
+		when(cache.contains(VIDEO_ID)).thenReturn(true);
+		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails("cached-title")));
+		memoryCache.put(VIDEO_ID, FINGERPRINT, streamDetails("https://example.com/cached-dash.mpd", StreamType.VIDEO_STREAM), 9_000L);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						new LongSupplier() {
+							private boolean first = true;
+
+							@Override
+							public long getAsLong() {
+								if (first) {
+									first = false;
+									session.cancel();
+								}
+								return 10_000L;
+							}
+						},
+						(videoId, activeSession) -> mockStreamInfo("unused", "https://example.com/unused.mpd", StreamType.VIDEO_STREAM));
+
+		assertThrows(InterruptedException.class, () -> extractor.getPlaybackInfo(WATCH_URL, session));
+	}
+
+	@Test
+	public void getPlaybackInfo_discardsFetchedResultWhenSessionCancelsMidFlight() {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final AtomicInteger fetchCount = new AtomicInteger();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final ExtractionSession session = new ExtractionSession();
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, activeSession) -> {
+							fetchCount.incrementAndGet();
+							activeSession.cancel();
+							return mockStreamInfo("unused", "https://example.com/unused.mpd", StreamType.VIDEO_STREAM);
+						});
+
+		assertThrows(InterruptedException.class, () -> extractor.getPlaybackInfo(WATCH_URL, session));
+		assertEquals(1, fetchCount.get());
+		verify(cache, never()).encode(eq(VIDEO_ID), anyString(), eq(3600));
+		assertNull(memoryCache.get(VIDEO_ID, FINGERPRINT, 10_001L));
+	}
+
+	@Test
+	public void getPlaybackInfo_liveStreams_areNotInsertedIntoMemoryCache() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		when(cache.contains(VIDEO_ID)).thenReturn(false);
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, activeSession) -> mockStreamInfo("live-title", "https://example.com/live.m3u8", StreamType.LIVE_STREAM));
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		assertSame(StreamType.LIVE_STREAM, playbackInfo.getStreamDetails().getStreamType());
+		assertNull(memoryCache.get(VIDEO_ID, FINGERPRINT, 10_001L));
+	}
+
+	@Test
+	public void getPlaybackInfo_returnsMutableAudioListForPlaybackReordering() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackInfoMemoryCache memoryCache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final StreamInfo streamInfo = mockStreamInfo("fresh-title", "https://example.com/dash.mpd", StreamType.VIDEO_STREAM);
+		final AudioStream audioStream = mock(AudioStream.class);
+		when(cache.contains(VIDEO_ID)).thenReturn(false);
+		when(audioStream.getFormat()).thenReturn(MediaFormat.M4A);
+		when(audioStream.getAverageBitrate()).thenReturn(128);
+		when(audioStream.getBitrate()).thenReturn(128);
+		when(streamInfo.getAudioStreams()).thenReturn(List.of(audioStream));
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> streamInfo);
+
+		final PlaybackInfo playbackInfo = extractor.getPlaybackInfo(WATCH_URL, new ExtractionSession());
+
+		playbackInfo.getStreamDetails().getAudioStreams().clear();
+		assertEquals(0, playbackInfo.getStreamDetails().getAudioStreams().size());
+	}
+
+	private static YoutubeExtractor newExtractor(final MMKV cache,
+	                                            final Gson gson,
+	                                            final PlaybackInfoMemoryCache memoryCache,
+	                                            final TestPlaybackCacheContextProvider contextProvider,
+	                                            final LongSupplier clock,
+	                                            final StreamInfoFetcher fetcher) {
+		return new YoutubeExtractor(cache, gson, memoryCache, fetcher, contextProvider, clock);
+	}
+
+	private static VideoDetails cachedVideoDetails(final String title) {
+		final VideoDetails videoDetails = new VideoDetails();
+		videoDetails.setId(VIDEO_ID);
+		videoDetails.setTitle(title);
+		videoDetails.setAuthor("cached-author");
+		return videoDetails;
+	}
+
+	private static StreamDetails streamDetails(final String dashUrl, final StreamType streamType) {
+		return new StreamDetails(
+						new ArrayList<>(List.of(mock(VideoStream.class))),
+						new ArrayList<>(List.of(mock(AudioStream.class))),
+						new ArrayList<>(List.of(mock(SubtitlesStream.class))),
+						dashUrl,
+						dashUrl.replace("dash", "hls"),
+						streamType);
+	}
+
+	private static StreamInfo mockStreamInfo(final String title,
+	                                         final String dashUrl,
+	                                         final StreamType streamType) {
+		final StreamInfo streamInfo = mock(StreamInfo.class, Answers.RETURNS_DEEP_STUBS);
+		when(streamInfo.getId()).thenReturn(VIDEO_ID);
+		when(streamInfo.getName()).thenReturn(title);
+		when(streamInfo.getUploaderName()).thenReturn("author");
+		when(streamInfo.getDescription().getContent()).thenReturn("description");
+		when(streamInfo.getDuration()).thenReturn(42L);
+		when(streamInfo.getThumbnails()).thenReturn(Collections.emptyList());
+		when(streamInfo.getLikeCount()).thenReturn(7L);
+		when(streamInfo.getDislikeCount()).thenReturn(1L);
+		when(streamInfo.getUploadDate().offsetDateTime().toInstant()).thenReturn(Instant.EPOCH);
+		when(streamInfo.getUploaderUrl()).thenReturn("https://example.com/channel");
+		when(streamInfo.getUploaderAvatars()).thenReturn(Collections.emptyList());
+		when(streamInfo.getViewCount()).thenReturn(99L);
+		when(streamInfo.getStreamSegments()).thenReturn(Collections.emptyList());
+		when(streamInfo.getVideoOnlyStreams()).thenReturn(Collections.emptyList());
+		when(streamInfo.getAudioStreams()).thenReturn(Collections.emptyList());
+		when(streamInfo.getSubtitles()).thenReturn(Collections.emptyList());
+		when(streamInfo.getDashMpdUrl()).thenReturn(dashUrl);
+		when(streamInfo.getHlsUrl()).thenReturn("https://example.com/hls.m3u8");
+		when(streamInfo.getStreamType()).thenReturn(streamType);
+		return streamInfo;
+	}
+}
+
+final class TestPlaybackCacheContextProvider implements PlaybackCacheContextProvider {
+	private final boolean canUse;
+	private final boolean canPopulate;
+	private final String fingerprint;
+
+	TestPlaybackCacheContextProvider(final boolean canUse,
+	                                 final boolean canPopulate,
+	                                 final String fingerprint) {
+		this.canUse = canUse;
+		this.canPopulate = canPopulate;
+		this.fingerprint = fingerprint;
+	}
+
+	@Override
+	public boolean canUsePlaybackMemoryCache(@NonNull final String url) {
+		return canUse;
+	}
+
+	@Override
+	@NonNull
+	public String buildRequestContextFingerprint(@NonNull final String url) {
+		return fingerprint;
+	}
+
+	@Override
+	public boolean canPopulatePlaybackMemoryCache(@Nullable final ExtractionSession session) {
+		return canPopulate;
+	}
+
+	@Override
+	public void clearPlaybackMemoryCacheSession(@Nullable final ExtractionSession session) {
 	}
 }

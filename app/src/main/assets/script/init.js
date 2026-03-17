@@ -47,31 +47,6 @@ try {
             return segments.join('/');
         };
 
-        // Extract poToken
-        if (!window.originalFetch) {
-            window.originalFetch = fetch;
-            window.fetch = async (...args) => {
-                const request = args[0] instanceof Request ? args[0] : new Request(...args);
-                if (request.url.includes('youtubei/v1/player') && request.method === 'POST') {
-                    try {
-                        const cloned = request.clone();
-                        const text = await cloned.text();
-                        if (text) {
-                            const json = JSON.parse(text);
-                            const poToken = json?.serviceIntegrityDimensions?.poToken;
-                            const visitorData = json?.context?.client?.visitorData;
-                            if (poToken) {
-                                android.setPoToken(poToken, visitorData);
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('poToken extraction error', e);
-                    }
-                }
-                return window.originalFetch(...args);
-            };
-        }
-
         // Observe page type changes and dispatch event
         const observePageClass = () => {
             const currentPageClass = getPageClass(location.href);

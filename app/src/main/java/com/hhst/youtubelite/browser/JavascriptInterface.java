@@ -16,13 +16,10 @@ import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.AboutActivity;
-
-import org.schabi.newpipe.extractor.services.youtube.PoTokenResult;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -44,20 +41,17 @@ public final class JavascriptInterface {
 	@NonNull
 	private final TabManager tabManager;
 	@NonNull
-	private final PoTokenProviderImpl poTokenProvider;
-	@NonNull
 	private final Gson gson = new Gson();
 	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
 
-	public JavascriptInterface(@NonNull final YoutubeWebview webview, @NonNull final YoutubeExtractor youtubeExtractor, @NonNull final LitePlayer player, @NonNull final ExtensionManager extensionManager, @NonNull final TabManager tabManager, @NonNull final PoTokenProviderImpl poTokenProvider) {
+	public JavascriptInterface(@NonNull final YoutubeWebview webview, @NonNull final YoutubeExtractor youtubeExtractor, @NonNull final LitePlayer player, @NonNull final ExtensionManager extensionManager, @NonNull final TabManager tabManager) {
 		this.context = webview.getContext();
 		this.webview = webview;
 		this.youtubeExtractor = youtubeExtractor;
 		this.player = player;
 		this.extensionManager = extensionManager;
 		this.tabManager = tabManager;
-		this.poTokenProvider = poTokenProvider;
 	}
 
 
@@ -118,13 +112,6 @@ public final class JavascriptInterface {
 	@android.webkit.JavascriptInterface
 	public void setPlayerHeight(final int height) {
 		handler.post(() -> player.setHeight(height));
-	}
-
-	@android.webkit.JavascriptInterface
-	public void setPoToken(@Nullable final String poToken, @Nullable final String visitorData) {
-		if (poToken != null && visitorData != null) {
-			poTokenProvider.setPoToken(new PoTokenResult(visitorData, poToken, poToken));
-		}
 	}
 
 	@android.webkit.JavascriptInterface

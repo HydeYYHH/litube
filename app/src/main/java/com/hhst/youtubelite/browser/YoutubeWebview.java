@@ -20,7 +20,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -30,10 +29,10 @@ import androidx.media3.common.util.UnstableApi;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.ui.widget.LoadingProgressBar;
 import com.hhst.youtubelite.util.StreamIOUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.ViewUtils;
@@ -41,9 +40,7 @@ import com.hhst.youtubelite.util.ViewUtils;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
-import java.net.HttpURLConnection;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -51,10 +48,11 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.Map;
 import java.util.Objects;
 
 import lombok.Setter;
+import okhttp3.OkHttpClient;
+import okhttp3.Response;
 
 @UnstableApi
 public class YoutubeWebview extends WebView {
@@ -62,6 +60,8 @@ public class YoutubeWebview extends WebView {
 	private final ArrayList<String> scripts = new ArrayList<>();
 	@Nullable
 	public View fullscreen = null;
+	@Nullable
+	private OkHttpWebViewInterceptor okHttpWebViewInterceptor;
 	@Setter
 	@Nullable
 	private Consumer<String> updateVisitedHistory;
@@ -76,8 +76,9 @@ public class YoutubeWebview extends WebView {
 	private ExtensionManager extensionManager;
 	@Setter
 	private TabManager tabManager;
-	@Setter
-	private PoTokenProviderImpl poTokenProvider;
+	@Nullable
+	private LoadingProgressBar progressBar;
+
 	public YoutubeWebview(@NonNull final Context context) {
 		this(context, null);
 	}
@@ -88,6 +89,16 @@ public class YoutubeWebview extends WebView {
 
 	public YoutubeWebview(@NonNull final Context context, @Nullable final AttributeSet attrs, final int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
+	}
+
+	public void setOkHttpClient(@NonNull final OkHttpClient okHttpClient) {
+		okHttpWebViewInterceptor = new OkHttpWebViewInterceptor(okHttpClient);
+	}
+
+	@Override
+	protected void onFinishInflate() {
+		super.onFinishInflate();
+		progressBar = findViewById(R.id.progressBar);
 	}
 
 	@Override
@@ -125,7 +136,7 @@ public class YoutubeWebview extends WebView {
 		settings.setMediaPlaybackRequiresUserGesture(false);
 		settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
-		final JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager, poTokenProvider);
+		final JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager);
 		addJavascriptInterface(jsInterface, "android");
 		setTag(jsInterface);
 
@@ -133,10 +144,11 @@ public class YoutubeWebview extends WebView {
 
 			@Override
 			public boolean shouldOverrideUrlLoading(@NonNull final WebView view, @NonNull final WebResourceRequest request) {
-				if (Objects.equals(request.getUrl().getScheme(), "intent")) {
+				final Uri uri = request.getUrl();
+				if (Objects.equals(uri.getScheme(), "intent")) {
 					// open in other app
 					try {
-						final Intent intent = Intent.parseUri(request.getUrl().toString(), Intent.URI_INTENT_SCHEME);
+						final Intent intent = Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME);
 						getContext().startActivity(intent);
 					} catch (final ActivityNotFoundException | URISyntaxException e) {
 						post(() -> Toast.makeText(getContext(), R.string.application_not_found, Toast.LENGTH_SHORT).show());
@@ -144,9 +156,9 @@ public class YoutubeWebview extends WebView {
 					}
 				} else {
 					// restrict domain
-					if (UrlUtils.isAllowedDomain(request.getUrl())) return false;
+					if (UrlUtils.isAllowedDomain(uri)) return false;
 					// open in browser
-					getContext().startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
+					getContext().startActivity(new Intent(Intent.ACTION_VIEW, uri));
 				}
 				return true;
 			}
@@ -161,6 +173,7 @@ public class YoutubeWebview extends WebView {
 			@Override
 			public void onPageStarted(@NonNull final WebView view, @NonNull final String url, @Nullable final Bitmap favicon) {
 				super.onPageStarted(view, url, favicon);
+				if (progressBar != null) progressBar.beginLoading();
 				evaluateJavascript("window.dispatchEvent(new Event('onPageStarted'));", null);
 				doInjectJavaScript();
 			}
@@ -204,48 +217,35 @@ public class YoutubeWebview extends WebView {
 			@Nullable
 			@Override
 			public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-				Uri uri = request.getUrl();
-				String path = uri.getPath();
-				if (path != null && path.equals("/live_chat")) {
-					String url = uri.toString();
+				final Uri uri = request.getUrl();
+				final String path = uri.getPath();
+				if (path != null && path.equals("/live_chat") && okHttpWebViewInterceptor != null && okHttpWebViewInterceptor.canExecute(request)) {
+					final String url = uri.toString();
+					Response response = null;
 					try {
-						HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-						conn.setRequestMethod(request.getMethod());
+						response = okHttpWebViewInterceptor.execute(request);
+						if (response == null) return super.shouldInterceptRequest(view, request);
 
-						// Copy headers from request
-						for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
-							conn.setRequestProperty(entry.getKey(), entry.getValue());
-						}
-
-						// Add cookies manually
-						String cookies = CookieManager.getInstance().getCookie(url);
-						if (cookies != null) {
-							conn.setRequestProperty("Cookie", cookies);
-						}
-
-						int responseCode = conn.getResponseCode();
-						if (responseCode == HttpURLConnection.HTTP_OK) {
-							InputStream is = conn.getInputStream();
-							String encoding = conn.getContentEncoding();
-
-							// Injected script
-							String injectedScript = "<script>(function(){ " +
-											"document.addEventListener('tap', (e) => { " +
-											"const msg = e.target.closest('yt-live-chat-text-message-renderer'); " +
-											"if (!msg) return; " +
-											"e.preventDefault(); " +
-											"e.stopImmediatePropagation(); " +
-											"}, true); " +
-											"})();</script>";
-
-							InputStream injectedStream = new ByteArrayInputStream(injectedScript.getBytes(StandardCharsets.UTF_8));
-							Enumeration<InputStream> streams = Collections.enumeration(Arrays.asList(injectedStream, is));
-							SequenceInputStream sequenceInputStream = new SequenceInputStream(streams);
-
-							return new WebResourceResponse("text/html", encoding, sequenceInputStream);
-						}
-					} catch (Exception ignored) {
+						final InputStream sourceStream = response.body().byteStream();
+						final String injectedScript = "<script>(function(){ " +
+										"document.addEventListener('tap', (e) => { " +
+										"const msg = e.target.closest('yt-live-chat-text-message-renderer'); " +
+										"if (!msg) return; " +
+										"e.preventDefault(); " +
+										"e.stopImmediatePropagation(); " +
+										"}, true); " +
+										"})();</script>";
+						final InputStream injectedStream = new ByteArrayInputStream(injectedScript.getBytes(StandardCharsets.UTF_8));
+						final Enumeration<InputStream> streams = Collections.enumeration(Arrays.asList(injectedStream, sourceStream));
+						final SequenceInputStream sequenceInputStream = new SequenceInputStream(streams);
+						return okHttpWebViewInterceptor.toWebResourceResponse(url, response, sequenceInputStream);
+					} catch (final Exception ignored) {
+						if (response != null) response.close();
 					}
+				}
+				if (okHttpWebViewInterceptor != null) {
+					final WebResourceResponse response = okHttpWebViewInterceptor.intercept(request);
+					if (response != null) return response;
 				}
 				return super.shouldInterceptRequest(view, request);
 			}
@@ -262,16 +262,15 @@ public class YoutubeWebview extends WebView {
 
 			@Override
 			public void onProgressChanged(@NonNull final WebView view, final int progress) {
-				final ProgressBar progressBar = findViewById(R.id.progressBar);
-				final int pad = ViewUtils.dpToPx(getContext(), 16);
-				progressBar.setPadding(pad, 0, pad, 0);
+				if (progressBar == null) {
+					super.onProgressChanged(view, progress);
+					return;
+				}
 				if (progress >= 100) {
-					progressBar.setVisibility(GONE);
-					progressBar.setProgress(0);
+					progressBar.finishLoading();
 					evaluateJavascript("window.dispatchEvent(new Event('onProgressChangeFinish'));", null);
 				} else {
-					progressBar.setVisibility(VISIBLE);
-					progressBar.setProgress(progress, true);
+					progressBar.setLoadingProgress(progress);
 				}
 				super.onProgressChanged(view, progress);
 			}
@@ -309,7 +308,7 @@ public class YoutubeWebview extends WebView {
 				fullscreen.setVisibility(View.GONE);
 				fullscreen.setKeepScreenOn(false);
 				setVisibility(View.VISIBLE);
-				if (getContext() instanceof MainActivity mainActivity) {
+				if (getContext() instanceof MainActivity) {
 					evaluateJavascript("window.dispatchEvent(new Event('exitFullScreen'));", null);
 				}
 			}

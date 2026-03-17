@@ -14,7 +14,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.controller.Controller;
@@ -25,6 +24,7 @@ import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 import lombok.Getter;
+import okhttp3.OkHttpClient;
 
 @Getter
 @AndroidEntryPoint
@@ -45,7 +45,7 @@ public final class YoutubeFragment extends Fragment {
 	@Inject
 	TabManager tabManager;
 	@Inject
-	PoTokenProviderImpl poTokenProvider;
+	OkHttpClient okHttpClient;
 
 	@Nullable
 	private String url;
@@ -103,7 +103,7 @@ public final class YoutubeFragment extends Fragment {
 		webview.setPlayer(player);
 		webview.setExtensionManager(extensionManager);
 		webview.setTabManager(tabManager);
-		webview.setPoTokenProvider(poTokenProvider);
+		webview.setOkHttpClient(okHttpClient);
 		webview.setUpdateVisitedHistory(url -> {
 			YoutubeFragment.this.url = url;
 			tabManager.onUrlChanged(this, url);
