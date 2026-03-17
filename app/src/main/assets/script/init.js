@@ -47,11 +47,93 @@ try {
             return segments.join('/');
         };
 
+        const DomLiteEngine = (() => {
+            const timing = {
+                setTimeout: window.setTimeout.bind(window),
+            };
+            const state = {
+                pendingAdds: new Set(),
+                flushScheduled: false,
+                flushCount: 0,
+                lastFlushSize: 0,
+                currentPageClass: getPageClass(location.href),
+                taskRuns: {
+                    global: 0,
+                    watch: 0,
+                    settings: 0,
+                    fallback: 0,
+                },
+            };
+            let addObserver = null;
+
+            const isElementNode = (node) => node?.nodeType === Node.ELEMENT_NODE;
+
+            const registerAddedNode = (node) => {
+                if (!isElementNode(node)) return;
+                state.pendingAdds.add(node);
+                scheduleFlush();
+            };
+
+            const scheduleFlush = () => {
+                if (state.flushScheduled) return;
+                state.flushScheduled = true;
+                timing.setTimeout(() => {
+                    state.flushScheduled = false;
+                    state.flushCount += 1;
+                    state.lastFlushSize = state.pendingAdds.size;
+                    state.currentPageClass = getPageClass(location.href);
+                    state.pendingAdds.clear();
+                }, 32);
+            };
+
+            const observeAddedNodes = () => {
+                if (addObserver || !document.documentElement) return;
+                addObserver = new MutationObserver(mutations => {
+                    for (const mutation of mutations) {
+                        mutation.addedNodes.forEach(registerAddedNode);
+                    }
+                });
+                addObserver.observe(document.documentElement, {
+                    childList: true,
+                    subtree: true,
+                });
+            };
+
+            const debugSnapshot = () => ({
+                pendingAdds: state.pendingAdds.size,
+                flushScheduled: state.flushScheduled,
+                flushCount: state.flushCount,
+                lastFlushSize: state.lastFlushSize,
+                currentPageClass: state.currentPageClass,
+                taskRuns: { ...state.taskRuns },
+            });
+
+            observeAddedNodes();
+
+            return {
+                registerAddedNode,
+                scheduleFlush,
+                debugSnapshot,
+                incrementTaskRun(name) {
+                    if (Object.prototype.hasOwnProperty.call(state.taskRuns, name)) {
+                        state.taskRuns[name] += 1;
+                    }
+                },
+                updateCurrentPageClass() {
+                    state.currentPageClass = getPageClass(location.href);
+                },
+            };
+        })();
+
+        window.__liteDomDebug = Object.freeze({
+            getSnapshot: () => DomLiteEngine.debugSnapshot(),
+        });
         // Observe page type changes and dispatch event
         const observePageClass = () => {
             const currentPageClass = getPageClass(location.href);
             if (currentPageClass && window.pageClass !== currentPageClass) {
                 window.pageClass = currentPageClass;
+                DomLiteEngine.updateCurrentPageClass();
                 window.dispatchEvent(new Event('onPageClassChange'));
             }
         };
