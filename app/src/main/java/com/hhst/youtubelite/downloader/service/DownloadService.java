@@ -34,8 +34,10 @@ import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.MainActivity;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.inject.Inject;
@@ -47,6 +49,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 @AndroidEntryPoint
 @UnstableApi
 public class DownloadService extends Service {
+
     public static final String ACTION_DOWNLOAD_RECORD_UPDATED = "com.hhst.youtubelite.action.DOWNLOAD_RECORD_UPDATED";
     public static final String EXTRA_TASK_ID = "extra_task_id";
     private static final String CHANNEL_ID = "download_channel";
@@ -60,7 +63,7 @@ public class DownloadService extends Service {
     private NotificationCompat.Builder notificationBuilder;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Map<String, Task> activeTasks = new ConcurrentHashMap<>();
-    private final Map<String, Long> lastBroadcastTimes = new ConcurrentHashMap<>();
+    private final Set<String> blockedPrefixes = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private SharedPreferences itagPrefs;
 
     @Override
@@ -88,6 +91,11 @@ public class DownloadService extends Service {
 
     private void startTask(@NonNull Task task) {
         final String taskId = task.vid();
+
+        if (blockedPrefixes.stream().anyMatch(p -> task.fileName().startsWith(p))) {
+            return;
+        }
+
         activeTasks.put(taskId, task);
 
         SharedPreferences.Editor editor = itagPrefs.edit();
@@ -106,7 +114,7 @@ public class DownloadService extends Service {
             updateRecordStatus(taskId, DownloadStatus.RUNNING);
         }
 
-        broadcastRecordUpdated(taskId, true);
+        broadcastRecordUpdated(taskId);
         attachCallback(taskId);
         liteDL.download(task);
     }
@@ -195,21 +203,26 @@ public class DownloadService extends Service {
         killNotification();
     }
 
+    public void cancelByPrefix(String prefix) {
+        blockedPrefixes.add(prefix);
+        activeTasks.values().forEach(t -> {
+            if (t.fileName().startsWith(prefix)) {
+                liteDL.cancel(t.vid());
+            }
+        });
+        mainHandler.postDelayed(() -> blockedPrefixes.remove(prefix), 60000);
+    }
+
     private void updateRecordProgress(String taskId, int p, long d, long t, DownloadStatus status) {
         DownloadRecord record = historyRepository.findByTaskId(taskId);
         if (record == null || record.getStatus() == DownloadStatus.PAUSED) return;
-
-        int oldProgress = record.getProgress();
         if (p >= 0) record.setProgress(p);
         if (d >= 0) record.setDownloadedSize(d);
         if (t >= 0) record.setTotalSize(t);
         record.setStatus(status);
         record.setUpdatedAt(System.currentTimeMillis());
         historyRepository.upsert(record);
-
-        if (p != oldProgress) {
-            broadcastRecordUpdated(taskId, false);
-        }
+        broadcastRecordUpdated(taskId);
     }
 
     private void updateRecordStatus(String taskId, DownloadStatus status) {
@@ -217,7 +230,7 @@ public class DownloadService extends Service {
         if (record != null) {
             record.setStatus(status);
             historyRepository.upsert(record);
-            broadcastRecordUpdated(taskId, true);
+            broadcastRecordUpdated(taskId);
         }
     }
 
@@ -296,18 +309,11 @@ public class DownloadService extends Service {
         return PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
-    private void broadcastRecordUpdated(@NonNull final String taskId, boolean force) {
-        long now = System.currentTimeMillis();
-        long lastTime = lastBroadcastTimes.getOrDefault(taskId, 0L);
-
-
-        if (force || (now - lastTime > 500)) {
-            lastBroadcastTimes.put(taskId, now);
-            final Intent intent = new Intent(ACTION_DOWNLOAD_RECORD_UPDATED);
-            intent.setPackage(getPackageName());
-            intent.putExtra(EXTRA_TASK_ID, taskId);
-            sendBroadcast(intent);
-        }
+    private void broadcastRecordUpdated(@NonNull final String taskId) {
+        final Intent intent = new Intent(ACTION_DOWNLOAD_RECORD_UPDATED);
+        intent.setPackage(getPackageName());
+        intent.putExtra(EXTRA_TASK_ID, taskId);
+        sendBroadcast(intent);
     }
 
     public class DownloadBinder extends Binder { public DownloadService getService() { return DownloadService.this; } }
