@@ -74,6 +74,62 @@ public class DomLiteEngineInstrumentationTest {
         }
     }
 
+    @Test
+    public void removedNodes_leaveOnlyTransientGhostAndThenCleanup() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            injectInitScript(webView);
+
+            evaluateScript(webView, "appendCards(3); removeCard('1'); null;");
+            final JSONObject removalSnapshot = evaluateObject(webView, "readDebug()");
+
+            assertTrue("ghost count should be positive immediately after removal", removalSnapshot.getJSONObject("snapshot").getInt("ghostCount") > 0);
+
+            Thread.sleep(180);
+
+            final JSONObject settledSnapshot = evaluateObject(webView, "readDebug()");
+            assertEquals("ghosts should be cleaned up after the fade", 0, settledSnapshot.getJSONObject("snapshot").getInt("ghostCount"));
+            assertEquals("card count should reflect the removed card", 2, Integer.parseInt(evaluateScript(webView, "countCards()")));
+        }
+    }
+
+    @Test
+    public void reorderedNodes_receiveConservativeFlipWhenSafe() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            injectInitScript(webView);
+
+            evaluateScript(webView, "appendCards(3); reorderCards(); null;");
+            final JSONObject debug = evaluateObject(webView, "readDebug()");
+
+            assertTrue("reorder should record at least one FLIP transition", debug.getJSONObject("snapshot").getInt("lastFlipCount") > 0);
+            assertEquals("[\"2\",\"0\",\"1\"]", evaluateScript(webView, "cardOrder()"));
+        }
+    }
+
+    @Test
+    public void oversizedMutationBatch_disablesAnimationButPreservesDomCorrectness() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            injectInitScript(webView);
+
+            evaluateScript(webView, "appendCards(160); null;");
+            final JSONObject debug = evaluateObject(webView, "readDebug()");
+
+            assertEquals("batch-only", debug.getJSONObject("snapshot").getString("animationMode"));
+            assertEquals("dom should still contain the full batch", 160, Integer.parseInt(evaluateScript(webView, "countCards()")));
+        }
+    }
+
     private ActivityScenario<Activity> launchScenario() {
         final Context targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         final Intent intent = new Intent().setClassName(targetContext, TEST_ACTIVITY_CLASS);

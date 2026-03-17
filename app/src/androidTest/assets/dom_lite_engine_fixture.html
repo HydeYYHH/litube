@@ -58,6 +58,10 @@
             return true;
         };
 
+        window.countCards = () => root.children.length;
+
+        window.cardOrder = () => [...root.children].map(card => card.dataset.cardId);
+
         window.setVirtualPath = (path) => {
             history.replaceState({}, '', path);
             return location.pathname + location.search;

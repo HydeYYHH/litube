@@ -49,6 +49,9 @@ try {
 
         const DomLiteEngine = (() => {
             const timing = {
+                requestAnimationFrame: typeof window.requestAnimationFrame === 'function'
+                    ? window.requestAnimationFrame.bind(window)
+                    : (callback) => window.setTimeout(callback, 16),
                 setTimeout: window.setTimeout.bind(window),
             };
             const state = {
@@ -56,6 +59,9 @@ try {
                 flushScheduled: false,
                 flushCount: 0,
                 lastFlushSize: 0,
+                ghostCount: 0,
+                lastFlipCount: 0,
+                animationMode: 'full',
                 currentPageClass: getPageClass(location.href),
                 taskRuns: {
                     global: 0,
@@ -65,12 +71,95 @@ try {
                 },
             };
             let addObserver = null;
+            let wrappedApis = false;
 
             const isElementNode = (node) => node?.nodeType === Node.ELEMENT_NODE;
+            const isGhostNode = (node) => node?.classList?.contains('lite-dom-ghost');
+            const shouldAnimateNode = (node) => {
+                if (!isElementNode(node) || isGhostNode(node)) return false;
+                const tagName = node.tagName;
+                if (!tagName) return false;
+                return !['BODY', 'HTML', 'IFRAME', 'INPUT', 'TEXTAREA', 'VIDEO', 'SCRIPT', 'STYLE'].includes(tagName);
+            };
+
+            const applyAddAnimation = (node) => {
+                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node)) return;
+                node.style.transition = 'opacity 120ms ease, transform 120ms ease';
+                node.style.opacity = '0';
+                node.style.transform = 'translateY(6px)';
+                timing.requestAnimationFrame(() => {
+                    node.style.opacity = '';
+                    node.style.transform = '';
+                });
+            };
+
+            const createGhost = (node, rect, onCleanup) => {
+                if (!document.body || !shouldAnimateNode(node)) {
+                    onCleanup();
+                    return;
+                }
+                const ghost = node.cloneNode(true);
+                ghost.classList.add('lite-dom-ghost');
+                ghost.style.position = 'fixed';
+                ghost.style.left = `${rect.left}px`;
+                ghost.style.top = `${rect.top}px`;
+                ghost.style.width = `${rect.width}px`;
+                ghost.style.height = `${rect.height}px`;
+                ghost.style.margin = '0';
+                ghost.style.pointerEvents = 'none';
+                ghost.style.zIndex = '2147483647';
+                ghost.style.transition = 'opacity 120ms ease';
+                ghost.style.opacity = '1';
+                document.body.appendChild(ghost);
+                timing.requestAnimationFrame(() => {
+                    ghost.style.opacity = '0';
+                });
+                timing.setTimeout(() => {
+                    ghost.remove();
+                    onCleanup();
+                }, 140);
+            };
+
+            const registerRemoval = (node) => {
+                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node)) return;
+                state.ghostCount += 1;
+                const cleanupGhost = () => {
+                    state.ghostCount = Math.max(0, state.ghostCount - 1);
+                };
+                const rect = node.getBoundingClientRect?.();
+                if (!rect || (!rect.width && !rect.height)) {
+                    timing.setTimeout(cleanupGhost, 140);
+                    return;
+                }
+                createGhost(node, rect, cleanupGhost);
+            };
+
+            const animateReorder = (node, firstRect) => {
+                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node) || !firstRect) return;
+                const lastRect = node.getBoundingClientRect?.();
+                if (!lastRect) return;
+                const dx = firstRect.left - lastRect.left;
+                const dy = firstRect.top - lastRect.top;
+                state.lastFlipCount = (dx || dy) ? 1 : 0;
+                if (!state.lastFlipCount) return;
+                node.style.transition = 'transform 140ms ease';
+                node.style.transform = `translate(${dx}px, ${dy}px)`;
+                timing.requestAnimationFrame(() => {
+                    node.style.transform = '';
+                });
+                timing.setTimeout(() => {
+                    if (node.isConnected) {
+                        node.style.transition = '';
+                    }
+                }, 180);
+            };
 
             const registerAddedNode = (node) => {
-                if (!isElementNode(node)) return;
+                if (!shouldAnimateNode(node)) return;
                 state.pendingAdds.add(node);
+                if (state.pendingAdds.size > 120) {
+                    state.animationMode = 'batch-only';
+                }
                 scheduleFlush();
             };
 
@@ -82,8 +171,37 @@ try {
                     state.flushCount += 1;
                     state.lastFlushSize = state.pendingAdds.size;
                     state.currentPageClass = getPageClass(location.href);
+                    state.pendingAdds.forEach(applyAddAnimation);
                     state.pendingAdds.clear();
                 }, 32);
+            };
+
+            const wrapDomApis = () => {
+                if (wrappedApis) return;
+                wrappedApis = true;
+                const originalInsertBefore = Node.prototype.insertBefore;
+                const originalRemoveChild = Node.prototype.removeChild;
+                const originalElementRemove = Element.prototype.remove;
+
+                Node.prototype.insertBefore = function (node, child) {
+                    const shouldFlip = node?.parentNode === this && shouldAnimateNode(node);
+                    const firstRect = shouldFlip ? node.getBoundingClientRect() : null;
+                    const result = originalInsertBefore.call(this, node, child);
+                    if (shouldFlip) {
+                        animateReorder(node, firstRect);
+                    }
+                    return result;
+                };
+
+                Node.prototype.removeChild = function (node) {
+                    registerRemoval(node);
+                    return originalRemoveChild.call(this, node);
+                };
+
+                Element.prototype.remove = function () {
+                    registerRemoval(this);
+                    return originalElementRemove.call(this);
+                };
             };
 
             const observeAddedNodes = () => {
@@ -104,10 +222,14 @@ try {
                 flushScheduled: state.flushScheduled,
                 flushCount: state.flushCount,
                 lastFlushSize: state.lastFlushSize,
+                ghostCount: state.ghostCount,
+                lastFlipCount: state.lastFlipCount,
+                animationMode: state.animationMode,
                 currentPageClass: state.currentPageClass,
                 taskRuns: { ...state.taskRuns },
             });
 
+            wrapDomApis();
             observeAddedNodes();
 
             return {
