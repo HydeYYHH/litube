@@ -39,8 +39,15 @@ public final class UrlUtils {
 		final String host = uri.getHost();
 		if (host == null) return false;
 		final String lowerHost = host.toLowerCase();
+		if (isGoogleAccountsHost(lowerHost)) return true;
 		return ALLOWED_DOMAINS.stream().anyMatch(domain ->
 						lowerHost.equals(domain) || lowerHost.endsWith("." + domain));
+	}
+
+	private static boolean isGoogleAccountsHost(@NonNull final String lowerHost) {
+		return lowerHost.equals("accounts.google")
+						|| lowerHost.equals("accounts.google.com")
+						|| lowerHost.startsWith("accounts.google.");
 	}
 
 	@NonNull
