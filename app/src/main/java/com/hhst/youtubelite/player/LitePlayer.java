@@ -17,7 +17,6 @@ import com.hhst.youtubelite.extractor.ExtractionSession;
 import com.hhst.youtubelite.extractor.ExtractionException;
 import com.hhst.youtubelite.extractor.PlaybackInfo;
 import com.hhst.youtubelite.extractor.StreamDetails;
-import com.hhst.youtubelite.player.common.AudioPreferenceUtils;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.Controller;
@@ -46,6 +45,7 @@ import dagger.hilt.android.scopes.ActivityScoped;
 @ActivityScoped
 public class LitePlayer {
 	private static final String KEY_LAST_AUDIO_LANG = "last_audio_lang";
+	private static final String UNKNOWN_LANGUAGE = "und";
 
 	@NonNull
 	private final Activity activity;
@@ -149,11 +149,47 @@ public class LitePlayer {
 		}
 	}
 
-	private void applyAudioPreference(StreamDetails si) {
-		List<AudioStream> audioStreams = si.getAudioStreams();
+	private void applyAudioPreference(@NonNull final StreamDetails streamDetails) {
+		final List<AudioStream> audioStreams = streamDetails.getAudioStreams();
 		if (audioStreams == null || audioStreams.isEmpty()) return;
 
-		si.setAudioStreams(AudioPreferenceUtils.reorder(audioStreams, kv.decodeString(KEY_LAST_AUDIO_LANG, "und")));
+		final String savedLanguage = kv.decodeString(KEY_LAST_AUDIO_LANG, UNKNOWN_LANGUAGE);
+		final List<AudioStream> reordered = new ArrayList<>(audioStreams);
+		reordered.sort((first, second) -> compareAudioStreams(first, second, savedLanguage));
+		streamDetails.setAudioStreams(reordered);
+	}
+
+	private static int compareAudioStreams(@NonNull final AudioStream first,
+	                                       @NonNull final AudioStream second,
+	                                       @NonNull final String savedLanguage) {
+		final int originalComparison = Boolean.compare(
+						isOriginalAudioTrack(second),
+						isOriginalAudioTrack(first));
+		if (originalComparison != 0) return originalComparison;
+
+		final int savedLanguageComparison = Boolean.compare(
+						matchesSavedLanguage(second, savedLanguage),
+						matchesSavedLanguage(first, savedLanguage));
+		if (savedLanguageComparison != 0) return savedLanguageComparison;
+
+		return Integer.compare(second.getAverageBitrate(), first.getAverageBitrate());
+	}
+
+	private static boolean isOriginalAudioTrack(@NonNull final AudioStream audioStream) {
+		final String trackName = audioStream.getAudioTrackName();
+		return trackName != null && trackName.toLowerCase().contains("original");
+	}
+
+	private static boolean matchesSavedLanguage(@NonNull final AudioStream audioStream,
+	                                            @NonNull final String savedLanguage) {
+		return audioLanguage(audioStream).equalsIgnoreCase(savedLanguage);
+	}
+
+	@NonNull
+	private static String audioLanguage(@NonNull final AudioStream audioStream) {
+		return audioStream.getAudioLocale() != null
+						? audioStream.getAudioLocale().getLanguage()
+						: UNKNOWN_LANGUAGE;
 	}
 
 	public void play(String url) {

@@ -1,5 +1,7 @@
 package com.hhst.youtubelite.player;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +13,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.datasource.DataSpec;
 import androidx.media3.datasource.HttpDataSource;
 
+import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
@@ -21,14 +24,20 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockedStatic;
+import org.schabi.newpipe.extractor.stream.AudioStream;
+import org.schabi.newpipe.extractor.stream.StreamType;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Executor;
 
 public class LitePlayerTest {
 	private LitePlayer player;
 	private YoutubeExtractor extractor;
+	private MMKV kv;
 	private MockedStatic<MMKV> mmkvStatic;
 
 	@Before
@@ -40,7 +49,7 @@ public class LitePlayerTest {
 		final Engine engine = mock(Engine.class);
 		final SponsorBlockManager sponsor = mock(SponsorBlockManager.class);
 		final Executor executor = Runnable::run;
-		final MMKV kv = mock(MMKV.class);
+		kv = mock(MMKV.class);
 
 		mmkvStatic = org.mockito.Mockito.mockStatic(MMKV.class);
 		mmkvStatic.when(MMKV::defaultMMKV).thenReturn(kv);
@@ -80,6 +89,34 @@ public class LitePlayerTest {
 		verify(extractor, never()).invalidatePlaybackCacheByVideoId("requested-video");
 	}
 
+	@Test
+	public void applyAudioPreference_prefersOriginalTrackAndKeepsMutableList() throws Exception {
+		final AudioStream dubbed = mock(AudioStream.class);
+		final AudioStream original = mock(AudioStream.class);
+		when(kv.decodeString("last_audio_lang", "und")).thenReturn("en");
+		when(dubbed.getAudioTrackName()).thenReturn("French");
+		when(original.getAudioTrackName()).thenReturn("English original");
+		when(dubbed.getAudioLocale()).thenReturn(Locale.FRENCH);
+		when(original.getAudioLocale()).thenReturn(Locale.ENGLISH);
+		when(dubbed.getAverageBitrate()).thenReturn(128);
+		when(original.getAverageBitrate()).thenReturn(128);
+
+		final StreamDetails streamDetails = new StreamDetails(
+						null,
+						List.of(dubbed, original),
+						null,
+						null,
+						null,
+						StreamType.VIDEO_STREAM);
+
+		invokeApplyAudioPreference(streamDetails);
+
+		assertEquals(2, streamDetails.getAudioStreams().size());
+		assertSame(original, streamDetails.getAudioStreams().get(0));
+		streamDetails.getAudioStreams().clear();
+		assertEquals(0, streamDetails.getAudioStreams().size());
+	}
+
 	private static PlaybackException sourceOpenFailure() {
 		final HttpDataSource.HttpDataSourceException cause = new HttpDataSource.HttpDataSourceException(
 						new IOException("GET 403"),
@@ -106,5 +143,11 @@ public class LitePlayerTest {
 		final Field field = LitePlayer.class.getDeclaredField(fieldName);
 		field.setAccessible(true);
 		field.set(target, value);
+	}
+
+	private void invokeApplyAudioPreference(final StreamDetails streamDetails) throws Exception {
+		final Method method = LitePlayer.class.getDeclaredMethod("applyAudioPreference", StreamDetails.class);
+		method.setAccessible(true);
+		method.invoke(player, streamDetails);
 	}
 }
