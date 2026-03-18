@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PlaybackInfo {
+public class PlaybackDetails {
 	private VideoDetails videoDetails;
 	private StreamDetails streamDetails;
 }

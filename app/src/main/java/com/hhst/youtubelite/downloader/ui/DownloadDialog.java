@@ -32,7 +32,7 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.Task;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.ExtractionSession;
-import com.hhst.youtubelite.extractor.PlaybackInfo;
+import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
@@ -118,9 +118,9 @@ public class DownloadDialog {
 
 		executor.submit(() -> {
 			try {
-				final PlaybackInfo playbackInfo = youtubeExtractor.getPlaybackInfo(url, extractionSession);
-				videoDetails = playbackInfo.getVideoDetails();
-				streamDetails = playbackInfo.getStreamDetails();
+				final PlaybackDetails playbackDetails = youtubeExtractor.getPlaybackDetails(url, extractionSession);
+				videoDetails = playbackDetails.getVideoDetails();
+				streamDetails = playbackDetails.getStreamDetails();
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			} catch (InterruptedIOException ignored) {

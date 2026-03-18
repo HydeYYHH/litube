@@ -15,7 +15,7 @@ import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extractor.ExtractionSession;
 import com.hhst.youtubelite.extractor.ExtractionException;
-import com.hhst.youtubelite.extractor.PlaybackInfo;
+import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
@@ -216,11 +216,11 @@ public class LitePlayer {
 			try {
 				sponsor.load(videoId);
 				if (session.isCancelled()) throw new InterruptedException("Extraction canceled");
-				PlaybackInfo playbackInfo = extractor.getPlaybackInfo(url, session);
-				StreamDetails streamDetails = playbackInfo.getStreamDetails();
+				PlaybackDetails playbackDetails = extractor.getPlaybackDetails(url, session);
+				StreamDetails streamDetails = playbackDetails.getStreamDetails();
 				streamDetails.setVideoStreams(PlayerUtils.filterBestStreams(streamDetails.getVideoStreams()));
 				applyAudioPreference(streamDetails);
-				return playbackInfo;
+				return playbackDetails;
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				throw new CompletionException("Interrupted", e);

@@ -6,7 +6,6 @@ import androidx.annotation.Nullable;
 import org.schabi.newpipe.extractor.stream.StreamType;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +16,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 @Singleton
-public final class PlaybackInfoMemoryCache {
+public final class PlaybackDetailsMemoryCache {
 	private static final int DEFAULT_MAX_ENTRIES = 16;
 	private static final long DEFAULT_TTL_MILLIS = TimeUnit.MINUTES.toMillis(5);
 
@@ -26,11 +25,11 @@ public final class PlaybackInfoMemoryCache {
 	private final LinkedHashMap<CacheKey, CacheEntry> entries;
 
 	@Inject
-	public PlaybackInfoMemoryCache() {
+	public PlaybackDetailsMemoryCache() {
 		this(DEFAULT_MAX_ENTRIES, DEFAULT_TTL_MILLIS);
 	}
 
-	PlaybackInfoMemoryCache(final int maxEntries, final long ttlMillis) {
+	PlaybackDetailsMemoryCache(final int maxEntries, final long ttlMillis) {
 		if (maxEntries <= 0) {
 			throw new IllegalArgumentException("maxEntries must be > 0");
 		}
@@ -40,10 +39,10 @@ public final class PlaybackInfoMemoryCache {
 
 		this.maxEntries = maxEntries;
 		this.ttlMillis = ttlMillis;
-		this.entries = new LinkedHashMap<CacheKey, CacheEntry>(maxEntries, 0.75f, true) {
+		this.entries = new LinkedHashMap<>(maxEntries, 0.75f, true) {
 			@Override
 			protected boolean removeEldestEntry(final Map.Entry<CacheKey, CacheEntry> eldest) {
-				return size() > PlaybackInfoMemoryCache.this.maxEntries;
+				return size() > PlaybackDetailsMemoryCache.this.maxEntries;
 			}
 		};
 	}
@@ -77,12 +76,7 @@ public final class PlaybackInfoMemoryCache {
 	}
 
 	public synchronized void invalidateVideo(@NonNull final String videoId) {
-		final Iterator<CacheKey> iterator = entries.keySet().iterator();
-		while (iterator.hasNext()) {
-			if (videoId.equals(iterator.next().videoId)) {
-				iterator.remove();
-			}
-		}
+		entries.keySet().removeIf(cacheKey -> videoId.equals(cacheKey.videoId));
 	}
 
 	private boolean isExpired(@NonNull final CacheEntry entry, final long nowMillis) {
@@ -90,12 +84,7 @@ public final class PlaybackInfoMemoryCache {
 	}
 
 	private void purgeExpired(final long nowMillis) {
-		final Iterator<Map.Entry<CacheKey, CacheEntry>> iterator = entries.entrySet().iterator();
-		while (iterator.hasNext()) {
-			if (isExpired(iterator.next().getValue(), nowMillis)) {
-				iterator.remove();
-			}
-		}
+		entries.entrySet().removeIf(cacheKeyCacheEntryEntry -> isExpired(cacheKeyCacheEntryEntry.getValue(), nowMillis));
 	}
 
 	private boolean isLive(@Nullable final StreamType streamType) {
@@ -118,36 +107,26 @@ public final class PlaybackInfoMemoryCache {
 		return source == null ? null : new ArrayList<>(source);
 	}
 
-	private static final class CacheEntry {
-		private final StreamDetails details;
-		private final long expiresAtMillis;
-
-		private CacheEntry(@NonNull final StreamDetails details, final long expiresAtMillis) {
-			this.details = details;
-			this.expiresAtMillis = expiresAtMillis;
-		}
-	}
-
-	private static final class CacheKey {
-		private final String videoId;
-		private final String fingerprint;
-
-		private CacheKey(@NonNull final String videoId, @NonNull final String fingerprint) {
-			this.videoId = Objects.requireNonNull(videoId, "videoId");
-			this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
+	private record CacheEntry(StreamDetails details, long expiresAtMillis) {
+			private CacheEntry(@NonNull final StreamDetails details, final long expiresAtMillis) {
+				this.details = details;
+				this.expiresAtMillis = expiresAtMillis;
+			}
 		}
 
-		@Override
-		public boolean equals(final Object other) {
-			if (this == other) return true;
-			if (!(other instanceof CacheKey cacheKey)) return false;
-			return Objects.equals(videoId, cacheKey.videoId)
-							&& Objects.equals(fingerprint, cacheKey.fingerprint);
-		}
+	private record CacheKey(String videoId, String fingerprint) {
+			private CacheKey(@NonNull final String videoId, @NonNull final String fingerprint) {
+				this.videoId = Objects.requireNonNull(videoId, "videoId");
+				this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
+			}
 
-		@Override
-		public int hashCode() {
-			return Objects.hash(videoId, fingerprint);
-		}
+			@Override
+			public boolean equals(final Object other) {
+				if (this == other) return true;
+				if (!(other instanceof CacheKey cacheKey)) return false;
+				return Objects.equals(videoId, cacheKey.videoId)
+								&& Objects.equals(fingerprint, cacheKey.fingerprint);
+			}
+
 	}
 }

@@ -16,11 +16,11 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PlaybackInfoMemoryCacheTest {
+public class PlaybackDetailsMemoryCacheTest {
 
 	@Test
 	public void putAndGet_returnsDefensiveCopyForFreshEntry() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(16, 300_000L);
 		final VideoStream videoStream = mock(VideoStream.class);
 		final AudioStream audioStream = mock(AudioStream.class);
 		final SubtitlesStream subtitlesStream = mock(SubtitlesStream.class);
@@ -71,7 +71,7 @@ public class PlaybackInfoMemoryCacheTest {
 
 	@Test
 	public void expiredEntry_isNotReturned() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(16, 1_000L);
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(16, 1_000L);
 
 		cache.put("video-a", "fp-a", streamDetails("https://example.com/dash-a.mpd", StreamType.VIDEO_STREAM), 1_000L);
 
@@ -81,7 +81,7 @@ public class PlaybackInfoMemoryCacheTest {
 
 	@Test
 	public void defaultConstructor_usesApprovedCapacity() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache();
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache();
 
 		for (int index = 0; index < 17; index++) {
 			cache.put("video-" + index, "fp-" + index,
@@ -94,7 +94,7 @@ public class PlaybackInfoMemoryCacheTest {
 
 	@Test
 	public void lruEviction_dropsLeastRecentlyUsedEntry() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(2, 300_000L);
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(2, 300_000L);
 
 		cache.put("video-a", "fp-a", streamDetails("https://example.com/dash-a.mpd", StreamType.VIDEO_STREAM), 1_000L);
 		cache.put("video-b", "fp-b", streamDetails("https://example.com/dash-b.mpd", StreamType.VIDEO_STREAM), 2_000L);
@@ -110,7 +110,7 @@ public class PlaybackInfoMemoryCacheTest {
 
 	@Test
 	public void invalidate_removesOnlyMatchingFingerprint() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(16, 300_000L);
 
 		cache.put("video-a", "fp-a", streamDetails("https://example.com/dash-a.mpd", StreamType.VIDEO_STREAM), 1_000L);
 		cache.put("video-a", "fp-b", streamDetails("https://example.com/dash-b.mpd", StreamType.VIDEO_STREAM), 1_000L);
@@ -123,7 +123,7 @@ public class PlaybackInfoMemoryCacheTest {
 
 	@Test
 	public void invalidateVideo_removesAllFingerprintsForVideo() {
-		final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(16, 300_000L);
+		final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(16, 300_000L);
 
 		cache.put("video-a", "fp-a", streamDetails("https://example.com/dash-a.mpd", StreamType.VIDEO_STREAM), 1_000L);
 		cache.put("video-a", "fp-b", streamDetails("https://example.com/dash-b.mpd", StreamType.VIDEO_STREAM), 1_000L);
@@ -139,7 +139,7 @@ public class PlaybackInfoMemoryCacheTest {
 	@Test
 	public void liveStreamEntry_isIgnored() {
 		for (StreamType streamType : List.of(StreamType.LIVE_STREAM, StreamType.AUDIO_LIVE_STREAM)) {
-			final PlaybackInfoMemoryCache cache = new PlaybackInfoMemoryCache(1, 300_000L);
+			final PlaybackDetailsMemoryCache cache = new PlaybackDetailsMemoryCache(1, 300_000L);
 
 			cache.put("video-a", "fp-a", streamDetails("https://example.com/dash-a.mpd", StreamType.VIDEO_STREAM), 1_000L);
 			cache.put("video-live-" + streamType.name(), "fp-live",

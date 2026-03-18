@@ -16,7 +16,6 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -33,7 +32,7 @@ import javax.inject.Singleton;
 public final class YoutubeExtractor {
 	private final MMKV cache;
 	private final Gson gson;
-	private final PlaybackInfoMemoryCache playbackInfoMemoryCache;
+	private final PlaybackDetailsMemoryCache playbackDetailsMemoryCache;
 	private final StreamInfoFetcher streamInfoFetcher;
 	private final PlaybackCacheContextProvider playbackCacheContextProvider;
 	private final LongSupplier currentTimeMillisSupplier;
@@ -42,11 +41,11 @@ public final class YoutubeExtractor {
 	public YoutubeExtractor(@NonNull final DownloaderImpl downloader,
 	                        @NonNull final MMKV cache,
 	                        @NonNull final Gson gson,
-	                        @NonNull final PlaybackInfoMemoryCache playbackInfoMemoryCache) {
+	                        @NonNull final PlaybackDetailsMemoryCache playbackDetailsMemoryCache) {
 		this(
 						cache,
 						gson,
-						playbackInfoMemoryCache,
+						playbackDetailsMemoryCache,
 						(videoID, session) -> downloader.withExtractionSession(
 										() -> StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=" + videoID),
 										session),
@@ -57,13 +56,13 @@ public final class YoutubeExtractor {
 
 	YoutubeExtractor(@NonNull final MMKV cache,
 	                 @NonNull final Gson gson,
-	                 @NonNull final PlaybackInfoMemoryCache playbackInfoMemoryCache,
+	                 @NonNull final PlaybackDetailsMemoryCache playbackDetailsMemoryCache,
 	                 @NonNull final StreamInfoFetcher streamInfoFetcher,
 	                 @NonNull final PlaybackCacheContextProvider playbackCacheContextProvider,
 	                 @NonNull final LongSupplier currentTimeMillisSupplier) {
 		this.cache = cache;
 		this.gson = gson;
-		this.playbackInfoMemoryCache = playbackInfoMemoryCache;
+		this.playbackDetailsMemoryCache = playbackDetailsMemoryCache;
 		this.streamInfoFetcher = streamInfoFetcher;
 		this.playbackCacheContextProvider = playbackCacheContextProvider;
 		this.currentTimeMillisSupplier = currentTimeMillisSupplier;
@@ -102,8 +101,8 @@ public final class YoutubeExtractor {
 	}
 
 	@NonNull
-	public PlaybackInfo getPlaybackInfo(@NonNull final String videoUrl,
-	                                    @Nullable final ExtractionSession session) throws ExtractionException, IOException, InterruptedException {
+	public PlaybackDetails getPlaybackDetails(@NonNull final String videoUrl,
+	                                          @Nullable final ExtractionSession session) throws ExtractionException, IOException, InterruptedException {
 		final String videoID = requireVideoId(videoUrl);
 		final VideoDetails cachedDetails = readCachedVideoDetails(videoID);
 		final boolean canUsePlaybackMemoryCache = cachedDetails != null
@@ -113,13 +112,13 @@ public final class YoutubeExtractor {
 						: null;
 		try {
 			if (fingerprint != null) {
-				final StreamDetails cachedStreamDetails = playbackInfoMemoryCache.get(
+				final StreamDetails cachedStreamDetails = playbackDetailsMemoryCache.get(
 								videoID,
 								fingerprint,
 								currentTimeMillisSupplier.getAsLong());
 				ensureNotCancelled(session);
 				if (cachedStreamDetails != null) {
-					return new PlaybackInfo(cachedDetails, cachedStreamDetails);
+					return new PlaybackDetails(cachedDetails, cachedStreamDetails);
 				}
 			}
 
@@ -135,20 +134,20 @@ public final class YoutubeExtractor {
 			ensureNotCancelled(session);
 			if (playbackCacheContextProvider.canUsePlaybackMemoryCache(videoUrl)
 							&& playbackCacheContextProvider.canPopulatePlaybackMemoryCache(session)) {
-				playbackInfoMemoryCache.put(
+				playbackDetailsMemoryCache.put(
 								videoID,
 								playbackCacheContextProvider.buildRequestContextFingerprint(videoUrl),
 								streamDetails,
 								currentTimeMillisSupplier.getAsLong());
 			}
-			return new PlaybackInfo(videoDetails, streamDetails);
+			return new PlaybackDetails(videoDetails, streamDetails);
 		} finally {
 			playbackCacheContextProvider.clearPlaybackMemoryCacheSession(session);
 		}
 	}
 
 	public void invalidatePlaybackCacheByVideoId(@NonNull final String videoId) {
-		playbackInfoMemoryCache.invalidateVideo(videoId);
+		playbackDetailsMemoryCache.invalidateVideo(videoId);
 	}
 
 	@NonNull
