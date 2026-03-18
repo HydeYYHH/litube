@@ -29,6 +29,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import lombok.AllArgsConstructor;
+import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -36,6 +37,11 @@ import okhttp3.Response;
 @Singleton
 public class StreamDownloaderImpl implements StreamDownloader {
 	private static final long MIN_CHUNK_SIZE = 512 * 1024; // 512KB
+	private static final int DOWNLOAD_MAX_REQUESTS = 8;
+	private static final int DOWNLOAD_MAX_REQUESTS_PER_HOST = 4;
+	private static final long DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 15L;
+	private static final long DOWNLOAD_WRITE_TIMEOUT_SECONDS = 15L;
+	private static final long DOWNLOAD_READ_TIMEOUT_SECONDS = 30L;
 	private final OkHttpClient client;
 	private final MMKV mmkv;
 	private final ThreadPoolExecutor executor;
@@ -43,10 +49,23 @@ public class StreamDownloaderImpl implements StreamDownloader {
 
 	@Inject
 	public StreamDownloaderImpl(OkHttpClient client, MMKV mmkv) {
-		this.client = client;
+		this.client = client.newBuilder()
+						.cache(null)
+						.dispatcher(createDispatcher(DOWNLOAD_MAX_REQUESTS, DOWNLOAD_MAX_REQUESTS_PER_HOST))
+						.connectTimeout(DOWNLOAD_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.writeTimeout(DOWNLOAD_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.readTimeout(DOWNLOAD_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.build();
 		this.mmkv = mmkv;
 		this.executor = new ThreadPoolExecutor(4, 4, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> new Thread(r, "dl-node"));
 		this.executor.allowCoreThreadTimeOut(true);
+	}
+
+	private static Dispatcher createDispatcher(final int maxRequests, final int maxRequestsPerHost) {
+		final Dispatcher dispatcher = new Dispatcher();
+		dispatcher.setMaxRequests(maxRequests);
+		dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+		return dispatcher;
 	}
 
 	private static long chunkLength(final int idx, final int totalChunks, final long partSize, final long totalLen) {

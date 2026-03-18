@@ -27,6 +27,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 import dagger.hilt.components.SingletonComponent;
 import okhttp3.Cache;
 import okhttp3.ConnectionPool;
+import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
 
@@ -34,8 +35,14 @@ import okhttp3.Response;
 @InstallIn(SingletonComponent.class)
 public class CommonModule {
 	static final long OKHTTP_CACHE_BYTES = 256L * 1024L * 1024L;
-	static final int OKHTTP_MAX_IDLE_CONNECTIONS = 5;
+	static final int OKHTTP_MAX_IDLE_CONNECTIONS = 10;
 	static final long OKHTTP_KEEP_ALIVE_MINUTES = 5L;
+	static final int OKHTTP_MAX_REQUESTS = 64;
+	static final int OKHTTP_MAX_REQUESTS_PER_HOST = 12;
+	static final long OKHTTP_CONNECT_TIMEOUT_SECONDS = 10L;
+	static final long OKHTTP_WRITE_TIMEOUT_SECONDS = 12L;
+	static final long OKHTTP_READ_TIMEOUT_SECONDS = 12L;
+	static final long OKHTTP_CALL_TIMEOUT_SECONDS = 20L;
 	static final long PLAYER_CACHE_BYTES = 256L * 1024L * 1024L;
 
 	@Provides
@@ -44,9 +51,13 @@ public class CommonModule {
 		final Cache cache = createOkHttpCache(context);
 		return new OkHttpClient.Builder()
 						.cache(cache)
+						.dispatcher(createDispatcher(OKHTTP_MAX_REQUESTS, OKHTTP_MAX_REQUESTS_PER_HOST))
 						.addNetworkInterceptor(chain -> {
 							final var request = chain.request();
 							final Response response = chain.proceed(request);
+							if (!"GET".equalsIgnoreCase(request.method())) {
+								return response;
+							}
 							if (!WebResourceUtils.shouldForceCache(request.url())) {
 								return response;
 							}
@@ -63,9 +74,10 @@ public class CommonModule {
 						.followRedirects(true)
 						.followSslRedirects(true)
 						.retryOnConnectionFailure(true)
-						.connectTimeout(30, TimeUnit.SECONDS)
-						.writeTimeout(30, TimeUnit.SECONDS)
-						.readTimeout(0, TimeUnit.SECONDS)
+						.callTimeout(OKHTTP_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.connectTimeout(OKHTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.writeTimeout(OKHTTP_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.readTimeout(OKHTTP_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.connectionPool(createConnectionPool())
 						.build();
 	}
@@ -109,6 +121,14 @@ public class CommonModule {
 
 	ConnectionPool createConnectionPool() {
 		return new ConnectionPool(OKHTTP_MAX_IDLE_CONNECTIONS, OKHTTP_KEEP_ALIVE_MINUTES, TimeUnit.MINUTES);
+	}
+
+	@NonNull
+	Dispatcher createDispatcher(final int maxRequests, final int maxRequestsPerHost) {
+		final Dispatcher dispatcher = new Dispatcher();
+		dispatcher.setMaxRequests(maxRequests);
+		dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+		return dispatcher;
 	}
 
 	LeastRecentlyUsedCacheEvictor createPlayerCacheEvictor() {

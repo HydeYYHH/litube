@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.browser;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -35,12 +36,29 @@ public class DomLiteEngineInstrumentationTest {
     private static final long TIMEOUT_SECONDS = 10;
 
     @Test
+    public void debugSurface_isDisabledByDefault() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            injectInitScript(webView);
+
+            final JSONObject debug = evaluateObject(webView, "readDebug()");
+
+            assertFalse("__liteDomDebug should be hidden unless tests opt in", debug.getBoolean("available"));
+            assertTrue("snapshot should be absent when debug surface is disabled", debug.isNull("snapshot"));
+        }
+    }
+
+    @Test
     public void addedNodes_areQueuedBeforeFlushAndReportedByDebugSurface() throws Exception {
         try (ActivityScenario<Activity> scenario = launchScenario()) {
             final WebView webView = getWebView(scenario);
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
+            enableInitDebugHooks(webView);
             injectInitScript(webView);
             evaluateScript(webView, "appendCards(3); null;");
 
@@ -54,12 +72,49 @@ public class DomLiteEngineInstrumentationTest {
     }
 
     @Test
+    public void observer_targetsFixtureRootInsteadOfWholeDocument() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            enableInitDebugHooks(webView);
+            injectInitScript(webView);
+
+            final JSONObject snapshot = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
+
+            assertEquals("#card-list", snapshot.getString("observerRootName"));
+            assertTrue("observer should remain connected for the fixture root", snapshot.getBoolean("observerConnected"));
+        }
+    }
+
+    @Test
+    public void watchPage_doesNotPreferStalePageManagerTrapAsObserverRoot() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            enableInitDebugHooks(webView);
+            injectInitScript(webView);
+
+            final JSONObject snapshot = evaluateObject(
+                    webView,
+                    "injectObserverRootTrap('page-manager'); setVirtualPath('/watch?v=abc123def45'); readDebug();"
+            ).getJSONObject("snapshot");
+
+            assertFalse("watch page should not lock onto a stale #page-manager trap", "#page-manager".equals(snapshot.getString("observerRootName")));
+        }
+    }
+
+    @Test
     public void timerCoordinator_onlyRunsMatchingTasksForCurrentPageClass() throws Exception {
         try (ActivityScenario<Activity> scenario = launchScenario()) {
             final WebView webView = getWebView(scenario);
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
+            enableInitDebugHooks(webView);
             injectInitScript(webView);
 
             final JSONObject debug = evaluateObject(
@@ -75,20 +130,81 @@ public class DomLiteEngineInstrumentationTest {
     }
 
     @Test
+    public void watchPage_doesNotKeepIdleTimerArmedAfterNavigation() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            enableInitDebugHooks(webView);
+            injectInitScript(webView);
+
+            final JSONObject homeSnapshot = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
+            assertFalse("home page should not keep the fallback timer armed", homeSnapshot.getBoolean("timerActive"));
+            assertTrue("home page should not expose a follow-up timer delay", homeSnapshot.isNull("nextTimerDelayMs"));
+
+            final JSONObject watchSnapshot = evaluateObject(
+                    webView,
+                    "setVirtualPath('/watch?v=abc123def45'); readDebug();"
+            ).getJSONObject("snapshot");
+
+            assertEquals("watch", watchSnapshot.getString("currentPageClass"));
+            assertEquals("watch navigation should be driven by replaceState", "replace-state", watchSnapshot.getString("lastTimerReason"));
+            assertTrue("watch task count should increase after navigation", watchSnapshot.getJSONObject("taskRuns").getInt("watch") > 0);
+            assertFalse("watch page should not keep an idle timer armed without ads or retries", watchSnapshot.getBoolean("timerActive"));
+            assertTrue("watch page should not expose a follow-up timer delay without ads or retries", watchSnapshot.isNull("nextTimerDelayMs"));
+        }
+    }
+
+    @Test
+    public void addedNodes_useMoreVisibleEntranceAnimation() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            enableInitDebugHooks(webView);
+            evaluateScript(webView, "window.requestAnimationFrame = () => 0; null;");
+            injectInitScript(webView);
+
+            evaluateScript(webView, "appendCards(1); null;");
+            Thread.sleep(80);
+
+            final JSONObject cardStyles = evaluateObject(webView, """
+                    (() => {
+                        const card = document.querySelector('[data-card-id="0"]');
+                        return {
+                            transition: card?.style.transition || '',
+                            transform: card?.style.transform || '',
+                            opacity: card?.style.opacity || ''
+                        };
+                    })()
+                    """);
+
+            assertEquals("opacity 320ms cubic-bezier(0.16, 1, 0.3, 1), transform 320ms cubic-bezier(0.16, 1, 0.3, 1)", cardStyles.getString("transition"));
+            assertEquals("translateY(24px) scale(0.94)", cardStyles.getString("transform"));
+            assertEquals("0", cardStyles.getString("opacity"));
+        }
+    }
+
+    @Test
     public void removedNodes_leaveOnlyTransientGhostAndThenCleanup() throws Exception {
         try (ActivityScenario<Activity> scenario = launchScenario()) {
             final WebView webView = getWebView(scenario);
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
+            enableInitDebugHooks(webView);
             injectInitScript(webView);
 
-            evaluateScript(webView, "appendCards(3); removeCard('1'); null;");
+            evaluateScript(webView, "appendCards(3); null;");
+            Thread.sleep(80);
+            evaluateScript(webView, "removeCard('1'); null;");
             final JSONObject removalSnapshot = evaluateObject(webView, "readDebug()");
 
             assertTrue("ghost count should be positive immediately after removal", removalSnapshot.getJSONObject("snapshot").getInt("ghostCount") > 0);
 
-            Thread.sleep(180);
+            Thread.sleep(380);
 
             final JSONObject settledSnapshot = evaluateObject(webView, "readDebug()");
             assertEquals("ghosts should be cleaned up after the fade", 0, settledSnapshot.getJSONObject("snapshot").getInt("ghostCount"));
@@ -103,6 +219,7 @@ public class DomLiteEngineInstrumentationTest {
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
+            enableInitDebugHooks(webView);
             injectInitScript(webView);
 
             evaluateScript(webView, "appendCards(3); reorderCards(); null;");
@@ -120,13 +237,35 @@ public class DomLiteEngineInstrumentationTest {
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
+            enableInitDebugHooks(webView);
             injectInitScript(webView);
 
             evaluateScript(webView, "appendCards(160); null;");
             final JSONObject debug = evaluateObject(webView, "readDebug()");
 
             assertEquals("batch-only", debug.getJSONObject("snapshot").getString("animationMode"));
+            assertFalse("large batches should disconnect the observer until a later wake-up", debug.getJSONObject("snapshot").getBoolean("observerConnected"));
+            assertEquals("large-batch", debug.getJSONObject("snapshot").getString("observerPauseReason"));
             assertEquals("dom should still contain the full batch", 160, Integer.parseInt(evaluateScript(webView, "countCards()")));
+        }
+    }
+
+    @Test
+    public void largeRemovedNodes_skipDeepGhostCloneToLimitRemovalCost() throws Exception {
+        try (ActivityScenario<Activity> scenario = launchScenario()) {
+            final WebView webView = getWebView(scenario);
+
+            loadFixture(webView, "https://m.youtube.com/");
+            installAndroidStub(webView);
+            enableInitDebugHooks(webView);
+            injectInitScript(webView);
+
+            evaluateScript(webView, "removeCard(appendComplexCard(18)); null;");
+            final JSONObject snapshot = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
+
+            assertEquals("skipped-large-node", snapshot.getString("lastGhostStrategy"));
+            assertEquals("large removals should skip transient ghost creation", 0, snapshot.getInt("ghostCount"));
+            assertEquals("complex card should still be removed correctly", 0, Integer.parseInt(evaluateScript(webView, "countCards()")));
         }
     }
 
@@ -192,6 +331,10 @@ public class DomLiteEngineInstrumentationTest {
 
     private void injectInitScript(WebView webView) throws Exception {
         evaluateScript(webView, readTargetAsset("script/init.js"));
+    }
+
+    private void enableInitDebugHooks(WebView webView) throws Exception {
+        evaluateScript(webView, "window.__liteDomEnableDebug = true; null;");
     }
 
     private JSONObject evaluateObject(WebView webView, String script) throws Exception {

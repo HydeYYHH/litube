@@ -26,10 +26,12 @@ import java.util.concurrent.TimeUnit;
 
 import okhttp3.Cache;
 import okhttp3.ConnectionPool;
+import okhttp3.Dispatcher;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
@@ -59,8 +61,27 @@ public class CommonModuleTest {
 		final OkHttpClient client = commonModule.provideOkHttpClient(context);
 		final ConnectionPool pool = client.connectionPool();
 
-		assertEquals(5, getConnectionPoolMaxIdleConnections(pool));
+		assertEquals(10, getConnectionPoolMaxIdleConnections(pool));
 		assertEquals(TimeUnit.MINUTES.toNanos(5), getConnectionPoolKeepAliveDurationNs(pool));
+	}
+
+	@Test
+	public void provideOkHttpClient_usesModerateWebConcurrencyLimits() throws Exception {
+		final OkHttpClient client = commonModule.provideOkHttpClient(context);
+		final Dispatcher dispatcher = client.dispatcher();
+
+		assertEquals(64, getDispatcherMaxRequests(dispatcher));
+		assertEquals(12, getDispatcherMaxRequestsPerHost(dispatcher));
+	}
+
+	@Test
+	public void provideOkHttpClient_prefersBalancedInteractiveTimeouts() {
+		final OkHttpClient client = commonModule.provideOkHttpClient(context);
+
+		assertEquals(10_000, client.connectTimeoutMillis());
+		assertEquals(12_000, client.writeTimeoutMillis());
+		assertEquals(12_000, client.readTimeoutMillis());
+		assertEquals(20_000, client.callTimeoutMillis());
 	}
 
 	@Test
@@ -114,6 +135,24 @@ public class CommonModuleTest {
 	}
 
 	@Test
+	public void provideOkHttpClient_skipsForceCacheInterceptorForPostRequests() throws Exception {
+		final OkHttpClient client = commonModule.provideOkHttpClient(context);
+		final Interceptor interceptor = client.networkInterceptors().get(0);
+		final Request request = new Request.Builder()
+						.url("https://example.com/assets/app.js")
+						.post(RequestBody.create(new byte[]{0x1}))
+						.build();
+		final Response response = response(request, "Cache-Control", "no-cache");
+		final Interceptor.Chain chain = mock(Interceptor.Chain.class);
+		when(chain.request()).thenReturn(request);
+		when(chain.proceed(request)).thenReturn(response);
+
+		final Response intercepted = interceptor.intercept(chain);
+
+		assertSame(response, intercepted);
+	}
+
+	@Test
 	public void provideSimpleCache_usesUpdatedCacheBudget() throws Exception {
 		final LeastRecentlyUsedCacheEvictor evictor = commonModule.createPlayerCacheEvictor();
 
@@ -132,6 +171,14 @@ public class CommonModuleTest {
 
 	private long getEvictorBudget(final LeastRecentlyUsedCacheEvictor evictor) throws Exception {
 		return getField(LeastRecentlyUsedCacheEvictor.class, "maxBytes").getLong(evictor);
+	}
+
+	private int getDispatcherMaxRequests(final Dispatcher dispatcher) throws Exception {
+		return getField(Dispatcher.class, "maxRequests").getInt(dispatcher);
+	}
+
+	private int getDispatcherMaxRequestsPerHost(final Dispatcher dispatcher) throws Exception {
+		return getField(Dispatcher.class, "maxRequestsPerHost").getInt(dispatcher);
 	}
 
 	private Field getField(final Class<?> type, final String name) throws Exception {

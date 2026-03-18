@@ -52,10 +52,10 @@ public class ExtensionDialog {
 			}
 
 			MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
-					.setTitle(titleRes)
-					.setItems(items, null)
-					.setPositiveButton(R.string.close, (dialog, which) -> dialog.dismiss())
-					.setNegativeButton(R.string.reset, (dialog, which) -> showResetConfirmation());
+							.setTitle(titleRes)
+							.setItems(items, null)
+							.setPositiveButton(R.string.close, (dialog, which) -> dialog.dismiss())
+							.setNegativeButton(R.string.reset, (dialog, which) -> showResetConfirmation());
 
 			AlertDialog dialog = builder.create();
 
@@ -86,9 +86,9 @@ public class ExtensionDialog {
 		}
 
 		AlertDialog dialog = new MaterialAlertDialogBuilder(context).setTitle(titleRes).setMultiChoiceItems(items, checked, (dlg, which, isChecked) -> {
-			// Just update checked array, apply on confirm
-			checked[which] = isChecked;
-		}).setPositiveButton(R.string.confirm, null)
+							// Just update checked array, apply on confirm
+							checked[which] = isChecked;
+						}).setPositiveButton(R.string.confirm, null)
 						.setNegativeButton(R.string.cancel, (dlg, which) -> dlg.dismiss()).create();
 
 		dialog.setOnShowListener(dlg -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
@@ -107,10 +107,10 @@ public class ExtensionDialog {
 
 	private void showResetConfirmation() {
 		new MaterialAlertDialogBuilder(context)
-				.setTitle(R.string.reset_extension_title)
-				.setMessage(R.string.reset_extension_message)
-				.setPositiveButton(R.string.confirm, (d, w) -> manager.resetToDefault())
-				.setNegativeButton(R.string.cancel, (d, w) -> d.dismiss())
-				.show();
+						.setTitle(R.string.reset_extension_title)
+						.setMessage(R.string.reset_extension_message)
+						.setPositiveButton(R.string.confirm, (d, w) -> manager.resetToDefault())
+						.setNegativeButton(R.string.cancel, (d, w) -> d.dismiss())
+						.show();
 	}
 }

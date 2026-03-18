@@ -21,9 +21,11 @@ import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.AboutActivity;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @UnstableApi
@@ -137,6 +139,28 @@ public final class JavascriptInterface {
 	@android.webkit.JavascriptInterface
 	public void openTab(@Nullable final String url, @Nullable final String tag) {
 		if (url != null && tag != null) handler.post(() -> tabManager.openTab(url, tag));
+	}
+
+	@android.webkit.JavascriptInterface
+	public void enqueueNativeHttpRequest(@Nullable final String requestId, @Nullable final String payloadJson) {
+		if (requestId == null || requestId.trim().isEmpty()) return;
+		webview.enqueueNativeHttpRequest(requestId, payloadJson, this::dispatchNativeHttpResult);
+	}
+
+	@android.webkit.JavascriptInterface
+	public void cancelNativeHttpRequest(@Nullable final String requestId) {
+		if (requestId == null || requestId.trim().isEmpty()) return;
+		webview.cancelNativeHttpRequest(requestId);
+	}
+
+	private void dispatchNativeHttpResult(@NonNull final String resultJson) {
+		final String encodedResult = Base64.getEncoder()
+						.encodeToString(resultJson.getBytes(StandardCharsets.UTF_8));
+		handler.post(() -> {
+			webview.evaluateJavascript(
+							"window.__liteNativeHttp && window.__liteNativeHttp.onNativeResult('" + encodedResult + "');",
+							null);
+		});
 	}
 
 }

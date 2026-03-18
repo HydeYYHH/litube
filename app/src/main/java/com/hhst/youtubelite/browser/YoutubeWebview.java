@@ -319,6 +319,22 @@ public class YoutubeWebview extends WebView {
 		for (final String js : scripts) evaluateJavascript(js, null);
 	}
 
+	public void enqueueNativeHttpRequest(@NonNull final String requestId,
+	                                     @Nullable final String payloadJson,
+	                                     @NonNull final Consumer<String> onComplete) {
+		if (okHttpWebViewInterceptor == null) {
+			onComplete.accept("{\"requestId\":\"" + requestId + "\",\"intercepted\":false}");
+			return;
+		}
+		okHttpWebViewInterceptor.enqueueNativeRequest(requestId, payloadJson, onComplete);
+	}
+
+	public void cancelNativeHttpRequest(@Nullable final String requestId) {
+		if (okHttpWebViewInterceptor != null) {
+			okHttpWebViewInterceptor.cancelNativeRequest(requestId);
+		}
+	}
+
 	public void injectJavaScript(@NonNull final InputStream jsInputStream) {
 		final String js = StreamIOUtils.readInputStream(jsInputStream);
 		if (js != null) post(() -> scripts.add(js));

@@ -63,12 +63,15 @@ public class LitePlayerView extends PlayerView {
 	private int playerWidth = 0;
 	private int playerHeight = 0;
 	private int normalHeight = 0;
+
 	public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
 	}
+
 	public LitePlayerView(Context context, @Nullable AttributeSet attrs) {
 		super(context, attrs);
 	}
+
 	public LitePlayerView(Context context) {
 		super(context);
 	}
@@ -111,8 +114,8 @@ public class LitePlayerView extends PlayerView {
 		isFs = true;
 		if (!activity.isInPictureInPictureMode()) normalHeight = playerHeight;
 		activity.setRequestedOrientation(isPortraitVideo
-				? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-				: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
 		updatePlayerLayout(true);

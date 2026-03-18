@@ -97,9 +97,9 @@ public class Controller {
 	private boolean longPress = false;
 	private boolean isLocked = false;
 	private long lastVideoRenderedCount = 0;
-	private long lastFpsUpdateTime = 0;	@NonNull
+	private long lastFpsUpdateTime = 0;
+	private float fps = 0;	@NonNull
 	private final Runnable hideControls = () -> setControlsVisible(false);
-	private float fps = 0;
 	@Inject
 	public Controller(@NonNull final Activity activity, @NonNull final LitePlayerView playerView, @NonNull final Engine engine, @NonNull final PlayerPreferences prefs, @NonNull final ZoomTouchListener zoomListener, @NonNull final TabManager tabManager, @NonNull final ExtensionManager extensionManager) {
 		this.activity = activity;
@@ -574,6 +574,7 @@ public class Controller {
 		playerView.setResizeMode(prefs.getResizeMode());
 		setControlsVisible(true);
 	}
+
 	public void exitFullscreen() {
 		if (isLocked) toggleLock();
 		playerView.exitFullscreen();
@@ -755,6 +756,8 @@ public class Controller {
 		default void onLongClick(int index, String label) {
 		}
 	}
+
+
 
 
 }

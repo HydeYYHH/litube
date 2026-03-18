@@ -7,6 +7,8 @@ import androidx.annotation.Nullable;
 
 import com.hhst.youtubelite.Constant;
 
+import java.net.URI;
+import java.util.Locale;
 import java.util.List;
 import java.util.Set;
 
@@ -36,9 +38,21 @@ public final class UrlUtils {
 
 	public static boolean isAllowedDomain(@Nullable final Uri uri) {
 		if (uri == null) return false;
-		final String host = uri.getHost();
+		return isAllowedHost(uri.getHost());
+	}
+
+	public static boolean isAllowedUrl(@Nullable final String url) {
+		if (url == null || url.isEmpty()) return false;
+		try {
+			return isAllowedHost(URI.create(url).getHost());
+		} catch (final IllegalArgumentException ignored) {
+			return false;
+		}
+	}
+
+	private static boolean isAllowedHost(@Nullable final String host) {
 		if (host == null) return false;
-		final String lowerHost = host.toLowerCase();
+		final String lowerHost = host.toLowerCase(Locale.US);
 		if (isGoogleAccountsHost(lowerHost)) return true;
 		return ALLOWED_DOMAINS.stream().anyMatch(domain ->
 						lowerHost.equals(domain) || lowerHost.endsWith("." + domain));

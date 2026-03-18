@@ -45,6 +45,25 @@
             return root.children.length;
         };
 
+        window.appendComplexCard = (childCount) => {
+            const card = document.createElement('div');
+            card.className = 'safe-card';
+            card.dataset.cardId = String(nextId);
+            card.textContent = `complex-card-${nextId}`;
+            for (let i = 0; i < childCount; i += 1) {
+                const row = document.createElement('div');
+                row.className = 'safe-card-row';
+                row.textContent = `row-${i}`;
+                const badge = document.createElement('span');
+                badge.textContent = `badge-${i}`;
+                row.appendChild(badge);
+                card.appendChild(row);
+            }
+            root.appendChild(card);
+            nextId += 1;
+            return card.dataset.cardId;
+        };
+
         window.reorderCards = () => {
             if (root.children.length < 2) return false;
             root.insertBefore(root.lastElementChild, root.firstElementChild);
@@ -65,6 +84,14 @@
         window.setVirtualPath = (path) => {
             history.replaceState({}, '', path);
             return location.pathname + location.search;
+        };
+
+        window.injectObserverRootTrap = (id) => {
+            const trap = document.createElement('div');
+            trap.id = id;
+            trap.textContent = `trap-${id}`;
+            document.body.insertBefore(trap, document.body.firstChild);
+            return trap.id;
         };
 
         window.readDebug = () => {

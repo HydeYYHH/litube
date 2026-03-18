@@ -1,12 +1,15 @@
 package com.hhst.youtubelite.downloader.core.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import com.tencent.mmkv.MMKV;
 
+import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,10 +18,13 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
+import okhttp3.Cache;
+import okhttp3.ConnectionPool;
+import okhttp3.Dispatcher;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
@@ -31,15 +37,18 @@ public class StreamDownloaderImplTest {
 	private static final String TEST_URL = "https://example.com/video";
 
 	private StreamDownloaderImpl downloader;
+	private File cacheRoot;
 
 	@Before
-	public void setUp() {
-		downloader = new StreamDownloaderImpl(mock(OkHttpClient.class), mock(MMKV.class));
+	public void setUp() throws Exception {
+		cacheRoot = Files.createTempDirectory("stream-downloader-test").toFile();
+		downloader = new StreamDownloaderImpl(new OkHttpClient.Builder().build(), mock(MMKV.class));
 	}
 
 	@After
 	public void tearDown() throws Exception {
 		shutdown(downloader);
+		FileUtils.deleteQuietly(cacheRoot);
 	}
 
 	@Test
@@ -106,14 +115,58 @@ public class StreamDownloaderImplTest {
 		}
 	}
 
+	@Test
+	public void constructor_buildsDedicatedFiniteTimeoutClientWithoutCache() throws Exception {
+		final ConnectionPool pool = new ConnectionPool(8, 5, TimeUnit.MINUTES);
+		final Cache cache = new Cache(new File(cacheRoot, "okhttp"), 1024L);
+		final OkHttpClient baseClient = new OkHttpClient.Builder()
+						.connectionPool(pool)
+						.cache(cache)
+						.build();
+		final StreamDownloaderImpl configured = new StreamDownloaderImpl(baseClient, mock(MMKV.class));
+
+		try {
+			final OkHttpClient client = getClient(configured);
+
+			assertNull(client.cache());
+			assertEquals(15_000, client.connectTimeoutMillis());
+			assertEquals(15_000, client.writeTimeoutMillis());
+			assertEquals(30_000, client.readTimeoutMillis());
+			assertNotSame(baseClient.dispatcher(), client.dispatcher());
+			assertEquals(8, getDispatcherMaxRequests(client.dispatcher()));
+			assertEquals(4, getDispatcherMaxRequestsPerHost(client.dispatcher()));
+			assertEquals(baseClient.connectionPool(), client.connectionPool());
+		} finally {
+			shutdown(configured);
+		}
+	}
+
 	private ThreadPoolExecutor getExecutor() throws Exception {
 		return getExecutor(downloader);
+	}
+
+	private OkHttpClient getClient(final StreamDownloaderImpl target) throws Exception {
+		final Field field = StreamDownloaderImpl.class.getDeclaredField("client");
+		field.setAccessible(true);
+		return (OkHttpClient) field.get(target);
 	}
 
 	private ThreadPoolExecutor getExecutor(final StreamDownloaderImpl target) throws Exception {
 		final Field field = StreamDownloaderImpl.class.getDeclaredField("executor");
 		field.setAccessible(true);
 		return (ThreadPoolExecutor) field.get(target);
+	}
+
+	private int getDispatcherMaxRequests(final Dispatcher dispatcher) throws Exception {
+		final Field field = Dispatcher.class.getDeclaredField("maxRequests");
+		field.setAccessible(true);
+		return field.getInt(dispatcher);
+	}
+
+	private int getDispatcherMaxRequestsPerHost(final Dispatcher dispatcher) throws Exception {
+		final Field field = Dispatcher.class.getDeclaredField("maxRequestsPerHost");
+		field.setAccessible(true);
+		return field.getInt(dispatcher);
 	}
 
 	private void replaceDownloader(final Interceptor interceptor) throws Exception {

@@ -1,6 +1,5 @@
 package com.hhst.youtubelite.browser;
 
-import android.net.Uri;
 import android.text.TextUtils;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
@@ -8,13 +7,16 @@ import android.webkit.WebResourceResponse;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.media3.common.util.Consumer;
 
 import com.hhst.youtubelite.Constant;
+import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.WebResourceUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -31,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.CacheControl;
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.Headers;
+import okhttp3.Dispatcher;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -61,16 +63,47 @@ public final class OkHttpWebViewInterceptor {
 	private static final long WATCHDOG_MIN_WINDOW_MILLIS = TimeUnit.SECONDS.toMillis(30);
 	private static final long WATCHDOG_MAX_WINDOW_MILLIS = TimeUnit.MINUTES.toMillis(10);
 	private static final long MAX_BUFFERED_IMAGE_BYTES = 4L * 1024L * 1024L;
+	static final int RESOURCE_MAX_REQUESTS = 48;
+	static final int RESOURCE_MAX_REQUESTS_PER_HOST = 12;
+	static final int NATIVE_MAX_REQUESTS = 32;
+	static final int NATIVE_MAX_REQUESTS_PER_HOST = 10;
+	private static final long RESOURCE_CALL_TIMEOUT_SECONDS = 18L;
+	private static final long RESOURCE_CONNECT_TIMEOUT_SECONDS = 6L;
+	private static final long RESOURCE_WRITE_TIMEOUT_SECONDS = 10L;
+	private static final long RESOURCE_READ_TIMEOUT_SECONDS = 12L;
+	private static final long NATIVE_CALL_TIMEOUT_SECONDS = 20L;
+	private static final long NATIVE_CONNECT_TIMEOUT_SECONDS = 6L;
+	private static final long NATIVE_WRITE_TIMEOUT_SECONDS = 10L;
+	private static final long NATIVE_READ_TIMEOUT_SECONDS = 12L;
 
 	@NonNull
 	private final OkHttpClient client;
 	@NonNull
-	private final CookieManager cookieManager;
+	private final OkHttpClient nativeRequestClient;
+	@NonNull
+	private final NativeHttpRequestExecutor nativeHttpRequestExecutor;
+	@NonNull
+	private final CookieAccessCoordinator cookieAccessCoordinator;
+	@NonNull
+	private final NativeRequestDeduplicator<NativeHttpRequestExecutor.ResponsePayload> nativeRequestDeduplicator = new NativeRequestDeduplicator<>();
 	@NonNull
 	private final Set<String> refreshingUrls = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	public OkHttpWebViewInterceptor(@NonNull final OkHttpClient client) {
-		this.client = client.newBuilder()
+		this.client = createResourceClient(client);
+		this.nativeRequestClient = createNativeRequestClient(client);
+		this.nativeHttpRequestExecutor = new NativeHttpRequestExecutor(Constant.USER_AGENT);
+		this.cookieAccessCoordinator = CookieAccessCoordinator.create(CookieManager.getInstance());
+	}
+
+	@NonNull
+	static OkHttpClient createResourceClient(@NonNull final OkHttpClient client) {
+		return client.newBuilder()
+						.dispatcher(createDispatcher(RESOURCE_MAX_REQUESTS, RESOURCE_MAX_REQUESTS_PER_HOST))
+						.callTimeout(RESOURCE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.connectTimeout(RESOURCE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.writeTimeout(RESOURCE_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.readTimeout(RESOURCE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.addNetworkInterceptor(chain -> {
 							final Request request = chain.request();
 							final Response response = chain.proceed(request);
@@ -81,35 +114,51 @@ public final class OkHttpWebViewInterceptor {
 							return rewriteCacheHeaders(response);
 						})
 						.build();
-		this.cookieManager = CookieManager.getInstance();
 	}
 
-	public boolean shouldIntercept(@Nullable final WebResourceRequest request) {
-		return request != null
-						&& isHttpGetRequest(request)
-						&& shouldUseWebViewCache(request);
+	@NonNull
+	static OkHttpClient createNativeRequestClient(@NonNull final OkHttpClient client) {
+		return client.newBuilder()
+						.dispatcher(createDispatcher(NATIVE_MAX_REQUESTS, NATIVE_MAX_REQUESTS_PER_HOST))
+						.cache(null)
+						.callTimeout(NATIVE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.connectTimeout(NATIVE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.writeTimeout(NATIVE_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.readTimeout(NATIVE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.build();
+	}
+
+	@NonNull
+	static Dispatcher createDispatcher(final int maxRequests, final int maxRequestsPerHost) {
+		final Dispatcher dispatcher = new Dispatcher();
+		dispatcher.setMaxRequests(maxRequests);
+		dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+		return dispatcher;
 	}
 
 	public boolean canExecute(@Nullable final WebResourceRequest request) {
-		return request != null && isHttpGetRequest(request);
+		return request != null && isInterceptableWebRequest(request.getMethod(), request.getRequestHeaders(), request.getUrl().toString());
 	}
 
 	@Nullable
 	public WebResourceResponse intercept(@NonNull final WebResourceRequest request) {
-		if (!shouldIntercept(request)) return null;
+		if (!shouldProxyRequest(request.getMethod(), request.getRequestHeaders(), request.getUrl().toString())) return null;
 		final String url = request.getUrl().toString();
 		Response response = null;
 		try {
-			response = executeCacheOnly(request);
-			if (isUsableResponse(response)) {
-				maybeScheduleRefresh(request, Objects.requireNonNull(response));
-				if (shouldBufferImageResponse(url, Objects.requireNonNull(response))) {
-					return toBufferedWebResourceResponse(url, Objects.requireNonNull(response));
+			if (shouldAttemptCacheLookup(request.isForMainFrame(), request.getUrl().toString())) {
+				response = executeCacheOnly(request);
+				if (isUsableResponse(response)) {
+					maybeScheduleRefresh(request, Objects.requireNonNull(response));
+					if (shouldBufferImageResponse(url, Objects.requireNonNull(response))) {
+						return toBufferedWebResourceResponse(url, Objects.requireNonNull(response));
+					}
+					return toWebResourceResponse(url, Objects.requireNonNull(response), Objects.requireNonNull(response.body()).byteStream());
 				}
-				return toWebResourceResponse(url, Objects.requireNonNull(response), Objects.requireNonNull(response.body()).byteStream());
+				closeQuietly(response);
+				response = null;
 			}
 
-			closeQuietly(response);
 			response = execute(request);
 			if (!isUsableResponse(response)) {
 				closeQuietly(response);
@@ -144,7 +193,10 @@ public final class OkHttpWebViewInterceptor {
 	@NonNull
 	private Request buildRequest(@NonNull final WebResourceRequest request, @Nullable final CacheControl cacheControl) {
 		final String url = request.getUrl().toString();
-		final Request.Builder builder = new Request.Builder().url(url).get();
+		final String method = request.getMethod() == null
+						? "GET"
+						: request.getMethod().trim().toUpperCase(Locale.US);
+		final Request.Builder builder = new Request.Builder().url(url).method(method, null);
 		if (cacheControl != null) builder.cacheControl(cacheControl);
 		builder.tag(CacheRequestInfo.class, new CacheRequestInfo(request.isForMainFrame(), WebResourceUtils.shouldForceCache(request.getUrl().getPath())));
 
@@ -156,7 +208,7 @@ public final class OkHttpWebViewInterceptor {
 			builder.header(name, value);
 		}
 
-		final String cookies = cookieManager.getCookie(url);
+		final String cookies = cookieAccessCoordinator.getCookie(url);
 		if (!TextUtils.isEmpty(cookies)) {
 			builder.header("Cookie", Objects.requireNonNull(cookies));
 		}
@@ -166,8 +218,47 @@ public final class OkHttpWebViewInterceptor {
 	@NonNull
 	private Response executeRequest(@NonNull final Request request) throws IOException {
 		final Response response = client.newCall(request).execute();
-		syncCookies(request.url().toString(), response.headers());
+		cookieAccessCoordinator.syncFromResponse(response);
 		return response;
+	}
+
+	public void enqueueNativeRequest(@NonNull final String requestId,
+	                                 @Nullable final String payloadJson,
+	                                 @NonNull final Consumer<String> onComplete) {
+		final NativeHttpRequestExecutor.PreparedRequest prepared = nativeHttpRequestExecutor.prepare(payloadJson, cookieAccessCoordinator::getCookie);
+		if (!prepared.intercepted() || prepared.request() == null) {
+			onComplete.accept(nativeHttpRequestExecutor.toJson(nativeHttpRequestExecutor.buildUnsupportedPayload(requestId, prepared.reason())));
+			return;
+		}
+
+		nativeRequestDeduplicator.enqueue(
+						requestId,
+						prepared.dedupeKey(),
+						payload -> onComplete.accept(nativeHttpRequestExecutor.toJson(payload.withRequestId(requestId))),
+						completion -> {
+							final Call call = nativeRequestClient.newCall(Objects.requireNonNull(prepared.request()));
+							call.enqueue(new Callback() {
+								@Override
+								public void onFailure(@NonNull final Call call, @NonNull final IOException e) {
+									completion.complete(nativeHttpRequestExecutor.buildFailurePayload(null, e));
+								}
+
+								@Override
+								public void onResponse(@NonNull final Call call, @NonNull final Response response) {
+									try (response) {
+										cookieAccessCoordinator.syncFromResponse(response);
+										completion.complete(nativeHttpRequestExecutor.buildResponsePayload(null, response));
+									} catch (final IOException e) {
+										completion.complete(nativeHttpRequestExecutor.buildFailurePayload(null, e));
+									}
+								}
+							});
+							return call::cancel;
+						});
+	}
+
+	public void cancelNativeRequest(@Nullable final String requestId) {
+		nativeRequestDeduplicator.cancel(requestId);
 	}
 
 	@NonNull
@@ -205,40 +296,65 @@ public final class OkHttpWebViewInterceptor {
 						new ByteArrayInputStream(bytes));
 	}
 
-	private boolean isHttpGetRequest(@NonNull final WebResourceRequest request) {
-		if (!"GET".equalsIgnoreCase(request.getMethod())) return false;
-		for (final String headerName : request.getRequestHeaders().keySet()) {
-			if ("range".equalsIgnoreCase(headerName)) return false;
+	private static boolean isInterceptableWebRequest(@Nullable final String method,
+	                                                 @Nullable final Map<String, String> requestHeaders,
+	                                                 @Nullable final String url) {
+		if (!isBodylessMethod(method)) return false;
+		if (requestHeaders != null) {
+			for (final String headerName : requestHeaders.keySet()) {
+				if ("range".equalsIgnoreCase(headerName)) return false;
+			}
 		}
-		final Uri uri = request.getUrl();
-		final String scheme = uri.getScheme();
+		final String scheme;
+		try {
+			scheme = url == null ? null : URI.create(url).getScheme();
+		} catch (final IllegalArgumentException ignored) {
+			return false;
+		}
 		return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
 	}
 
-	private boolean shouldUseWebViewCache(@NonNull final WebResourceRequest request) {
-		return shouldUseMainFrameCache(request) || WebResourceUtils.shouldForceCache(request.getUrl().getPath());
+	private static boolean isBodylessMethod(@Nullable final String method) {
+		return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
 	}
 
-	private boolean shouldUseMainFrameCache(@NonNull final WebResourceRequest request) {
-		return request.isForMainFrame() && isCacheableYouTubeMainFrame(request.getUrl());
+	static boolean shouldProxyRequest(@Nullable final String method,
+	                                  @Nullable final Map<String, String> requestHeaders,
+	                                  @Nullable final String url) {
+		if (!isInterceptableWebRequest(method, requestHeaders, url)) return false;
+		return UrlUtils.isAllowedUrl(url);
 	}
 
-	private boolean isCacheableYouTubeMainFrame(@Nullable final Uri uri) {
-		if (uri == null) return false;
-		final String host = uri.getHost();
-		if (TextUtils.isEmpty(host)) return false;
-		final String lowerHost = Objects.requireNonNull(host).toLowerCase(Locale.US);
-		if (ACCOUNTS_YOUTUBE_HOST.equals(lowerHost)) return false;
-		return lowerHost.equals(Constant.YOUTUBE_DOMAIN) || lowerHost.endsWith("." + Constant.YOUTUBE_DOMAIN);
+	static boolean shouldAttemptCacheLookup(final boolean isForMainFrame,
+	                                        @Nullable final String url) {
+		return shouldUseMainFrameCache(isForMainFrame, url)
+						|| WebResourceUtils.shouldForceCache(extractPath(url));
 	}
 
-	private void syncCookies(@NonNull final String url, @NonNull final Headers headers) {
-		final var cookies = headers.values("Set-Cookie");
-		if (cookies.isEmpty()) return;
-		for (final String cookie : cookies) {
-			cookieManager.setCookie(url, cookie);
+	private static String extractPath(@Nullable final String url) {
+		try {
+			return url == null ? null : URI.create(url).getPath();
+		} catch (final IllegalArgumentException ignored) {
+			return null;
 		}
-		cookieManager.flush();
+	}
+
+	private static boolean shouldUseMainFrameCache(final boolean isForMainFrame,
+	                                               @Nullable final String url) {
+		return isForMainFrame && isCacheableYouTubeMainFrameUrl(url);
+	}
+
+	private static boolean isCacheableYouTubeMainFrameUrl(@Nullable final String url) {
+		try {
+			if (url == null) return false;
+			final String host = URI.create(url).getHost();
+			if (TextUtils.isEmpty(host)) return false;
+			final String lowerHost = Objects.requireNonNull(host).toLowerCase(Locale.US);
+			if (ACCOUNTS_YOUTUBE_HOST.equals(lowerHost)) return false;
+			return lowerHost.equals(Constant.YOUTUBE_DOMAIN) || lowerHost.endsWith("." + Constant.YOUTUBE_DOMAIN);
+		} catch (final RuntimeException ignored) {
+			return false;
+		}
 	}
 
 	@NonNull
@@ -267,7 +383,7 @@ public final class OkHttpWebViewInterceptor {
 		}
 	}
 
-	private boolean shouldRewriteCacheHeaders(@Nullable final CacheRequestInfo cacheRequestInfo, @NonNull final Request request, @NonNull final Response response) {
+	private static boolean shouldRewriteCacheHeaders(@Nullable final CacheRequestInfo cacheRequestInfo, @NonNull final Request request, @NonNull final Response response) {
 		if (cacheRequestInfo == null) return false;
 		if (response.header(WebResourceUtils.ORIGINAL_CACHE_CONTROL_HEADER) != null) return false;
 		if (cacheRequestInfo.staticResource) return false;
@@ -276,7 +392,7 @@ public final class OkHttpWebViewInterceptor {
 	}
 
 	@NonNull
-	private Response rewriteCacheHeaders(@NonNull final Response response) {
+	private static Response rewriteCacheHeaders(@NonNull final Response response) {
 		final Response.Builder builder = response.newBuilder()
 						.removeHeader("Pragma")
 						.removeHeader("Cache-Control")
@@ -288,7 +404,7 @@ public final class OkHttpWebViewInterceptor {
 		return builder.build();
 	}
 
-	private boolean isHtmlLikeResponse(@NonNull final Request request, @NonNull final Response response) {
+	private static boolean isHtmlLikeResponse(@NonNull final Request request, @NonNull final Response response) {
 		final ResponseBody body = response.body();
 		final MediaType contentType = body.contentType();
 		if (contentType != null) {
@@ -409,7 +525,7 @@ public final class OkHttpWebViewInterceptor {
 			@Override
 			public void onResponse(@NonNull final Call call, @NonNull final Response response) {
 				try (response) {
-					syncCookies(url, response.headers());
+					cookieAccessCoordinator.syncFromResponse(response);
 					drainBody(response.body());
 				} catch (final IOException ignored) {
 				} finally {
