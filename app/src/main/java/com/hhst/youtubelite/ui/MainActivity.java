@@ -12,12 +12,14 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,6 +37,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.radiobutton.MaterialRadioButton;
+
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
@@ -63,6 +67,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -215,24 +220,25 @@ public final class MainActivity extends AppCompatActivity {
         String clean = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
         Toast.makeText(this, "Fetching playlist...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            List<StreamInfoItem> items = new ArrayList<>();
             try {
                 PlaylistExtractor ex = NewPipe.getService(0).getPlaylistExtractor(clean);
                 ex.fetchPage();
+                String playlistName = ex.getName();
+                List<StreamInfoItem> items = new ArrayList<>();
                 InfoItemsPage<StreamInfoItem> p = ex.getInitialPage();
                 while (p != null) {
                     items.addAll(p.getItems());
                     if (!Page.isValid(p.getNextPage())) break;
                     p = ex.getPage(p.getNextPage());
                 }
-                mainHandler.post(() -> showPlaylistSelectionDialog(items));
+                mainHandler.post(() -> showPlaylistVideoSelectionDialog(items, playlistName));
             } catch (Exception e) {
                 mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
 
-    private void showPlaylistSelectionDialog(List<StreamInfoItem> items) {
+    private void showPlaylistVideoSelectionDialog(List<StreamInfoItem> items, String playlistName) {
         String[] titles = new String[items.size()];
         boolean[] checked = new boolean[items.size()];
         for (int i = 0; i < items.size(); i++) {
@@ -250,18 +256,18 @@ public final class MainActivity extends AppCompatActivity {
         tv.setTextSize(16);
         tv.setTextColor(Color.WHITE);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
+        header.addView(tv);
 
         CheckBox allCb = new CheckBox(this);
         allCb.setChecked(true);
         allCb.setText("All");
         allCb.setTextColor(Color.WHITE);
-        header.addView(tv);
         header.addView(allCb);
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(this)
                 .setCustomTitle(header)
                 .setMultiChoiceItems(titles, checked, (d, i, b) -> checked[i] = b)
-                .setPositiveButton("Download", null)
+                .setPositiveButton("Next", null)
                 .setNegativeButton("Cancel", null)
                 .create();
 
@@ -275,8 +281,6 @@ public final class MainActivity extends AppCompatActivity {
         dialog.setOnShowListener(d -> {
             Button pos = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
             Button neg = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-            styleButton(pos, true);
-            styleButton(neg, false);
 
             pos.setOnClickListener(v -> {
                 List<PlaylistDownloadItem> selected = new ArrayList<>();
@@ -284,51 +288,84 @@ public final class MainActivity extends AppCompatActivity {
                     if (checked[i]) selected.add(new PlaylistDownloadItem(items.get(i).getUrl(), items.get(i).getName()));
                 }
                 if (!selected.isEmpty()) {
-                    processBulkDownload(selected);
                     dialog.dismiss();
+                    showPlaylistQualityDialog(selected, playlistName);
                 }
             });
-            neg.setOnClickListener(v -> dialog.dismiss());
         });
+
         dialog.show();
     }
 
-    private void styleButton(Button b, boolean primary) {
-        b.setAllCaps(false);
-        b.setTextSize(15);
-        if (primary) {
-            b.setBackgroundColor(Color.WHITE);
-            b.setTextColor(Color.BLACK);
-        } else {
-            b.setTextColor(Color.WHITE);
+    private void showPlaylistQualityDialog(List<PlaylistDownloadItem> selectedItems, String playlistName) {
+        RadioGroup rg = new RadioGroup(this);
+        rg.setPadding(48, 24, 48, 24);
+
+        String lastRes = kv.decodeString("last_download_res", "720p");
+        List<String> resOptions = List.of("144p", "240p", "360p", "480p", "720p", "1080p");
+        int selectedResIndex = resOptions.indexOf(lastRes);
+        if (selectedResIndex == -1) selectedResIndex = 4;
+
+        for (int i = 0; i < resOptions.size(); i++) {
+            MaterialRadioButton rb = new MaterialRadioButton(this);
+            rb.setText(resOptions.get(i));
+            rb.setTextColor(Color.WHITE);
+            rb.setId(View.generateViewId());
+            rb.setTag(resOptions.get(i));
+            rg.addView(rb);
+            if (i == selectedResIndex) rb.setChecked(true);
         }
+
+        AlertDialog qualityDialog = new MaterialAlertDialogBuilder(this)
+                .setTitle("Choose Quality")
+                .setView(rg)
+                .setPositiveButton("Download", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        qualityDialog.setOnShowListener(d -> {
+            Button pos = qualityDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            pos.setOnClickListener(v -> {
+                int checkedId = rg.getCheckedRadioButtonId();
+                if (checkedId == -1) return;
+                MaterialRadioButton rb = rg.findViewById(checkedId);
+                String selectedRes = (String) rb.getTag();
+
+                kv.encode("last_download_res", selectedRes);
+                qualityDialog.dismiss();
+                processBulkDownload(selectedItems, playlistName, selectedRes);
+            });
+        });
+
+        qualityDialog.show();
     }
 
-    private void processBulkDownload(List<PlaylistDownloadItem> items) {
-        if (kv == null) return;
+    private void processBulkDownload(List<PlaylistDownloadItem> items, String playlistName, String selectedRes) {
         Toast.makeText(this, "Enqueuing " + items.size() + " items...", Toast.LENGTH_LONG).show();
-        String lastRes = kv.decodeString("last_download_res", "720p");
-        int lastBitrate = kv.decodeInt("last_download_audio_bitrate", -1);
         int threads = kv.decodeInt("download_thread_count", 4);
-
+        String sanitizedPl = playlistName.replaceAll("[<>:\"/|?*]", "_");
+        
         ExecutorService pool = Executors.newFixedThreadPool(3);
         for (PlaylistDownloadItem item : items) {
             pool.execute(() -> {
                 try {
                     StreamDetails si = youtubeExtractor.getStreamInfo(item.url);
                     VideoStream vs = si.getVideoStreams().stream()
-                            .filter(s -> s.getFormat() == MediaFormat.MPEG_4 && s.getResolution().equals(lastRes))
-                            .findFirst().orElse(si.getVideoStreams().get(0));
+                            .filter(s -> s.getResolution().equals(selectedRes))
+                            .min(Comparator.comparingInt(s -> s.getFormat() == MediaFormat.MPEG_4 ? 0 : 1))
+                            .orElse(si.getVideoStreams().get(0));
+                    
                     AudioStream as = si.getAudioStreams().stream()
-                            .filter(s -> s.getFormat() == MediaFormat.M4A && (lastBitrate == -1 || s.getAverageBitrate() == lastBitrate))
+                            .filter(s -> s.getFormat() == MediaFormat.M4A)
                             .findFirst().orElse(si.getAudioStreams().get(0));
-
+                            
                     File dir = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), getString(R.string.app_name));
                     if (!dir.exists()) dir.mkdirs();
-
+                    
                     String sanitized = item.title.replaceAll("[<>:\"/|?*]", "_");
-                    Task t = new Task(YoutubeExtractor.getVideoId(item.url) + ":v", vs, as, null, null, sanitized, dir, threads);
-
+                    String finalName = sanitizedPl + "_" + sanitized;
+                    Task t = new Task(YoutubeExtractor.getVideoId(item.url) + ":v", vs, as, null, null, finalName, dir, threads);
+                    
                     mainHandler.post(() -> { if (downloadService != null) downloadService.download(List.of(t)); });
                     Thread.sleep(1000);
                 } catch (Exception ignored) {}
@@ -337,8 +374,7 @@ public final class MainActivity extends AppCompatActivity {
         pool.shutdown();
     }
 
-    private record PlaylistDownloadItem(String url, String title) {
-    }
+    private record PlaylistDownloadItem(String url, String title) {}
 
     private void shareUrl(String url) {
         Intent i = new Intent(Intent.ACTION_SEND);
@@ -375,7 +411,6 @@ public final class MainActivity extends AppCompatActivity {
 
     @Nullable private YoutubeWebview getWebview() { return tabManager != null ? tabManager.getWebview() : null; }
 
-    private void startPlaybackService() {}
     private void requestPermissions() {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 100);

@@ -492,12 +492,20 @@ public class Controller {
         View center = playerView.findViewById(R.id.center_controls);
         View bar = playerView.findViewById(R.id.exo_progress);
         float alpha = visible ? 1.0f : 0.0f;
-        ViewUtils.animateViewAlpha(other, alpha, View.GONE);
-        ViewUtils.animateViewAlpha(center, alpha, View.GONE);
-        ViewUtils.animateViewAlpha(bar, alpha, View.GONE);
-        if (!isLocked) showReset(playerView.isFs() && visible && zoomListener.isZoomed());
-        else showReset(false);
         ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
+
+        if (isLocked) {
+            ViewUtils.animateViewAlpha(center, 0f, View.GONE);
+            ViewUtils.animateViewAlpha(other, 0f, View.GONE);
+            ViewUtils.animateViewAlpha(bar, 0f, View.GONE);
+            showReset(false);
+        } else {
+            ViewUtils.animateViewAlpha(other, alpha, View.GONE);
+            ViewUtils.animateViewAlpha(center, (visible && engine.getPlaybackState() != Player.STATE_BUFFERING) ? 1.0f : 0.0f, View.GONE);
+            ViewUtils.animateViewAlpha(bar, alpha, View.GONE);
+            showReset(playerView.isFs() && visible && zoomListener.isZoomed());
+        }
+
         ViewUtils.animateViewAlpha(lockBtn, (visible && playerView.isFs()) ? 1.0f : 0.0f, View.GONE);
         if (visible) hideControlsAutomatically();
     }
@@ -522,7 +530,7 @@ public class Controller {
 
     public void hideHint() { if (hintText != null) ViewUtils.animateViewAlpha(hintText, 0.0f, View.GONE); }
     public void enterFullscreen() { playerView.enterFullscreen(PlayerUtils.isPortrait(engine)); setControlsVisible(true); }
-    public void exitFullscreen() { playerView.exitFullscreen(); setControlsVisible(true); }
+    public void exitFullscreen() { if (isLocked) toggleLock(); playerView.exitFullscreen(); setControlsVisible(true); }
     public void onPictureInPictureModeChanged(boolean pip) { playerView.onPictureInPictureModeChanged(pip); setControlsVisible(!pip); }
     private void setClick(int id, View.OnClickListener l) { View v = playerView.findViewById(id); if (v != null) v.setOnClickListener(l); }
     private void toggleLock() { isLocked = !isLocked; ImageButton lb = playerView.findViewById(R.id.btn_lock); if (lb != null) lb.setImageResource(isLocked ? R.drawable.ic_lock : R.drawable.ic_unlock); setControlsVisible(true); showHint(activity.getString(isLocked ? R.string.lock_screen : R.string.unlock_screen), 1000); }

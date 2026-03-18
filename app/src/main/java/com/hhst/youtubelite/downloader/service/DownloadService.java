@@ -205,11 +205,15 @@ public class DownloadService extends Service {
 
     public void cancelByPrefix(String prefix) {
         blockedPrefixes.add(prefix);
-        activeTasks.values().forEach(t -> {
+        activeTasks.entrySet().removeIf(entry -> {
+            Task t = entry.getValue();
             if (t.fileName().startsWith(prefix)) {
                 liteDL.cancel(t.vid());
+                return true;
             }
+            return false;
         });
+        killNotification();
         mainHandler.postDelayed(() -> blockedPrefixes.remove(prefix), 60000);
     }
 
