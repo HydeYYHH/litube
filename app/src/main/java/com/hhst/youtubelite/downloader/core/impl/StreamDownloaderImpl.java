@@ -39,6 +39,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	private static final long MIN_CHUNK_SIZE = 512 * 1024; // 512KB
 	private static final int DOWNLOAD_MAX_REQUESTS = 8;
 	private static final int DOWNLOAD_MAX_REQUESTS_PER_HOST = 4;
+	private static final long DOWNLOAD_CALL_TIMEOUT_MILLIS = 0L;
 	private static final long DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 15L;
 	private static final long DOWNLOAD_WRITE_TIMEOUT_SECONDS = 15L;
 	private static final long DOWNLOAD_READ_TIMEOUT_SECONDS = 30L;
@@ -52,6 +53,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		this.client = client.newBuilder()
 						.cache(null)
 						.dispatcher(createDispatcher(DOWNLOAD_MAX_REQUESTS, DOWNLOAD_MAX_REQUESTS_PER_HOST))
+						.callTimeout(DOWNLOAD_CALL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 						.connectTimeout(DOWNLOAD_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.writeTimeout(DOWNLOAD_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.readTimeout(DOWNLOAD_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -223,6 +225,9 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	@Override
 	public synchronized void setMaxThreadCount(int count) {
 		final int targetCount = Math.max(1, count);
+		final Dispatcher dispatcher = client.dispatcher();
+		dispatcher.setMaxRequests(targetCount);
+		dispatcher.setMaxRequestsPerHost(targetCount);
 		if (targetCount > executor.getMaximumPoolSize()) {
 			executor.setMaximumPoolSize(targetCount);
 			executor.setCorePoolSize(targetCount);

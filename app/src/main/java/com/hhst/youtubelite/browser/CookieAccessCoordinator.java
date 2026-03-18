@@ -6,6 +6,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -96,14 +98,20 @@ final class CookieAccessCoordinator {
 	}
 
 	void syncFromResponse(@NonNull final Response response) {
+		final List<Response> responseChain = new ArrayList<>();
 		Response current = response;
-		boolean cookiesUpdated = false;
 		while (current != null) {
-			for (final String cookie : current.headers().values("Set-Cookie")) {
-				backend.setCookie(current.request().url().toString(), cookie);
+			responseChain.add(current);
+			current = current.priorResponse();
+		}
+
+		boolean cookiesUpdated = false;
+		for (int i = responseChain.size() - 1; i >= 0; i--) {
+			final Response chainResponse = responseChain.get(i);
+			for (final String cookie : chainResponse.headers().values("Set-Cookie")) {
+				backend.setCookie(chainResponse.request().url().toString(), cookie);
 				cookiesUpdated = true;
 			}
-			current = current.priorResponse();
 		}
 		if (!cookiesUpdated) return;
 		invalidateCache();

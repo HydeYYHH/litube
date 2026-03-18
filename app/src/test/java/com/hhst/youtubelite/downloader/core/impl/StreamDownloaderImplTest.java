@@ -71,6 +71,15 @@ public class StreamDownloaderImplTest {
 	}
 
 	@Test
+	public void setMaxThreadCount_updatesDispatcherLimitsToMatchRequestedConcurrency() throws Exception {
+		downloader.setMaxThreadCount(12);
+
+		final Dispatcher dispatcher = getClient(downloader).dispatcher();
+		assertEquals(12, getDispatcherMaxRequests(dispatcher));
+		assertEquals(12, getDispatcherMaxRequestsPerHost(dispatcher));
+	}
+
+	@Test
 	public void headFailure_completesExceptionally() throws Exception {
 		replaceDownloader(chain -> {
 			final Request request = chain.request();
@@ -122,6 +131,7 @@ public class StreamDownloaderImplTest {
 		final OkHttpClient baseClient = new OkHttpClient.Builder()
 						.connectionPool(pool)
 						.cache(cache)
+						.callTimeout(20, TimeUnit.SECONDS)
 						.build();
 		final StreamDownloaderImpl configured = new StreamDownloaderImpl(baseClient, mock(MMKV.class));
 
@@ -132,6 +142,7 @@ public class StreamDownloaderImplTest {
 			assertEquals(15_000, client.connectTimeoutMillis());
 			assertEquals(15_000, client.writeTimeoutMillis());
 			assertEquals(30_000, client.readTimeoutMillis());
+			assertEquals(0, client.callTimeoutMillis());
 			assertNotSame(baseClient.dispatcher(), client.dispatcher());
 			assertEquals(8, getDispatcherMaxRequests(client.dispatcher()));
 			assertEquals(4, getDispatcherMaxRequestsPerHost(client.dispatcher()));

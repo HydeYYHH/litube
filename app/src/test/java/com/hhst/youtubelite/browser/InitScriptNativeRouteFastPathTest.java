@@ -28,6 +28,18 @@ public class InitScriptNativeRouteFastPathTest {
 		assertTrue(initScript.contains("return !BODYLESS_METHODS.has(metadata.method) || hasHeader(metadata.headers, 'range');"));
 	}
 
+	@Test
+	public void initScript_cleansAndSettlesNativePendingRequestWhenXhrAborts() throws Exception {
+		final String initScript = new String(Files.readAllBytes(resolveInitScriptPath()), StandardCharsets.UTF_8);
+
+		assertTrue(initScript.contains("const requestId = this._nativeRequestId;"));
+		assertTrue(initScript.contains("const pending = pendingRequests.get(requestId);"));
+		assertTrue(initScript.contains("pendingRequests.delete(requestId);"));
+		assertTrue(initScript.contains("pending?.cleanup?.();"));
+		assertTrue(initScript.contains("pending?.resolve({"));
+		assertTrue(initScript.contains("aborted: true,"));
+	}
+
 	private Path resolveInitScriptPath() throws IOException {
 		final Path moduleRelative = Path.of("src", "main", "assets", "script", "init.js");
 		if (Files.exists(moduleRelative)) {

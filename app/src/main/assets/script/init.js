@@ -513,7 +513,17 @@ try {
                     return;
                 }
                 if (this._nativeRequestId) {
-                    androidBridge.cancelNativeHttpRequest?.(this._nativeRequestId);
+                    const requestId = this._nativeRequestId;
+                    const pending = pendingRequests.get(requestId);
+                    pendingRequests.delete(requestId);
+                    pending?.cleanup?.();
+                    pending?.resolve({
+                        requestId,
+                        intercepted: true,
+                        error: 'aborted',
+                        aborted: true,
+                    });
+                    androidBridge.cancelNativeHttpRequest?.(requestId);
                     this._nativeRequestId = null;
                 }
                 if (this.readyState !== NativeXMLHttpRequest.UNSENT

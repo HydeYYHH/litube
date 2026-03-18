@@ -115,7 +115,7 @@ public class CookieAccessCoordinatorTest {
 	}
 
 	@Test
-	public void syncFromResponse_appliesRedirectChainCookiesWithSingleFlush() {
+	public void syncFromResponse_appliesRedirectChainCookiesInChronologicalOrder() {
 		final FakeBackend backend = new FakeBackend();
 		final FakeClock clock = new FakeClock();
 		final FakeScheduler scheduler = new FakeScheduler();
@@ -138,7 +138,7 @@ public class CookieAccessCoordinatorTest {
 										.protocol(Protocol.HTTP_1_1)
 										.code(302)
 										.message("Found")
-										.header("Set-Cookie", "HSID=redirect")
+										.header("Set-Cookie", "SID=redirect")
 										.build())
 						.build();
 
@@ -146,8 +146,8 @@ public class CookieAccessCoordinatorTest {
 
 		assertEquals(
 						List.of(
-										"https://m.youtube.com/final|SID=final",
-										"https://m.youtube.com/redirect|HSID=redirect"),
+										"https://m.youtube.com/redirect|SID=redirect",
+										"https://m.youtube.com/final|SID=final"),
 						backend.setCookieCalls);
 		assertEquals(1, scheduler.pendingCount());
 		assertEquals(0, backend.flushCalls);
