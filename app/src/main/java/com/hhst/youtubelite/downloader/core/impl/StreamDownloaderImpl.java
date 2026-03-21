@@ -9,9 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.security.MessageDigest;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -23,7 +21,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import lombok.AllArgsConstructor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -44,12 +41,6 @@ public class StreamDownloaderImpl implements StreamDownloader {
         this.executor.allowCoreThreadTimeOut(true);
     }
 
-    private static long chunkLength(final int idx, final int totalChunks, final long partSize, final long totalLen) {
-        final long start = idx * partSize;
-        final long end = (idx == totalChunks - 1) ? totalLen - 1 : (start + partSize - 1);
-        return (totalLen <= 0 || end < start) ? 0 : (end - start + 1);
-    }
-
     private static void maybeReportProgress(@NonNull final TaskContext ctx, final long totalLen) {
         if (ctx.cb == null || totalLen <= 0) return;
         final long downloaded = Math.min(totalLen, Math.max(0, ctx.downloadedBytes.get()));
@@ -65,7 +56,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
     @Override
     public CompletableFuture<File> download(@NonNull String url, @NonNull File out, @Nullable ProgressCallback cb) {
         CompletableFuture<File> future = new CompletableFuture<>();
-        TaskContext ctx = new TaskContext(url, out, "dl_v5_" + out.getName(), future, cb);
+        TaskContext ctx = new TaskContext(url, out, "dl_v6_" + out.getName(), future, cb);
         tasks.put(out.getAbsolutePath(), ctx);
         new Thread(() -> runTask(ctx)).start();
         return future;
@@ -79,35 +70,42 @@ public class StreamDownloaderImpl implements StreamDownloader {
             boolean rangeSupported = total > 0 && (head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges")) || ctx.url.contains("googlevideo.com"));
             head.close();
 
-            int chunks = (!rangeSupported) ? 1 : (int) Math.min(64, Math.max(4, total / MIN_CHUNK_SIZE));
+            long savedTotal = mmkv.decodeLong(ctx.key + "_total", -1);
+            int chunks;
+            if (savedTotal != -1 && savedTotal == total) {
+                chunks = mmkv.decodeInt(ctx.key + "_chunks", 1);
+            } else {
+                for (int i = 0; i < 128; i++) mmkv.removeValueForKey(ctx.key + "_c" + i);
+                chunks = (!rangeSupported) ? 1 : (int) Math.min(64, Math.max(4, total / MIN_CHUNK_SIZE));
+                mmkv.encode(ctx.key + "_total", total);
+                mmkv.encode(ctx.key + "_chunks", chunks);
+            }
             long part = total > 0 ? total / chunks : total;
 
             long initialDownloaded = 0;
-            long[] chunkOffsets = new long[chunks];
             for (int i = 0; i < chunks; i++) {
-                long offset = mmkv.decodeLong(ctx.key + "_c" + i, 0L);
-                chunkOffsets[i] = offset;
-                initialDownloaded += offset;
+                initialDownloaded += mmkv.decodeLong(ctx.key + "_c" + i, 0L);
             }
             ctx.downloadedBytes.set(initialDownloaded);
             maybeReportProgress(ctx, total);
 
             raf = new RandomAccessFile(ctx.out, "rw");
-            if (total > 0) raf.setLength(total);
+            if (total > 0 && raf.length() != total) raf.setLength(total);
 
-            RandomAccessFile finalRaf = raf;
+            final RandomAccessFile finalRaf = raf;
             CompletableFuture.allOf(IntStream.range(0, chunks).mapToObj(i ->
-                    CompletableFuture.runAsync(() -> downloadChunk(ctx, i, chunks, part, total, finalRaf, chunkOffsets[i]), executor)
+                    CompletableFuture.runAsync(() -> downloadChunk(ctx, i, chunks, part, total, finalRaf), executor)
             ).toArray(CompletableFuture[]::new)).join();
 
             if (!ctx.isInactive()) {
+                mmkv.removeValuesForKeys(new String[]{ctx.key + "_total", ctx.key + "_chunks"});
                 for (int i = 0; i < chunks; i++) mmkv.removeValueForKey(ctx.key + "_c" + i);
                 tasks.remove(ctx.out.getAbsolutePath());
                 ctx.future.complete(ctx.out);
                 if (ctx.cb != null) ctx.cb.onComplete(ctx.out);
             }
         } catch (Exception e) {
-            if (!ctx.paused.get() && !ctx.cancelled.get()) {
+            if (!ctx.isInactive()) {
                 tasks.remove(ctx.out.getAbsolutePath());
                 ctx.future.completeExceptionally(e);
                 if (ctx.cb != null) ctx.cb.onError(e);
@@ -117,10 +115,11 @@ public class StreamDownloaderImpl implements StreamDownloader {
         }
     }
 
-    private void downloadChunk(TaskContext ctx, int idx, int totalChunks, long partSize, long totalLen, RandomAccessFile raf, long startOffset) {
+    private void downloadChunk(TaskContext ctx, int idx, int totalChunks, long partSize, long totalLen, RandomAccessFile raf) {
         if (ctx.isInactive()) return;
         long chunkStart = idx * partSize;
         long chunkEnd = (idx == totalChunks - 1) ? totalLen - 1 : (chunkStart + partSize - 1);
+        long startOffset = mmkv.decodeLong(ctx.key + "_c" + idx, 0L);
         long currentPos = chunkStart + startOffset;
         if (currentPos > chunkEnd) return;
 
@@ -141,14 +140,16 @@ public class StreamDownloaderImpl implements StreamDownloader {
                 maybeReportProgress(ctx, totalLen);
             }
         } catch (Exception e) {
-            if (!ctx.paused.get()) throw new RuntimeException(e);
+            if (!ctx.isInactive()) throw new RuntimeException(e);
         }
     }
 
     @Override public void pause(@NonNull String url) { tasks.values().stream().filter(t -> t.url.equals(url)).forEach(t -> t.paused.set(true)); }
     @Override public void cancel(@NonNull String url) {
-        tasks.values().stream().filter(t -> t.url.equals(url)).findFirst().ifPresent(t -> {
-            t.cancelled.set(true); tasks.remove(t.out.getAbsolutePath());
+        tasks.values().stream().filter(t -> t.url.equals(url)).forEach(t -> {
+            t.cancelled.set(true);
+            tasks.remove(t.out.getAbsolutePath());
+            mmkv.removeValuesForKeys(new String[]{t.key + "_total", t.key + "_chunks"});
             for (int i = 0; i < 128; i++) mmkv.removeValueForKey(t.key + "_c" + i);
             if (t.cb != null) t.cb.onCancel();
         });
@@ -160,15 +161,16 @@ public class StreamDownloaderImpl implements StreamDownloader {
     }
     @Override public void setMaxThreadCount(int count) { executor.setCorePoolSize(count); executor.setMaximumPoolSize(count); }
 
-    @AllArgsConstructor
     private static class TaskContext {
         final String url; final File out; final String key; final CompletableFuture<File> future; final ProgressCallback cb;
         final Object lock = new Object();
         final AtomicBoolean paused = new AtomicBoolean(false);
         final AtomicBoolean cancelled = new AtomicBoolean(false);
-        final AtomicInteger done = new AtomicInteger(0);
         final AtomicLong downloadedBytes = new AtomicLong(0);
         final AtomicInteger lastProgress = new AtomicInteger(-1);
+        TaskContext(String url, File out, String key, CompletableFuture<File> future, ProgressCallback cb) {
+            this.url = url; this.out = out; this.key = key; this.future = future; this.cb = cb;
+        }
         boolean isInactive() { return paused.get() || cancelled.get() || future.isCancelled(); }
     }
 }

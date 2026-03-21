@@ -5,6 +5,7 @@
     <string name="video">동영상</string>
     <string name="cancel">취소</string>
     <string name="download">다운로드</string>
+    <string name="menu_downloads">다운로드</string>
     <string name="video_quality">화질</string>
     <string name="confirm">확인</string>
     <string name="select_something_first">항목을 먼저 선택하세요</string>
@@ -13,6 +14,7 @@
     <string name="failed_to_download">다운로드 실패</string>
     <string name="failed_to_download_thumbnail">썸네일 다운로드 실패</string>
     <string name="audio_only">오디오</string>
+    <string name="player_gestures">플레이어 제스처</string>
     <string name="close">닫기</string>
     <string name="save">저장</string>
     <string name="share">공유</string>
@@ -113,8 +115,8 @@
     <string name="about">정보</string>
     <string name="download_tasks_added">다운로드 작업이 추가되었습니다</string>
     <string name="download_tasks_added_count">%1$d개의 작업이 대기열에 추가되었습니다</string>
-    <string name="download_history">다운로드 기록</string>
-    <string name="no_download_records">다운로드 기록이 없습니다</string>
+    <string name="download_history">다운로드</string>
+    <string name="no_download_records">아직 다운로드 항목이 없습니다...</string>
     <string name="open_file">파일 열기</string>
     <string name="file_not_found">파일을 찾을 수 없습니다</string>
     <string name="copy_vid">비디오 ID 복사</string>
@@ -123,7 +125,8 @@
     <string name="retry_download">다시 시도</string>
     <string name="delete_record">삭제</string>
     <string name="delete_record_confirmation">이 기록을 삭제하시겠습니까?</string>
-    <string name="delete_local_file">로컬 파일도 삭제</string>
+    <string name="delete_local_file">로컬 파일 삭제</string>
+    <string name="delete_local_files">로컬 파일 삭제</string>
     <string name="clear_history">기록 삭제</string>
     <string name="clear_history_confirmation">모든 다운로드 기록을 삭제하시겠습니까?</string>
     <string name="history_cleared">기록이 삭제되었습니다</string>
@@ -137,7 +140,21 @@
     <string name="type_audio">오디오</string>
     <string name="type_subtitle">자막</string>
     <string name="type_thumbnail">썸네일</string>
+    <string name="status_paused">일시정지됨</string>
+    <string name="action_resume_download">재개</string>
+    <string name="action_pause_download">일시정지</string>
+    <string name="download_progress_with_total">%1$s / %2$s MB (%3$d%%)</string>
+    <string name="download_progress_simple">%1$s MB</string>
+    <string name="download_status_with_type">%1$s • %2$s</string>
     <string name="filename">파일 이름</string>
-    <string name="reset_extension_message">모든 확장 기능 설정을 기본값으로 재설정할까요?</string>
     <string name="reset_extension_title">확장 기능 재설정</string>
+    <string name="reset_extension_message">모든 확장 기능 설정을 기본값으로 재설정할까요?</string>
+    <string name="selected_count">%1$d개 선택됨</string>
+    <string name="videos_count">%1$d개의 비디오</string>
+    <string name="size_mb">%.1f MB</string>
+    <string name="size_mb_ratio">%.1f MB / %.1f MB</string>
+    <string name="delete_everything">모두 삭제하시겠습니까?</string>
+    <string name="delete_items_count">%1$d개의 항목을 삭제하시겠습니까?</string>
+    <string name="downloads_default_title">다운로드</string>
+    <string name="download_singular">다운로드</string>
 </resources>

@@ -16,22 +16,29 @@
         android:layout_height="wrap_content"
         android:padding="12dp">
 
-        <!-- 1. Thumbnail (Reset to 110x65 for better fit) -->
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/checkbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@id/thumbnail"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail" />
+
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/thumbnail"
             android:layout_width="110dp"
             android:layout_height="65dp"
             android:scaleType="centerCrop"
             android:contentDescription="@string/thumbnail"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintStart_toEndOf="@id/checkbox"
             app:layout_constraintTop_toTopOf="parent"
             app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
 
-        <!-- 2. More Button (Standard Position) -->
         <ImageButton
             android:id="@+id/more"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/more_options"
             android:src="@drawable/ic_more"
@@ -39,7 +46,6 @@
             app:layout_constraintTop_toTopOf="parent"
             app:tint="?attr/colorOnSurfaceVariant" />
 
-        <!-- 3. Title (Fixed lines to prevent pushing progress bar) -->
         <TextView
             android:id="@+id/title"
             android:layout_width="0dp"
@@ -54,7 +60,6 @@
             app:layout_constraintTop_toTopOf="parent"
             tools:text="Video Title Example" />
 
-        <!-- 4. Size Info (One line logic) -->
         <TextView
             android:id="@+id/size_downloaded"
             android:layout_width="0dp"
@@ -67,7 +72,6 @@
             app:layout_constraintTop_toBottomOf="@id/title"
             tools:text="14.0 / 50.0 MB (28%)" />
 
-        <!-- 5. Progress Bar (Forced spacing to prevent overlap) -->
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/progress"
             android:layout_width="0dp"
@@ -80,7 +84,6 @@
             app:trackCornerRadius="4dp"
             app:trackThickness="4dp" />
 
-        <!-- 6. Status Text -->
         <TextView
             android:id="@+id/subtitle"
             android:layout_width="wrap_content"

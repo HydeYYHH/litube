@@ -1,33 +1,22 @@
-package com.hhst.youtubelite.ui;
-
-import android.Manifest;
+package com.hhst.youtubelite.ui;import android.Manifest;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.util.Log;
-import android.view.Gravity;
 import android.view.View;
 import android.webkit.WebView;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.LinearLayout;
-import android.widget.RadioGroup;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -37,19 +26,16 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.radiobutton.MaterialRadioButton;
-
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.browser.YoutubeWebview;
-import com.hhst.youtubelite.downloader.core.Task;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
+import com.hhst.youtubelite.downloader.ui.PlaylistDownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.util.DeviceUtils;
@@ -57,25 +43,17 @@ import com.hhst.youtubelite.util.UrlUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
-import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.Page;
 import org.schabi.newpipe.extractor.playlist.PlaylistExtractor;
-import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
-import org.schabi.newpipe.extractor.stream.VideoStream;
 
-import java.io.File;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.inject.Inject;
-
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
@@ -83,7 +61,6 @@ import dagger.hilt.android.AndroidEntryPoint;
 public final class MainActivity extends AppCompatActivity {
 
     private static final String YOUTUBE_WWW_HOST = "www.youtube.com";
-    private static final int REQUEST_NOTIFICATION_CODE = 100;
     private static final int DOUBLE_TAP_EXIT_INTERVAL_MS = 2_000;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -231,150 +208,14 @@ public final class MainActivity extends AppCompatActivity {
                     if (!Page.isValid(p.getNextPage())) break;
                     p = ex.getPage(p.getNextPage());
                 }
-                mainHandler.post(() -> showPlaylistVideoSelectionDialog(items, playlistName));
+                mainHandler.post(() -> {
+                    new PlaylistDownloadDialog(this, items, playlistName, youtubeExtractor, downloadService).show();
+                });
             } catch (Exception e) {
                 mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
-
-    private void showPlaylistVideoSelectionDialog(List<StreamInfoItem> items, String playlistName) {
-        String[] titles = new String[items.size()];
-        boolean[] checked = new boolean[items.size()];
-        for (int i = 0; i < items.size(); i++) {
-            titles[i] = items.get(i).getName();
-            checked[i] = true;
-        }
-
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setPadding(60, 30, 60, 0);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView tv = new TextView(this);
-        tv.setText("Select Videos");
-        tv.setTextSize(16);
-        tv.setTextColor(Color.WHITE);
-        tv.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
-        header.addView(tv);
-
-        CheckBox allCb = new CheckBox(this);
-        allCb.setChecked(true);
-        allCb.setText("All");
-        allCb.setTextColor(Color.WHITE);
-        header.addView(allCb);
-
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                .setCustomTitle(header)
-                .setMultiChoiceItems(titles, checked, (d, i, b) -> checked[i] = b)
-                .setPositiveButton("Next", null)
-                .setNegativeButton("Cancel", null)
-                .create();
-
-        allCb.setOnCheckedChangeListener((v, is) -> {
-            for (int i = 0; i < checked.length; i++) {
-                checked[i] = is;
-                dialog.getListView().setItemChecked(i, is);
-            }
-        });
-
-        dialog.setOnShowListener(d -> {
-            Button pos = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            Button neg = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-
-            pos.setOnClickListener(v -> {
-                List<PlaylistDownloadItem> selected = new ArrayList<>();
-                for (int i = 0; i < items.size(); i++) {
-                    if (checked[i]) selected.add(new PlaylistDownloadItem(items.get(i).getUrl(), items.get(i).getName()));
-                }
-                if (!selected.isEmpty()) {
-                    dialog.dismiss();
-                    showPlaylistQualityDialog(selected, playlistName);
-                }
-            });
-        });
-
-        dialog.show();
-    }
-
-    private void showPlaylistQualityDialog(List<PlaylistDownloadItem> selectedItems, String playlistName) {
-        RadioGroup rg = new RadioGroup(this);
-        rg.setPadding(48, 24, 48, 24);
-
-        String lastRes = kv.decodeString("last_download_res", "720p");
-        List<String> resOptions = List.of("144p", "240p", "360p", "480p", "720p", "1080p");
-        int selectedResIndex = resOptions.indexOf(lastRes);
-        if (selectedResIndex == -1) selectedResIndex = 4;
-
-        for (int i = 0; i < resOptions.size(); i++) {
-            MaterialRadioButton rb = new MaterialRadioButton(this);
-            rb.setText(resOptions.get(i));
-            rb.setTextColor(Color.WHITE);
-            rb.setId(View.generateViewId());
-            rb.setTag(resOptions.get(i));
-            rg.addView(rb);
-            if (i == selectedResIndex) rb.setChecked(true);
-        }
-
-        AlertDialog qualityDialog = new MaterialAlertDialogBuilder(this)
-                .setTitle("Choose Quality")
-                .setView(rg)
-                .setPositiveButton("Download", null)
-                .setNegativeButton("Cancel", null)
-                .create();
-
-        qualityDialog.setOnShowListener(d -> {
-            Button pos = qualityDialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            pos.setOnClickListener(v -> {
-                int checkedId = rg.getCheckedRadioButtonId();
-                if (checkedId == -1) return;
-                MaterialRadioButton rb = rg.findViewById(checkedId);
-                String selectedRes = (String) rb.getTag();
-
-                kv.encode("last_download_res", selectedRes);
-                qualityDialog.dismiss();
-                processBulkDownload(selectedItems, playlistName, selectedRes);
-            });
-        });
-
-        qualityDialog.show();
-    }
-
-    private void processBulkDownload(List<PlaylistDownloadItem> items, String playlistName, String selectedRes) {
-        Toast.makeText(this, "Enqueuing " + items.size() + " items...", Toast.LENGTH_LONG).show();
-        int threads = kv.decodeInt("download_thread_count", 4);
-        String sanitizedPl = playlistName.replaceAll("[<>:\"/|?*]", "_");
-        
-        ExecutorService pool = Executors.newFixedThreadPool(3);
-        for (PlaylistDownloadItem item : items) {
-            pool.execute(() -> {
-                try {
-                    StreamDetails si = youtubeExtractor.getStreamInfo(item.url);
-                    VideoStream vs = si.getVideoStreams().stream()
-                            .filter(s -> s.getResolution().equals(selectedRes))
-                            .min(Comparator.comparingInt(s -> s.getFormat() == MediaFormat.MPEG_4 ? 0 : 1))
-                            .orElse(si.getVideoStreams().get(0));
-                    
-                    AudioStream as = si.getAudioStreams().stream()
-                            .filter(s -> s.getFormat() == MediaFormat.M4A)
-                            .findFirst().orElse(si.getAudioStreams().get(0));
-                            
-                    File dir = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), getString(R.string.app_name));
-                    if (!dir.exists()) dir.mkdirs();
-                    
-                    String sanitized = item.title.replaceAll("[<>:\"/|?*]", "_");
-                    String finalName = sanitizedPl + "_" + sanitized;
-                    Task t = new Task(YoutubeExtractor.getVideoId(item.url) + ":v", vs, as, null, null, finalName, dir, threads);
-                    
-                    mainHandler.post(() -> { if (downloadService != null) downloadService.download(List.of(t)); });
-                    Thread.sleep(1000);
-                } catch (Exception ignored) {}
-            });
-        }
-        pool.shutdown();
-    }
-
-    private record PlaylistDownloadItem(String url, String title) {}
 
     private void shareUrl(String url) {
         Intent i = new Intent(Intent.ACTION_SEND);

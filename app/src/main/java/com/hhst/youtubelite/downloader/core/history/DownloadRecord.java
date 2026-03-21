@@ -30,4 +30,6 @@ public class DownloadRecord {
 	private String errorMessage;
 	private long downloadedSize;
 	private long totalSize;
+	@Nullable
+	private String quality;
 }

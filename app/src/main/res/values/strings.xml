@@ -116,16 +116,17 @@
     <string name="download_tasks_added">Download tasks added</string>
     <string name="download_tasks_added_count">%1$d tasks added to queue</string>
     <string name="download_history">Downloads</string>
-    <string name="no_download_records">No download records</string>
+    <string name="no_download_records">No Downloads yet...</string>
     <string name="open_file">Open file</string>
     <string name="file_not_found">File not found</string>
     <string name="copy_vid">Copy video ID</string>
     <string name="vid_copied">Video ID copied</string>
     <string name="cancel_download">Cancel</string>
-    <string name="retry_download">Re-download</string>
+    <string name="retry_download">Retry</string>
     <string name="delete_record">Delete</string>
     <string name="delete_record_confirmation">Delete this record?</string>
     <string name="delete_local_file">Delete local file</string>
+    <string name="delete_local_files">Delete local files</string>
     <string name="clear_history">Clear history</string>
     <string name="clear_history_confirmation">Clear all download history?</string>
     <string name="history_cleared">History cleared</string>
@@ -148,5 +149,13 @@
     <string name="filename">Filename</string>
     <string name="reset_extension_title">Reset extensions</string>
     <string name="reset_extension_message">Reset all extension settings to default?</string>
-</resources>
+    <string name="selected_count">%1$d selected</string>
+    <string name="videos_count">%1$d videos</string>
+    <string name="size_mb">%.1f MB</string>
+    <string name="size_mb_ratio">%.1f MB / %.1f MB</string>
+    <string name="delete_everything">Delete everything?</string>
+    <string name="delete_items_count">Delete %1$d items?</string>
+    <string name="downloads_default_title">Downloads</string>
+    <string name="download_singular">Download</string>
 
+</resources>

@@ -53,12 +53,20 @@ public class LiteDownloaderImpl implements LiteDownloader {
     @Override
     public void download(@NonNull Task t) {
         pausedTasks.remove(t.vid());
-        tasks.put(t.vid(), t);
-        if (isProcessing.get()) {
-            queuedTasks.add(t);
-            return;
+        synchronized (queuedTasks) {
+            queuedTasks.removeIf(task -> task.vid().equals(t.vid()));
+            if (isProcessing.get()) {
+                tasks.put(t.vid(), t);
+                queuedTasks.add(t);
+                return;
+            }
+            isProcessing.set(true);
         }
-        isProcessing.set(true);
+        tasks.put(t.vid(), t);
+        startTaskInternal(t);
+    }
+
+    private void startTaskInternal(Task t) {
         if (t.subtitle() != null) {
             exec(t, () -> FileUtils.copyURLToFile(new URL(t.subtitle().getContent()), new File(t.desDir(), t.fileName() + "." + t.subtitle().getExtension())));
         } else if (t.thumbnail() != null) {
@@ -71,6 +79,9 @@ public class LiteDownloaderImpl implements LiteDownloader {
     @Override
     public void pause(@NonNull String vid) {
         pausedTasks.add(vid);
+        synchronized (queuedTasks) {
+            queuedTasks.removeIf(t -> t.vid().equals(vid));
+        }
         Task t = tasks.get(vid);
         if (t != null) {
             if (t.video() != null) streamDL.pause(t.video().getContent());
@@ -93,36 +104,36 @@ public class LiteDownloaderImpl implements LiteDownloader {
     @Override
     public void cancel(@NonNull String vid) {
         pausedTasks.remove(vid);
+        synchronized (queuedTasks) {
+            queuedTasks.removeIf(t -> t.vid().equals(vid));
+        }
         Task t = tasks.remove(vid);
-        if (t == null) return;
-        if (t.video() != null) streamDL.cancel(t.video().getContent());
-        if (t.audio() != null) streamDL.cancel(t.audio().getContent());
-        notify(vid, ProgressCallback2::onCancel);
-        clean(t);
+        if (t != null) {
+            if (t.video() != null) streamDL.cancel(t.video().getContent());
+            if (t.audio() != null) streamDL.cancel(t.audio().getContent());
+            notify(vid, ProgressCallback2::onCancel);
+            clean(t);
+        }
         startNext();
     }
 
     private void startNext() {
-        if (queuedTasks.isEmpty()) {
-            isProcessing.set(false);
-            return;
+        Task next;
+        synchronized (queuedTasks) {
+            next = queuedTasks.poll();
+            if (next == null) {
+                isProcessing.set(false);
+                return;
+            }
         }
-        Task next = queuedTasks.poll();
-        tasks.put(next.vid(), next);
-        if (next.subtitle() != null) {
-            exec(next, () -> FileUtils.copyURLToFile(new URL(next.subtitle().getContent()), new File(next.desDir(), next.fileName() + "." + next.subtitle().getExtension())));
-        } else if (next.thumbnail() != null) {
-            exec(next, () -> FileUtils.copyURLToFile(new URL(next.thumbnail()), new File(next.desDir(), next.fileName() + ".jpg")));
-        } else {
-            downloadMedia(next);
-        }
+        startTaskInternal(next);
     }
 
     private void exec(Task t, RunnableIOC r) {
         CompletableFuture.runAsync(() -> {
             try {
                 r.run();
-                complete(t.vid(), new File(t.desDir(), t.fileName() + (t.thumbnail() != null ? ".jpg" : "." + t.subtitle().getExtension())));
+                complete(t.vid(), new File(t.desDir(), t.fileName() + (t.thumbnail() != null ? ".jpg" : "." + (t.subtitle() != null ? t.subtitle().getExtension() : "srt"))));
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -134,14 +145,17 @@ public class LiteDownloaderImpl implements LiteDownloader {
         File vF = tmp(t, "_v"), aF = tmp(t, "_a"), out = new File(t.desDir(), t.fileName() + (t.video() != null ? ".mp4" : ".m4a"));
         long vSz = len(t.video()), aSz = len(t.audio());
         Aggregator agg = new Aggregator(vSz, aSz, (p, d, tot) -> progress(t.vid(), p, d, tot));
+        
         CompletableFuture<File> vFut = t.video() == null ? null : streamDL.download(t.video().getContent(), vF, createProgressAdapter(t.vid(), p -> {
             if (aSz > 0) agg.updV(p);
             else progress(t.vid(), p, (long) (vSz * (p / 100.0)), vSz);
         }));
+        
         CompletableFuture<File> aFut = t.audio() == null ? null : streamDL.download(t.audio().getContent(), aF, createProgressAdapter(t.vid(), p -> {
             if (vSz > 0) agg.updA(p);
             else progress(t.vid(), p, (long) (aSz * (p / 100.0)), aSz);
         }));
+
         CompletableFuture<?> combined = (vFut != null && aFut != null ? CompletableFuture.allOf(vFut, aFut) : (vFut != null ? vFut : aFut));
         if (combined != null) {
             combined.thenRun(() -> {
@@ -181,7 +195,7 @@ public class LiteDownloaderImpl implements LiteDownloader {
         Throwable c = e instanceof CompletionException ? e.getCause() : e;
         if (tasks.containsKey(t.vid())) {
             notify(t.vid(), cb -> cb.onError(c instanceof Exception ? (Exception) c : new Exception(c)));
-            clean(tasks.remove(t.vid()));
+            tasks.remove(t.vid());
         }
         startNext();
         return null;
@@ -189,7 +203,11 @@ public class LiteDownloaderImpl implements LiteDownloader {
 
     private void complete(String vid, File f) {
         if (pausedTasks.contains(vid)) return;
-        if (tasks.remove(vid) != null) notify(vid, cb -> cb.onComplete(f));
+        Task t = tasks.remove(vid);
+        if (t != null) {
+            notify(vid, cb -> cb.onComplete(f));
+            clean(t);
+        }
         startNext();
     }
 

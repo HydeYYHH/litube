@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_pause_all"
+        android:title="Pause all"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_resume_all"
+        android:title="Resume all"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_delete_all"
+        android:title="Delete all"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_clear_history"
+        android:title="@string/clear_history"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_pause_selected"
+        android:title="Pause selected"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_resume_selected"
+        android:title="Resume selected"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_retry_selected"
+        android:title="Retry selected"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_cancel_selected"
+        android:title="Cancel selected"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_delete_selected"
+        android:title="Delete selected"
+        android:visible="false"
+        app:showAsAction="never" />
+</menu>

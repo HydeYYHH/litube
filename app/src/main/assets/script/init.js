@@ -8,14 +8,14 @@ try {
     if (!window.injected) {
         const getLocalizedText = (key) => {
             const languages = {
-                 'zh': { 'downloads': '下载', 'extensions': '扩展', 'chat': '聊天室', 'about': '关于' },
-                 'zt': { 'downloads': '下載', 'extensions': '擴充功能', 'chat': '聊天室', 'about': '關於' },
-                 'en': { 'downloads': 'Downloads', 'extensions': 'Extensions', 'chat': 'Chat', 'about': 'About' },
-                 'ja': { 'downloads': 'ダウンロード', 'extensions': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
-                 'ko': { 'downloads': '다운로드', 'extensions': '플러그인', 'chat': '채팅', 'about': '정보' },
-                 'fr': { 'downloads': 'Télécharger', 'extensions': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
-                 'ru': { 'downloads': 'Скачать', 'extensions': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
-                 'tr': { 'downloads': 'İndir', 'extensions': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
+                 'zh': { 'download': '下载', 'downloads': '下载', 'extensions': '扩展', 'chat': '聊天室', 'about': '关于' },
+                 'zt': { 'download': '下載', 'downloads': '下載', 'extensions': '擴充功能', 'chat': '聊天室', 'about': '關於' },
+                 'en': { 'download': 'Download', 'downloads': 'Downloads', 'extensions': 'Extensions', 'chat': 'Chat', 'about': 'About' },
+                 'ja': { 'download': 'ダウンロード', 'downloads': 'ダウンロード', 'extensions': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
+                 'ko': { 'download': '다운로드', 'downloads': '다운로드', 'extensions': '플러그인', 'chat': '채팅', 'about': '정보' },
+                 'fr': { 'download': 'Télécharger', 'downloads': 'Télécharger', 'extensions': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
+                 'ru': { 'download': 'Скачать', 'downloads': 'Скачать', 'extensions': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
+                 'tr': { 'download': 'İndir', 'downloads': 'İndir', 'extensions': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
             const lang = (document.documentElement.lang || 'en').toLowerCase();
             let keyLang = lang.substring(0, 2);
@@ -183,7 +183,7 @@ try {
                     const dlBtn = saveBtn.cloneNode(true);
                     dlBtn.id = 'downloadButton';
                     const txt = dlBtn.querySelector('.yt-spec-button-shape-next__button-text-content');
-                    if (txt) txt.innerText = getLocalizedText('downloads');
+                    if (txt) txt.innerText = getLocalizedText('download');
                     const svg = dlBtn.querySelector('svg');
                     if (svg) {
                         svg.setAttribute("viewBox", "0 -960 960 960");
