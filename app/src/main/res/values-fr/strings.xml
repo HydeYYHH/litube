@@ -5,6 +5,7 @@
     <string name="video">Vidéo</string>
     <string name="cancel">Annuler</string>
     <string name="download">Télécharger</string>
+    <string name="menu_downloads">Téléchargements</string>
     <string name="video_quality">Qualité vidéo</string>
     <string name="confirm">Confirmer</string>
     <string name="select_something_first">Sélectionnez d\'abord quelque chose</string>
@@ -13,6 +14,7 @@
     <string name="failed_to_download">Échec du téléchargement</string>
     <string name="failed_to_download_thumbnail">Échec du téléchargement de la miniature </string>
     <string name="audio_only">Audio</string>
+    <string name="player_gestures">Gestes du lecteur</string>
     <string name="close">Fermer</string>
     <string name="save">Sauvegarder</string>
     <string name="share">Partager</string>
@@ -93,7 +95,7 @@
     <string name="failed_to_load_image">Échec du chargement de l\'image</string>
     <string name="application_not_found">Application non trouvée</string>
     <string name="press_back_again_to_exit">Appuyez à nouveau sur retour pour quitter</string>
-    <string name="tap_to_unmute">Tap to unmute</string>
+    <string name="tap_to_unmute">Appuyez pour réactiver le son</string>
     <string name="threads">Threads</string>
     <string name="app_description">Un wrapper webview avancé pour YouTube.</string>
     <string name="source_code">Code Source</string>
@@ -113,8 +115,8 @@
     <string name="about">À propos</string>
     <string name="download_tasks_added">Tâches de téléchargement ajoutées</string>
     <string name="download_tasks_added_count">%1$d tâches ajoutées à la file d\'attente</string>
-    <string name="download_history">Historique de téléchargement</string>
-    <string name="no_download_records">Aucun enregistrement de téléchargement</string>
+    <string name="download_history">Téléchargements</string>
+    <string name="no_download_records">Aucun téléchargement pour le moment...</string>
     <string name="open_file">Ouvrir le fichier</string>
     <string name="file_not_found">Fichier non trouvé</string>
     <string name="copy_vid">Copier l\'ID de la vidéo</string>
@@ -123,7 +125,8 @@
     <string name="retry_download">Réessayer</string>
     <string name="delete_record">Supprimer</string>
     <string name="delete_record_confirmation">Voulez-vous supprimer cet enregistrement ?</string>
-    <string name="delete_local_file">Supprimer aussi le fichier local</string>
+    <string name="delete_local_file">Supprimer le fichier local</string>
+    <string name="delete_local_files">Supprimer les fichiers locaux</string>
     <string name="clear_history">Effacer l\'historique</string>
     <string name="clear_history_confirmation">Voulez-vous effacer tout l\'historique des téléchargements ?</string>
     <string name="history_cleared">Historique effacé</string>
@@ -137,7 +140,21 @@
     <string name="type_audio">Audio</string>
     <string name="type_subtitle">Sous-titre</string>
     <string name="type_thumbnail">Miniature</string>
+    <string name="status_paused">En pause</string>
+    <string name="action_resume_download">Reprendre</string>
+    <string name="action_pause_download">Pause</string>
+    <string name="download_progress_with_total">%1$s / %2$s Mo (%3$d%%)</string>
+    <string name="download_progress_simple">%1$s Mo</string>
+    <string name="download_status_with_type">%1$s • %2$s</string>
     <string name="filename">Nom du fichier</string>
     <string name="reset_extension_message">Réinitialiser tous les paramètres des extensions par défaut ?</string>
     <string name="reset_extension_title">Réinitialiser les extensions</string>
+    <string name="selected_count">%1$d sélectionné(s)</string>
+    <string name="videos_count">%1$d vidéos</string>
+    <string name="size_mb">%.1f Mo</string>
+    <string name="size_mb_ratio">%.1f Mo / %.1f Mo</string>
+    <string name="delete_everything">Tout supprimer ?</string>
+    <string name="delete_items_count">Supprimer %1$d éléments ?</string>
+    <string name="downloads_default_title">Téléchargements</string>
+    <string name="download_singular">Télécharger</string>
 </resources>

@@ -12,6 +12,6 @@ import java.io.File;
 public record Task(@NonNull String vid, @Nullable VideoStream video, @Nullable AudioStream audio,
                    @Nullable SubtitlesStream subtitle, @Nullable String thumbnail,
                    @NonNull String fileName,
-                   @NonNull File desDir, int threadCount) {
+                   @NonNull File desDir, int threadCount, @Nullable String quality) {
 
 }

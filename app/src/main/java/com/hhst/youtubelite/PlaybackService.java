@@ -66,11 +66,16 @@ public class PlaybackService extends Service {
 	public void onCreate() {
 		super.onCreate();
 		notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-		final NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_DEFAULT);
-		channel.setDescription("Media playback controls");
-		channel.setShowBadge(false);
-		channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-		if (notificationManager != null) notificationManager.createNotificationChannel(channel);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			final NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_LOW);
+			channel.setDescription("Media playback controls");
+			channel.setShowBadge(false);
+			channel.setSound(null, null);
+			channel.enableLights(false);
+			channel.enableVibration(false);
+			channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+			if (notificationManager != null) notificationManager.createNotificationChannel(channel);
+		}
 		mediaSession = new MediaSessionCompat(this, TAG);
 		final PlaybackStateCompat initialState = new PlaybackStateCompat.Builder().setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SEEK_TO).setState(PlaybackStateCompat.STATE_NONE, 0, 1.0f).build();
 		mediaSession.setPlaybackState(initialState);
@@ -160,7 +165,7 @@ public class PlaybackService extends Service {
 		if (launchIntent == null) launchIntent = new Intent(this, MainActivity.class);
 		launchIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 		final PendingIntent contentIntent = PendingIntent.getActivity(this, 101, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-		return new NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle(title).setContentText(artist).setLargeIcon(largeIcon).setContentIntent(contentIntent).setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(isPlaying).addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevIntent).addAction(playPauseIcon, playPauseTitle, playPauseIntent).addAction(R.drawable.ic_next, getString(R.string.action_next), nextIntent).setStyle(new MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).build();
+		return new NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle(title).setContentText(artist).setLargeIcon(largeIcon).setContentIntent(contentIntent).setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(isPlaying).setSilent(true).addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevIntent).addAction(playPauseIcon, playPauseTitle, playPauseIntent).addAction(R.drawable.ic_next, getString(R.string.action_next), nextIntent).setStyle(new MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).setGroup("playback_notification").setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY).build();
 	}
 
 	public void showNotification(@Nullable final String title, @Nullable final String author, @Nullable final String thumbnail, final long duration) {

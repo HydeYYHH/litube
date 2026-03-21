@@ -5,6 +5,7 @@
     <string name="video">Видео</string>
     <string name="cancel">Отменить</string>
     <string name="download">Скачать</string>
+    <string name="menu_downloads">Загрузки</string>
     <string name="video_quality">Качество видео</string>
     <string name="confirm">Подтвердить</string>
     <string name="select_something_first">Сначала выберите что-нибудь</string>
@@ -13,6 +14,7 @@
     <string name="failed_to_download">Не удалось скачать</string>
     <string name="failed_to_download_thumbnail">Не удалось загрузить миниатюру </string>
     <string name="audio_only">Аудио</string>
+    <string name="player_gestures">Жесты плеера</string>
     <string name="close">Закрыть</string>
     <string name="save">Сохранить</string>
     <string name="share">Поделиться</string>
@@ -93,7 +95,7 @@
     <string name="failed_to_load_image">Не удалось загрузить изображение</string>
     <string name="application_not_found">Приложение не найдено</string>
     <string name="press_back_again_to_exit">Нажмите еще раз, чтобы выйти</string>
-    <string name="tap_to_unmute">Tap to unmute</string>
+    <string name="tap_to_unmute">Нажмите, чтобы включить звук</string>
     <string name="threads">Потоки</string>
     <string name="app_description">Продвинутая оболочка WebView для YouTube.</string>
     <string name="source_code">Исходный код</string>
@@ -105,7 +107,7 @@
     <string name="check_for_updates">Проверить обновления</string>
     <string name="update_available">Доступно обновление: %1$s</string>
     <string name="no_updates_available">Вы используете последнюю версию</string>
-    <string name="checking_for_updates">Проверка обновлений...</string>
+    <string name="checking_for_updates">Проверка обновлений…</string>
     <string name="failed_to_check_for_updates">Не удалось проверить обновления</string>
     <string name="clear_cache_confirmation">Вы уверены, что хотите очистить кэш приложения?</string>
     <string name="clear">Очистить</string>
@@ -114,7 +116,7 @@
     <string name="download_tasks_added">Задачи на загрузку добавлены</string>
     <string name="download_tasks_added_count">Добавлено %1$d задач в очередь</string>
     <string name="download_history">Загрузки</string>
-    <string name="no_download_records">Нет записей о загрузках</string>
+    <string name="no_download_records">Загрузок пока нет...</string>
     <string name="open_file">Открыть файл</string>
     <string name="file_not_found">Файл не найден</string>
     <string name="copy_vid">Копировать ID видео</string>
@@ -124,12 +126,13 @@
     <string name="delete_record">Удалить</string>
     <string name="delete_record_confirmation">Удалить эту запись?</string>
     <string name="delete_local_file">Удалить локальный файл</string>
+    <string name="delete_local_files">Удалить локальные файлы</string>
     <string name="clear_history">Очистить историю</string>
     <string name="clear_history_confirmation">Очистить всю историю загрузок?</string>
     <string name="history_cleared">История очищена</string>
     <string name="status_queued">В очереди</string>
     <string name="status_downloading">Загрузка (%1$d%%)</string>
-    <string name="status_merging">Объединение...</string>
+    <string name="status_merging">Объединение…</string>
     <string name="status_completed">Завершено</string>
     <string name="status_cancelled">Отменено</string>
     <string name="status_failed">Ошибка</string>
@@ -137,7 +140,21 @@
     <string name="type_audio">Аудио</string>
     <string name="type_subtitle">Субтитры</string>
     <string name="type_thumbnail">Миниатюра</string>
+    <string name="status_paused">Приостановлено</string>
+    <string name="action_resume_download">Возобновить</string>
+    <string name="action_pause_download">Пауза</string>
+    <string name="download_progress_with_total">%1$s / %2$s МБ (%3$d%%)</string>
+    <string name="download_progress_simple">%1$s МБ</string>
+    <string name="download_status_with_type">%1$s • %2$s</string>
     <string name="filename">Имя файла</string>
-    <string name="reset_extension_message">Сбросить все настройки расширений к значениям по умолчанию?</string>
     <string name="reset_extension_title">Сбросить расширения</string>
+    <string name="reset_extension_message">Сбросить все настройки расширений к значениям по умолчанию?</string>
+    <string name="selected_count">Выбрано: %1$d</string>
+    <string name="videos_count">Видео: %1$d</string>
+    <string name="size_mb">%.1f МБ</string>
+    <string name="size_mb_ratio">%.1f МБ / %.1f МБ</string>
+    <string name="delete_everything">Удалить всё?</string>
+    <string name="delete_items_count">Удалить эти %1$d элементов?</string>
+    <string name="downloads_default_title">Загрузки</string>
+    <string name="download_singular">Скачать</string>
 </resources>

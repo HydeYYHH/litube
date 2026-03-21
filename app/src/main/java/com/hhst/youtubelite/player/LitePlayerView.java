@@ -153,11 +153,9 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	public void cueing(@NonNull final CueGroup cueGroup) {
-		if (subtitleView == null) {
-			final SubtitleView defaultSubtitleView = getSubtitleView();
-			if (defaultSubtitleView != null) defaultSubtitleView.setVisibility(View.GONE);
-			subtitleView = findViewById(R.id.custom_subtitle_view);
-		}
+		final SubtitleView sv = getCustomSubtitleView();
+		if (sv == null) return;
+		
 		final List<Cue> cues = new ArrayList<>();
 		for (final Cue cue : cueGroup.cues)
 			cues.add(cue.buildUpon()
@@ -166,7 +164,17 @@ public class LitePlayerView extends PlayerView {
 							.setPosition(SUBTITLE_POSITION_FRACTION)
 							.setPositionAnchor(Cue.ANCHOR_TYPE_MIDDLE)
 							.build());
-		subtitleView.setCues(cues);
+		sv.setCues(cues);
+	}
+
+	@Nullable
+	public SubtitleView getCustomSubtitleView() {
+		if (subtitleView == null) {
+			final SubtitleView defaultSubtitleView = getSubtitleView();
+			if (defaultSubtitleView != null) defaultSubtitleView.setVisibility(View.GONE);
+			subtitleView = findViewById(R.id.custom_subtitle_view);
+		}
+		return subtitleView;
 	}
 
 	@Override

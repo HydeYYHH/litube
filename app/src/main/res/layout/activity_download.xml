@@ -15,8 +15,25 @@
 			android:id="@+id/toolbar"
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			app:title="@string/download_history"
-			app:navigationIcon="@drawable/ic_arrow_back" />
+			app:title="@string/download_history">
+
+			<LinearLayout
+				android:id="@+id/selection_header"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:gravity="center_vertical"
+				android:orientation="horizontal"
+				android:visibility="gone">
+
+				<com.google.android.material.checkbox.MaterialCheckBox
+					android:id="@+id/toolbar_checkbox"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="Select All"
+					android:textAppearance="?attr/textAppearanceTitleMedium" />
+			</LinearLayout>
+
+		</com.google.android.material.appbar.MaterialToolbar>
 	</com.google.android.material.appbar.AppBarLayout>
 
 	<FrameLayout
@@ -43,4 +60,3 @@
 	</FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-

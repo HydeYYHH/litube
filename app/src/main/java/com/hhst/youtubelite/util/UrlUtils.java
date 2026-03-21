@@ -23,15 +23,17 @@ public final class UrlUtils {
 	public static final String PAGE_SEARCHING = "searching";
 
 	private static final Set<String> ALLOWED_DOMAINS = Set.of(
-					Constant.YOUTUBE_DOMAIN,
-					"youtube.googleapis.com",
-					"googlevideo.com",
-					"ytimg.com",
-					"accounts.google",
-					"accounts.google.com",
+					"youtube.com",
+					"google.com",
 					"googleusercontent.com",
-					"apis.google.com",
-					"gstatic.com"
+					"gstatic.com",
+					"googleapis.com",
+					"googlevideo.com",
+					"ggpht.com",
+					"ytimg.com",
+					"yt.be",
+					"google.ad",
+					"doubleclick.net"
 	);
 
 	public static boolean isAllowedDomain(@Nullable final Uri uri) {
@@ -39,6 +41,11 @@ public final class UrlUtils {
 		final String host = uri.getHost();
 		if (host == null) return false;
 		final String lowerHost = host.toLowerCase();
+
+		if (lowerHost.contains("accounts.google") || lowerHost.contains("accounts.youtube") || lowerHost.contains("myaccount.google")) {
+			return true;
+		}
+
 		return ALLOWED_DOMAINS.stream().anyMatch(domain ->
 						lowerHost.equals(domain) || lowerHost.endsWith("." + domain));
 	}
@@ -52,7 +59,7 @@ public final class UrlUtils {
 		if (host == null) return PAGE_UNKNOWN;
 
 		final String lowerHost = host.toLowerCase();
-		if (!lowerHost.equals(Constant.YOUTUBE_MOBILE_HOST) && !lowerHost.equals(Constant.YOUTUBE_DOMAIN))
+		if (!lowerHost.endsWith("youtube.com"))
 			return PAGE_UNKNOWN;
 
 		final List<String> segments = uri.getPathSegments();
