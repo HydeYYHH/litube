@@ -36,6 +36,9 @@ public final class ViewUtils {
 			v.animate().cancel();
 			v.setAlpha(ALPHA_VISIBLE);
 			v.setVisibility(View.VISIBLE);
+		} else if (v.getVisibility() != View.VISIBLE) {
+			v.setAlpha(ALPHA_INVISIBLE);
+			v.setVisibility(visibilityIfGone);
 		} else {
 			v.setVisibility(View.VISIBLE);
 			v.animate().alpha(alpha).setDuration(ANIMATION_DURATION_MS).withEndAction(() -> {

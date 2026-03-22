@@ -91,11 +91,10 @@ public class Controller {
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
 	private TextView hintText;
-	@Getter
-	private boolean isControlsVisible = false;
 	@Setter
 	private boolean longPress = false;
-	private boolean isLocked = false;
+	@NonNull
+	private final ControllerMachine stateMachine = new ControllerMachine();
 	private long lastVideoRenderedCount = 0;
 	private long lastFpsUpdateTime = 0;
 	private float fps = 0;	@NonNull
@@ -109,7 +108,8 @@ public class Controller {
 		this.zoomListener = zoomListener;
 		this.tabManager = tabManager;
 		this.extensionManager = extensionManager;
-		this.zoomListener.setOnShowReset(show -> showReset(show && playerView.isFs() && isControlsVisible));
+		this.zoomListener.setOnShowReset(show ->
+						showReset(show && isControlsVisible() && stateMachine.getState() == ControllerMachine.State.FULLSCREEN_UNLOCKED));
 
 
 		playerView.post(() -> {
@@ -145,11 +145,11 @@ public class Controller {
 		final GestureDetector detector = new GestureDetector(activity, gestureListener);
 		playerView.setOnTouchListener((v, ev) -> {
 			final int action = ev.getAction();
-			if (action == MotionEvent.ACTION_DOWN && isControlsVisible) {
+			if (action == MotionEvent.ACTION_DOWN && isControlsVisible()) {
 				handler.removeCallbacks(hideControls);
 			}
 			boolean handled = detector.onTouchEvent(ev);
-			if (!handled && playerView.isFs()) zoomListener.onTouch(ev);
+			if (!handled && isFullscreen()) zoomListener.onTouch(ev);
 			if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
 				gestureListener.onTouchRelease();
 				if (longPress) {
@@ -157,7 +157,7 @@ public class Controller {
 					engine.setPlaybackRate(prefs.getSpeed());
 					hideHint();
 				}
-				if (isControlsVisible) hideControlsAutomatically();
+				if (isControlsVisible()) hideControlsAutomatically();
 			}
 			return handled;
 		});
@@ -167,14 +167,14 @@ public class Controller {
 			public void onIsPlayingChanged(boolean isPlaying) {
 				updatePlayPauseButtons(isPlaying);
 				playerView.setKeepScreenOn(isPlaying);
-				if (!isPlaying && isControlsVisible) hideControlsAutomatically();
+				if (!isPlaying && isControlsVisible()) hideControlsAutomatically();
 			}
 
 			@Override
 			public void onPlaybackStateChanged(int playbackState) {
 				if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
 					hideControlsAutomatically();
-				} else if (playbackState == Player.STATE_BUFFERING && isControlsVisible) {
+				} else if (playbackState == Player.STATE_BUFFERING && isControlsVisible()) {
 					setControlsVisible(true);
 				}
 				if (playbackState == Player.STATE_READY) {
@@ -236,17 +236,16 @@ public class Controller {
 		final ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
 		if (lockBtn != null) {
 			lockBtn.setOnClickListener(v -> {
-				isLocked = !isLocked;
-				lockBtn.setImageResource(isLocked ? R.drawable.ic_lock : R.drawable.ic_unlock);
-				setControlsVisible(true);
-				showHint(activity.getString(isLocked ? R.string.lock_screen : R.string.unlock_screen), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
+				toggleLockState();
+				showHint(activity.getString(stateMachine.isLocked() ? R.string.lock_screen : R.string.unlock_screen),
+								com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 			});
 		}
 
 		final ImageButton fsBtn = playerView.findViewById(R.id.btn_fullscreen);
 		if (fsBtn != null) {
 			fsBtn.setOnClickListener(v -> {
-				if (!playerView.isFs()) {
+				if (!isFullscreen()) {
 					enterFullscreen();
 				} else {
 					exitFullscreen();
@@ -562,53 +561,50 @@ public class Controller {
 		if (o != null) o.setOnClickListener(l);
 	}
 
-	private void toggleLock() {
-		isLocked = !isLocked;
-		ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
-		if (lockBtn != null)
-			lockBtn.setImageResource(isLocked ? R.drawable.ic_lock : R.drawable.ic_unlock);
-	}
-
 	public void enterFullscreen() {
-		playerView.enterFullscreen(PlayerUtils.isPortrait(engine));
-		playerView.setResizeMode(prefs.getResizeMode());
-		setControlsVisible(true);
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.enterFullscreen();
+		applyControllerState(previousState, true);
 	}
 
 	public void exitFullscreen() {
-		if (isLocked) toggleLock();
-		playerView.exitFullscreen();
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.exitFullscreen();
+		applyControllerState(previousState, true);
 		zoomListener.reset();
-		setControlsVisible(true);
 	}
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
-		playerView.onPictureInPictureModeChanged(isInPiP);
-		setControlsVisible(!isInPiP);
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.onPictureInPictureModeChanged(isInPiP);
+		applyControllerState(previousState, !isInPiP);
 	}
 
 	public void setControlsVisible(boolean visible) {
-		if (visible && activity.isInPictureInPictureMode()) return;
-		this.isControlsVisible = visible;
+		stateMachine.setControlsVisible(visible);
+		final ControllerMachine.RenderState renderState = stateMachine.currentRenderState(
+						engine.getPlaybackState() == Player.STATE_BUFFERING,
+						zoomListener.isZoomed());
 		handler.removeCallbacks(hideControls);
 		View center = playerView.findViewById(R.id.center_controls);
 		View other = playerView.findViewById(R.id.other_controls);
 		View bar = playerView.findViewById(R.id.exo_progress);
-		float alpha = visible ? 1.0f : 0.0f;
 		ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
-		if (isLocked) {
-			ViewUtils.animateViewAlpha(center, 0f, View.GONE);
-			ViewUtils.animateViewAlpha(other, 0f, View.GONE);
-			ViewUtils.animateViewAlpha(bar, 0f, View.GONE);
-			showReset(false);
-		} else {
-			ViewUtils.animateViewAlpha(other, alpha, View.GONE);
-			ViewUtils.animateViewAlpha(center, (visible && engine.getPlaybackState() != Player.STATE_BUFFERING) ? 1.0f : 0.0f, View.GONE);
-			ViewUtils.animateViewAlpha(bar, alpha, View.GONE);
-			showReset(playerView.isFs() && visible && zoomListener.isZoomed());
+		updateLockButton(lockBtn);
+		if (center != null) {
+			ViewUtils.animateViewAlpha(center, renderState.showCenterControls() ? 1.0f : 0.0f, View.GONE);
 		}
-		ViewUtils.animateViewAlpha(lockBtn, (visible && playerView.isFs()) ? 1.0f : 0.0f, View.GONE);
-		if (visible) hideControlsAutomatically();
+		if (other != null) {
+			ViewUtils.animateViewAlpha(other, renderState.showOtherControls() ? 1.0f : 0.0f, View.GONE);
+		}
+		if (bar != null) {
+			ViewUtils.animateViewAlpha(bar, renderState.showProgressBar() ? 1.0f : 0.0f, View.GONE);
+		}
+		showReset(renderState.showResetButton());
+		if (lockBtn != null) {
+			ViewUtils.animateViewAlpha(lockBtn, renderState.showLockButton() ? 1.0f : 0.0f, View.GONE);
+		}
+		if (renderState.controlsVisible()) hideControlsAutomatically();
 	}
 
 	private void showReset(boolean show) {
@@ -618,15 +614,51 @@ public class Controller {
 
 	private void hideControlsAutomatically() {
 		handler.removeCallbacks(hideControls);
-		if (engine.isPlaying()) handler.postDelayed(hideControls, CONTROLS_HIDE_DELAY_MS);
+		if (engine.isPlaying() && !stateMachine.isInPictureInPicture()) {
+			handler.postDelayed(hideControls, CONTROLS_HIDE_DELAY_MS);
+		}
 	}
 
 	public void showHint(@NonNull String text, long durationMs) {
-		if (activity.isInPictureInPictureMode() || hintText == null) return;
+		if (hintText == null || activity.isInPictureInPictureMode() || stateMachine.isInPictureInPicture()) return;
 		hintText.setText(text);
 		ViewUtils.animateViewAlpha(hintText, 1.0f, View.GONE);
 		handler.removeCallbacks(this::hideHint);
 		if (durationMs > 0) handler.postDelayed(this::hideHint, durationMs);
+	}
+
+	public boolean isFullscreen() {
+		return stateMachine.isFullscreen();
+	}
+
+	public boolean isControlsVisible() {
+		return stateMachine.isControlsVisible();
+	}
+
+	private void toggleLockState() {
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.toggleLock();
+		applyControllerState(previousState, true);
+	}
+
+	private void applyControllerState(@NonNull final ControllerMachine.State previousState,
+	                                  final boolean controlsVisible) {
+		playerView.applyControllerState(
+						previousState,
+						stateMachine.getState(),
+						PlayerUtils.isPortrait(engine),
+						prefs.getResizeMode());
+		if (stateMachine.isInPictureInPicture()) {
+			hideHint();
+		}
+		setControlsVisible(controlsVisible);
+	}
+
+	private void updateLockButton(@Nullable final ImageButton lockBtn) {
+		if (lockBtn == null) return;
+		lockBtn.setImageResource(stateMachine.isLocked() ? R.drawable.ic_lock : R.drawable.ic_unlock);
+		lockBtn.setContentDescription(activity.getString(
+						stateMachine.isLocked() ? R.string.lock_screen : R.string.unlock_screen));
 	}
 
 	public void hideHint() {

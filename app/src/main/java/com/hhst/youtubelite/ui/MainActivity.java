@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -111,6 +112,20 @@ public final class MainActivity extends AppCompatActivity {
 		handleIntent(intent);
 	}
 
+	@Override
+	protected void onUserLeaveHint() {
+		super.onUserLeaveHint();
+		if (shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, DeviceUtils.isInPictureInPictureMode(this))) {
+			player.enterPictureInPicture();
+		}
+	}
+
+	@Override
+	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
+		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		dispatchPictureInPictureModeChanged(player, isInPictureInPictureMode);
+	}
+
 	private void handleIntent(@Nullable Intent intent) {
 		if (intent == null) return;
 		String action = intent.getAction();
@@ -142,6 +157,22 @@ public final class MainActivity extends AppCompatActivity {
 			}
 		} else if (tabManager.getWebview() == null) {
 			tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
+		}
+	}
+
+	static boolean shouldEnterPictureInPictureOnUserLeaveHint(@Nullable final LitePlayer player,
+	                                                          @Nullable final ExtensionManager extensionManager,
+	                                                          final boolean isInPictureInPictureMode) {
+		return !isInPictureInPictureMode
+						&& player != null
+						&& extensionManager != null
+						&& extensionManager.isEnabled(Constant.ENABLE_PIP)
+						&& player.shouldAutoEnterPictureInPicture();
+	}
+
+	static void dispatchPictureInPictureModeChanged(@Nullable final LitePlayer player, final boolean isInPictureInPictureMode) {
+		if (player != null) {
+			player.onPictureInPictureModeChanged(isInPictureInPictureMode);
 		}
 	}
 
