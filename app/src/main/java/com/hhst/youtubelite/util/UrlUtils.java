@@ -24,6 +24,8 @@ public final class UrlUtils {
 	public static final String PAGE_USER_MENTION = "@";
 	public static final String PAGE_SEARCHING = "searching";
 
+	private static final Locale NORMALIZATION_LOCALE = Locale.ROOT;
+
 	private static final Set<String> ALLOWED_DOMAINS = Set.of(
 					Constant.YOUTUBE_DOMAIN,
 					"youtube.googleapis.com",
@@ -50,9 +52,19 @@ public final class UrlUtils {
 		}
 	}
 
+	public static boolean isGoogleAccountsUrl(@Nullable final String url) {
+		if (url == null || url.isEmpty()) return false;
+		try {
+			final String host = URI.create(url).getHost();
+			return host != null && isGoogleAccountsHost(host.toLowerCase(NORMALIZATION_LOCALE));
+		} catch (final IllegalArgumentException ignored) {
+			return false;
+		}
+	}
+
 	private static boolean isAllowedHost(@Nullable final String host) {
 		if (host == null) return false;
-		final String lowerHost = host.toLowerCase(Locale.US);
+		final String lowerHost = host.toLowerCase(NORMALIZATION_LOCALE);
 		if (isGoogleAccountsHost(lowerHost)) return true;
 		return ALLOWED_DOMAINS.stream().anyMatch(domain ->
 						lowerHost.equals(domain) || lowerHost.endsWith("." + domain));
@@ -61,25 +73,39 @@ public final class UrlUtils {
 	private static boolean isGoogleAccountsHost(@NonNull final String lowerHost) {
 		return lowerHost.equals("accounts.google")
 						|| lowerHost.equals("accounts.google.com")
-						|| lowerHost.startsWith("accounts.google.");
+						|| lowerHost.startsWith("accounts.google.")
+						|| lowerHost.equals("accounts.youtube.com");
 	}
 
 	@NonNull
 	public static String getPageClass(@Nullable final String url) {
 		if (url == null || url.isEmpty()) return PAGE_UNKNOWN;
 
-		final Uri uri = Uri.parse(url);
-		final String host = uri.getHost();
-		if (host == null) return PAGE_UNKNOWN;
+		try {
+			final URI uri = URI.create(url);
+			final String host = uri.getHost();
+			if (host == null) return PAGE_UNKNOWN;
+			final String path = uri.getPath();
+			final List<String> segments = path == null || path.isEmpty()
+							? List.of()
+							: java.util.Arrays.stream(path.split("/"))
+											.filter(segment -> !segment.isEmpty())
+											.toList();
+			return resolvePageClass(host, segments);
+		} catch (final IllegalArgumentException ignored) {
+			return PAGE_UNKNOWN;
+		}
+	}
 
-		final String lowerHost = host.toLowerCase();
+	@NonNull
+	static String resolvePageClass(@NonNull final String host, @NonNull final List<String> segments) {
+		final String lowerHost = host.toLowerCase(NORMALIZATION_LOCALE);
 		if (!lowerHost.equals(Constant.YOUTUBE_MOBILE_HOST) && !lowerHost.equals(Constant.YOUTUBE_DOMAIN))
 			return PAGE_UNKNOWN;
 
-		final List<String> segments = uri.getPathSegments();
 		if (segments.isEmpty()) return Constant.PAGE_HOME;
 
-		final String s0 = segments.get(0).toLowerCase();
+		final String s0 = segments.get(0).toLowerCase(NORMALIZATION_LOCALE);
 		if (s0.startsWith("@")) return PAGE_USER_MENTION;
 
 		return switch (s0) {
@@ -89,7 +115,7 @@ public final class UrlUtils {
 			case "gaming" -> PAGE_GAMING;
 			case "select_site" -> PAGE_SELECT_SITE;
 			case "results" -> PAGE_SEARCHING;
-			case "feed" -> (segments.size() > 1) ? switch (segments.get(1).toLowerCase()) {
+			case "feed" -> (segments.size() > 1) ? switch (segments.get(1).toLowerCase(NORMALIZATION_LOCALE)) {
 				case "subscriptions" -> Constant.PAGE_SUBSCRIPTIONS;
 				case "library" -> Constant.PAGE_LIBRARY;
 				case "history" -> PAGE_HISTORY;

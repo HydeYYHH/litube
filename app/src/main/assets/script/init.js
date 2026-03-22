@@ -63,8 +63,6 @@ try {
                 'youtube.googleapis.com',
                 'googlevideo.com',
                 'ytimg.com',
-                'accounts.google',
-                'accounts.google.com',
                 'googleusercontent.com',
                 'apis.google.com',
                 'gstatic.com',
@@ -157,11 +155,20 @@ try {
                     ? 'same-site'
                     : 'cross-site';
             };
+            const isGoogleAccountsHost = (hostname) => {
+                const lowerHostname = (hostname || '').toLowerCase();
+                return lowerHostname === 'accounts.google'
+                    || lowerHostname === 'accounts.google.com'
+                    || lowerHostname.startsWith('accounts.google.')
+                    || lowerHostname === 'accounts.youtube.com';
+            };
             const isAllowedUrl = (urlValue) => {
                 try {
+                    if (isGoogleAccountsHost(location.hostname)) return false;
                     const url = new URL(urlValue, location.href);
                     if (!['http:', 'https:'].includes(url.protocol)) return false;
                     const hostname = url.hostname.toLowerCase();
+                    if (isGoogleAccountsHost(hostname)) return false;
                     return ALLOWED_DOMAINS.some(domain =>
                         hostname === domain || hostname.endsWith(`.${domain}`));
                 } catch (error) {

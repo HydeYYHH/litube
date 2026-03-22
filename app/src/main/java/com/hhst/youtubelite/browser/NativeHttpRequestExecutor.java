@@ -5,6 +5,7 @@ import androidx.annotation.Nullable;
 
 import com.google.gson.Gson;
 import com.hhst.youtubelite.Constant;
+import com.hhst.youtubelite.util.UrlUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -48,8 +49,6 @@ final class NativeHttpRequestExecutor {
 					"youtube.googleapis.com",
 					"googlevideo.com",
 					"ytimg.com",
-					"accounts.google",
-					"accounts.google.com",
 					"googleusercontent.com",
 					"apis.google.com",
 					"gstatic.com");
@@ -201,10 +200,11 @@ final class NativeHttpRequestExecutor {
 
 	private boolean isAllowedUrl(@Nullable final String url) {
 		if (isBlank(url)) return false;
+		if (UrlUtils.isGoogleAccountsUrl(url)) return false;
 		try {
 			final URI uri = new URI(url);
 			final String scheme = uri.getScheme();
-			if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+			if ((!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
 				return false;
 			}
 			final String host = uri.getHost();
@@ -223,7 +223,7 @@ final class NativeHttpRequestExecutor {
 
 	private boolean hasHeader(@NonNull final Map<String, String> headers, @NonNull final String name) {
 		for (final String headerName : headers.keySet()) {
-			if (headerName != null && name.equalsIgnoreCase(headerName)) {
+			if (name.equalsIgnoreCase(headerName)) {
 				return true;
 			}
 		}
@@ -249,8 +249,9 @@ final class NativeHttpRequestExecutor {
 
 	@NonNull
 	private byte[] readBodyBytes(@NonNull final Response response) throws IOException {
-		if (response.body() == null) return new byte[0];
-		return response.body().bytes();
+		final ResponseBody body = response.body();
+		if (body == null) return new byte[0];
+		return body.bytes();
 	}
 
 	@NonNull

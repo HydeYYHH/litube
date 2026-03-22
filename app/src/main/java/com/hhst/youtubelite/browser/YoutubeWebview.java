@@ -175,14 +175,14 @@ public class YoutubeWebview extends WebView {
 				super.onPageStarted(view, url, favicon);
 				if (progressBar != null) progressBar.beginLoading();
 				evaluateJavascript("window.dispatchEvent(new Event('onPageStarted'));", null);
-				doInjectJavaScript();
+				maybeInjectJavaScript(url);
 			}
 
 			@Override
 			public void onPageFinished(@NonNull final WebView view, @NonNull final String url) {
 				super.onPageFinished(view, url);
 				evaluateJavascript("window.dispatchEvent(new Event('onPageFinished'));", null);
-				doInjectJavaScript();
+				maybeInjectJavaScript(url);
 				if (onPageFinishedListener != null) onPageFinishedListener.accept(url);
 			}
 
@@ -317,6 +317,11 @@ public class YoutubeWebview extends WebView {
 
 	private void doInjectJavaScript() {
 		for (final String js : scripts) evaluateJavascript(js, null);
+	}
+
+	private void maybeInjectJavaScript(@Nullable final String url) {
+		if (UrlUtils.isGoogleAccountsUrl(url)) return;
+		doInjectJavaScript();
 	}
 
 	public void enqueueNativeHttpRequest(@NonNull final String requestId,

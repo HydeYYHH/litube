@@ -8,6 +8,7 @@ import android.webkit.WebResourceResponse;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.util.Consumer;
+import androidx.media3.common.util.UnstableApi;
 
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.util.UrlUtils;
@@ -42,6 +43,7 @@ import okhttp3.ResponseBody;
 import okio.Okio;
 import okio.Sink;
 
+@UnstableApi
 public final class OkHttpWebViewInterceptor {
 
 	private static final String ACCOUNTS_YOUTUBE_HOST = "accounts.youtube.com";
@@ -322,6 +324,7 @@ public final class OkHttpWebViewInterceptor {
 	                                  @Nullable final Map<String, String> requestHeaders,
 	                                  @Nullable final String url) {
 		if (!isInterceptableWebRequest(method, requestHeaders, url)) return false;
+		if (UrlUtils.isGoogleAccountsUrl(url)) return false;
 		return UrlUtils.isAllowedUrl(url);
 	}
 
