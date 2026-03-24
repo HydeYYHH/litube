@@ -1,12 +1,45 @@
-/**
- * @description basic script to YouTube page
- * @author halcyon
- * @version 1.0.0
- * @license MIT
- */
 try {
     // Prevent repeated injection of the script
     if (!window.injected) {
+        // Timer and interval optimization
+        const st = setTimeout.bind(window), si = setInterval.bind(window);
+        const ct = clearTimeout.bind(window), ci = clearInterval.bind(window);
+        const THRESHOLD = 800, map = new Map();
+        let fp = null, token = 0;
+
+        const nextFrame = () => fp || (fp = new Promise(r =>
+            requestAnimationFrame(() => { fp = null; r(++token); })
+        ));
+
+        const wrap = (setFn) => (fn, delay, ...args) => {
+            if (typeof fn !== "function") return setFn(fn, delay, ...args);
+            const s = { on: 1, last: 0, frame: 0 };
+            const run = async () => {
+                if (!s.on) return;
+                if (s.last && Date.now() - s.last < THRESHOLD) {
+                const t = await nextFrame();
+                if (!s.on || s.frame === t) return;
+                s.frame = t;
+                }
+                s.last = Date.now();
+                fn(...args);
+            };
+            const id = setFn(run, delay);
+            map.set(id, s);
+            return id;
+        };
+
+        const clear = (clearFn) => (id) => {
+            const s = map.get(id);
+            if (s) s.on = 0, map.delete(id);
+            clearFn(id);
+        };
+
+        window.setTimeout = wrap(st);
+        window.setInterval = wrap(si);
+        window.clearTimeout = clear(ct);
+        window.clearInterval = clear(ci);
+
         // Utility to get localized text based on the page's language
         const getLocalizedText = (key) => {
             // Automatically translated by AI
@@ -47,269 +80,39 @@ try {
             return segments.join('/');
         };
 
-        const DomRepairPipeline = (() => {
-            const timing = {
-                setTimeout: window.setTimeout.bind(window),
-            };
-            const state = {
-                currentPageClass: getPageClass(location.href),
-                flushScheduled: false,
-                flushCount: 0,
-                lastFlushReason: null,
-                observerRootName: null,
-                observerConnected: false,
-            };
-            const dirtyRoots = new Set();
-            const repairRootSelector = [
-                '#card-list',
-                '#panel-container',
-                '.watch-below-the-player',
-                'ytm-settings',
-                'ytm-watch',
-                'ytm-app',
-                'main',
-                'body',
-            ].join(', ');
-            let observer = null;
-            let observerRoot = null;
-
-            const describeNode = (node) => {
-                if (!node) return 'none';
-                if (node.id) return `#${node.id}`;
-                return node.tagName || node.nodeName || 'unknown';
-            };
-            const resolveObserverRoot = (pageClass = state.currentPageClass) => {
-                const selectors = ['#card-list'];
-                if (pageClass === 'watch') {
-                    selectors.push('#panel-container', '.watch-below-the-player', 'ytm-watch');
-                } else if (pageClass === 'select_site') {
-                    selectors.push('ytm-settings');
-                }
-                selectors.push('ytm-app', 'main', 'body');
-                for (const selector of selectors) {
-                    const node = document.querySelector(selector);
-                    if (node) return node;
-                }
-                return document.body || document.documentElement;
-            };
-            const normalizeElement = (node) => {
-                if (!node) return null;
-                if (node.nodeType === Node.ELEMENT_NODE) return node;
-                return node.parentElement || null;
-            };
-            const resolveDirtyRoot = (node) => {
-                const element = normalizeElement(node);
-                const candidate = element?.closest?.(repairRootSelector);
-                if (candidate) return candidate;
-                return observerRoot || resolveObserverRoot();
-            };
-            const flushDomRepairs = (reason = 'flush') => {
-                state.flushScheduled = false;
-                state.currentPageClass = getPageClass(location.href);
-                attachObserver(state.currentPageClass);
-                state.lastFlushReason = reason;
-                const roots = Array.from(dirtyRoots);
-                dirtyRoots.clear();
-                if (roots.length === 0) return;
-                state.flushCount += 1;
-                runTimedTasks(state.currentPageClass);
-            };
-            const scheduleFlush = (reason = 'mutation') => {
-                if (state.flushScheduled) return;
-                state.flushScheduled = true;
-                timing.setTimeout(() => {
-                    flushDomRepairs(reason);
-                }, 32);
-            };
-            const markDirty = (node = null, reason = 'mutation') => {
-                const root = resolveDirtyRoot(node);
-                if (root) {
-                    dirtyRoots.add(root);
-                }
-                scheduleFlush(reason);
-            };
-            const attachObserver = (pageClass = state.currentPageClass) => {
-                if (!document.documentElement) return;
-                if (!observer) {
-                    observer = new MutationObserver((mutations) => {
-                        for (const mutation of mutations) {
-                            markDirty(mutation.target, 'mutation');
-                            mutation.addedNodes.forEach((node) => markDirty(node, 'mutation'));
-                            mutation.removedNodes.forEach((node) => markDirty(node, 'mutation'));
-                        }
-                    });
-                }
-                const nextRoot = resolveObserverRoot(pageClass);
-                if (!nextRoot) return;
-                if (observerRoot === nextRoot && state.observerConnected) return;
-                observer.disconnect();
-                observerRoot = nextRoot;
-                state.observerRootName = describeNode(observerRoot);
-                observer.observe(observerRoot, {
-                    childList: true,
-                    subtree: true,
-                });
-                state.observerConnected = true;
-            };
-
-            attachObserver();
-
-            return {
-                markDirty,
-                debugSnapshot() {
-                    return {
-                        currentPageClass: state.currentPageClass,
-                        flushScheduled: state.flushScheduled,
-                        flushCount: state.flushCount,
-                        dirtyRootCount: dirtyRoots.size,
-                        lastFlushReason: state.lastFlushReason,
-                        observerRootName: state.observerRootName,
-                        observerConnected: state.observerConnected,
-                    };
-                },
-                updateCurrentPageClass(pageClass = getPageClass(location.href)) {
-                    state.currentPageClass = pageClass;
-                    attachObserver(pageClass);
-                    markDirty(observerRoot, 'page-class-change');
-                },
-            };
-        })();
-        const PageTaskDiagnostics = (() => {
-            const state = {
-                timerActive: false,
-                nextTimerDelayMs: null,
-                lastTimerReason: 'init',
-                taskRuns: {
-                    global: 0,
-                    watch: 0,
-                    settings: 0,
-                    fallback: 0,
-                },
-            };
-
-            return {
-                updateTimerState(partialState) {
-                    Object.assign(state, partialState);
-                },
-                markTimerTick(reason) {
-                    state.lastTimerReason = reason;
-                },
-                incrementTaskRun(name) {
-                    if (Object.prototype.hasOwnProperty.call(state.taskRuns, name)) {
-                        state.taskRuns[name] += 1;
+        let observer = null;
+        let observedTarget = null;
+        const attachObserver = () => {
+            if (!document.documentElement) return;
+            if (!observer) {
+                observer = new MutationObserver((mutations) => {
+                    if (mutations.length > 0) {
+                        run();
                     }
-                },
-                debugSnapshot() {
-                    return {
-                        timerActive: state.timerActive,
-                        nextTimerDelayMs: state.nextTimerDelayMs,
-                        lastTimerReason: state.lastTimerReason,
-                        taskRuns: { ...state.taskRuns },
-                    };
-                },
-            };
-        })();
-
-        const TimerCoordinator = (() => {
-            let timerId = null;
-            let wakePending = false;
-            let pendingWakeReason = 'wake';
-
-            const clearScheduledTick = () => {
-                if (timerId !== null) {
-                    window.clearTimeout(timerId);
-                    timerId = null;
-                }
-                PageTaskDiagnostics.updateTimerState({
-                    timerActive: false,
-                    nextTimerDelayMs: null,
                 });
-            };
+            }
+            const observerTarget = document.querySelector('ytm-app') || document;
+            if (observedTarget === observerTarget) return;
+            observer.disconnect();
+            observedTarget = observerTarget;
+            observer.observe(observerTarget, {
+                childList: true,
+                subtree: true,
+            });
+        };
 
-            const schedule = (delayMs) => {
-                clearScheduledTick();
-                if (delayMs == null || document.visibilityState === 'hidden') return;
-                PageTaskDiagnostics.updateTimerState({
-                    timerActive: true,
-                    nextTimerDelayMs: delayMs,
-                });
-                timerId = window.setTimeout(() => {
-                    timerId = null;
-                    tick('scheduled');
-                }, delayMs);
-            };
-
-            const computeDelay = (pageClass, taskState) => {
-                if (document.visibilityState === 'hidden') return null;
-                if (pageClass === 'watch') {
-                    if (taskState.adShowing) return 300;
-                    if (taskState.needsRetry) return 700;
-                    return null;
-                }
-                if (pageClass === 'select_site') {
-                    return taskState.needsRetry ? 900 : null;
-                }
-                return null;
-            };
-
-            const tick = (reason = 'manual') => {
-                wakePending = false;
-                clearScheduledTick();
-                const pageClass = getPageClass(location.href);
-                DomRepairPipeline.updateCurrentPageClass(pageClass);
-                PageTaskDiagnostics.incrementTaskRun('global');
-                if (pageClass === 'watch') {
-                    PageTaskDiagnostics.incrementTaskRun('watch');
-                } else if (pageClass === 'select_site') {
-                    PageTaskDiagnostics.incrementTaskRun('settings');
-                } else if (pageClass === 'unknown') {
-                    PageTaskDiagnostics.incrementTaskRun('fallback');
-                }
-                PageTaskDiagnostics.markTimerTick(reason);
-                const taskState = runTimedTasks(pageClass);
-                schedule(computeDelay(pageClass, taskState));
-            };
-
-            return {
-                tick,
-                wake(reason = 'wake') {
-                    if (document.visibilityState === 'hidden') {
-                        wakePending = false;
-                        clearScheduledTick();
-                        return;
-                    }
-                    pendingWakeReason = reason;
-                    if (wakePending) return;
-                    wakePending = true;
-                    window.setTimeout(() => tick(pendingWakeReason), 0);
-                },
-                handleVisibilityChange() {
-                    if (document.visibilityState === 'hidden') {
-                        wakePending = false;
-                        clearScheduledTick();
-                    } else {
-                        tick('visibility');
-                    }
-                },
-            };
-        })();
+        attachObserver();
         // Observe page type changes and dispatch event
         const observePageClass = () => {
-            const currentPageClass = getPageClass(location.href);
-            if (currentPageClass && window.pageClass !== currentPageClass) {
-                window.pageClass = currentPageClass;
-                DomRepairPipeline.updateCurrentPageClass(currentPageClass);
+            const pageClass = getPageClass(location.href);
+            if (pageClass && window.pageClass !== pageClass) {
+                window.pageClass = pageClass;
                 window.dispatchEvent(new Event('onPageClassChange'));
             }
         };
 
         window.addEventListener('onProgressChangeFinish', observePageClass);
-        window.addEventListener('onPageClassChange', () => {
-            TimerCoordinator.wake('page-class-change');
-        });
-        document.addEventListener('visibilitychange', () => {
-            TimerCoordinator.handleVisibilityChange();
-        });
+        window.addEventListener('onPageClassChange', attachObserver);
 
         // Extract video ID from the URL
         const getVideoId = (url) => {
@@ -345,7 +148,7 @@ try {
         // Notify Android when page loading is finished
         window.addEventListener('onProgressChangeFinish', () => {
             android.finishRefresh();
-            TimerCoordinator.wake('progress-finish');
+            run();
         });
 
         // Enable/disable refresh layout based on page type
@@ -357,7 +160,6 @@ try {
                 android.setRefreshLayoutEnabled(false);
             }
         });
-
 
         // Handle player visibility based on page type
         const handlePlayerVisibility = () => {
@@ -372,7 +174,7 @@ try {
         // Listen for popstate events
         window.addEventListener('popstate', () => {
             handlePlayerVisibility();
-            TimerCoordinator.tick('popstate');
+            run();
         });
 
         // Override pushState to trigger player visibility changes
@@ -380,7 +182,7 @@ try {
         history.pushState = function (data, title, url) {
             originalPushState.call(this, data, title, url);
             handlePlayerVisibility();
-            TimerCoordinator.tick('push-state');
+            run();
         };
 
         // Override replaceState to trigger player visibility changes
@@ -388,114 +190,42 @@ try {
         history.replaceState = function (data, title, url) {
             originalReplaceState.call(this, data, title, url);
             handlePlayerVisibility();
-            TimerCoordinator.tick('replace-state');
+            run();
         };
 
 
         const WATCH_CONTENT_WRAPPER_OFFSET = 200;
         const WATCH_CONTENT_WRAPPER_MIN_HEIGHT = 60;
-        const WATCH_LAYOUT_HOOK_ANIMATION_NAME = 'nodeInserted';
-        const WATCH_LAYOUT_HOOK_SELECTOR = 'ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player';
-        const WATCH_LAYOUT_SYNC_DELAYS_MS = [16, 32, 64, 128, 256, 512, 1024];
-        const WATCH_SEARCH_SUGGESTIONS_SELECTOR = '.yt-searchbox-suggestions-container';
-        let watchLayoutSyncToken = 0;
+        const ro = typeof ResizeObserver === 'function'
+            ? new ResizeObserver(() => {
+                const pageClass = getPageClass(location.href);
+                const player = document.querySelector('#movie_player');
+                if (pageClass !== 'watch' || !player) return;
+                android.setPlayerHeight(player.clientHeight);
+            })
+            : null;
+        let observedPlayer = null;
 
-        const applyWatchContentWrapperMaxHeight = (pageClass = getPageClass(location.href), player = document.querySelector('#movie_player')) => {
-            const contentWrapper = document.querySelector('#content-wrapper');
-            if (!contentWrapper) return;
+        const setPlaylistSaftHeight = (pageClass = getPageClass(location.href), player = document.querySelector('#movie_player')) => {
+            const wrapper = document.querySelector('#content-wrapper');
+            if (!wrapper) return;
 
             if (pageClass !== 'watch' || !player) {
-                if (contentWrapper.dataset.liteManagedMaxHeight === 'true') {
-                    contentWrapper.style.maxHeight = '';
-                    delete contentWrapper.dataset.liteManagedMaxHeight;
+                if (wrapper.dataset.maxheight === 'true') {
+                    wrapper.style.maxHeight = '';
+                    delete wrapper.dataset.maxheight;
                 }
                 return;
             }
 
             const viewportHeight = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
             const nextMaxHeight = `${Math.max(WATCH_CONTENT_WRAPPER_MIN_HEIGHT, Math.floor(viewportHeight - player.clientHeight - WATCH_CONTENT_WRAPPER_OFFSET))}px`;
-            if (contentWrapper.style.maxHeight !== nextMaxHeight) {
-                contentWrapper.style.maxHeight = nextMaxHeight;
+            if (wrapper.style.maxHeight !== nextMaxHeight) {
+                wrapper.style.maxHeight = nextMaxHeight;
             }
-            contentWrapper.dataset.liteManagedMaxHeight = 'true';
+            wrapper.dataset.maxheight = 'true';
         };
 
-        // Keep native player height and watch content wrapper height in sync.
-        window.changePlayerHeight = () => {
-            const pageClass = getPageClass(location.href);
-            const player = document.querySelector('#movie_player');
-            applyWatchContentWrapperMaxHeight(pageClass, player);
-            if (pageClass !== 'watch' || !player) return;
-            android.setPlayerHeight(player.clientHeight);
-        };
-        const scheduleWatchLayoutSyncRetries = () => {
-            const syncToken = ++watchLayoutSyncToken;
-            WATCH_LAYOUT_SYNC_DELAYS_MS.forEach((delayMs) => {
-                window.setTimeout(() => {
-                    if (syncToken !== watchLayoutSyncToken) return;
-                    window.changePlayerHeight();
-                }, delayMs);
-            });
-        };
-
-        const ensureWatchTouchCapture = (node) => {
-            if (!node || node.dataset.liteTouchCaptureBound === 'true') return;
-            ['touchmove', 'touchend'].forEach((eventName) => {
-                node.addEventListener(eventName, (event) => {
-                    event.stopPropagation();
-                }, { passive: false, capture: true });
-            });
-            node.dataset.liteTouchCaptureBound = 'true';
-        };
-        const repairPlayerSurface = (pageClass) => {
-            const moviePlayer = document.querySelector('#movie_player');
-            if (moviePlayer) {
-                if (pageClass === 'watch') {
-                    moviePlayer.mute?.();
-                    if (moviePlayer.dataset.litePauseOnStateChange !== 'true') {
-                        moviePlayer.seekTo?.(moviePlayer.getDuration?.() / 2);
-                        moviePlayer.addEventListener('onStateChange', (state) => {
-                            if (state === 1) moviePlayer.pauseVideo?.();
-                        });
-                        moviePlayer.dataset.litePauseOnStateChange = 'true';
-                    }
-                } else if (pageClass === 'shorts') {
-                    moviePlayer.unMute?.();
-                }
-            }
-            if (pageClass !== 'watch') return;
-            const playerContainer = document.getElementById('player-container-id');
-            if (playerContainer) {
-                playerContainer.style.backgroundColor = 'black';
-            }
-            const playerShell = document.getElementById('player');
-            if (playerShell) {
-                playerShell.style.visibility = 'hidden';
-            }
-            document.querySelectorAll('.watch-below-the-player').forEach(ensureWatchTouchCapture);
-        };
-        const syncWatchSearchSuggestions = (pageClass) => {
-            document.querySelectorAll(WATCH_SEARCH_SUGGESTIONS_SELECTOR).forEach((node) => {
-                if (!(node instanceof HTMLElement)) return;
-                if (pageClass === 'watch') {
-                    if (node.dataset.liteManagedWatchSuggestionsHidden !== 'true') {
-                        node.dataset.liteManagedWatchSuggestionsDisplay = node.style.display || '';
-                    }
-                    node.style.setProperty('display', 'none', 'important');
-                    node.dataset.liteManagedWatchSuggestionsHidden = 'true';
-                    return;
-                }
-                if (node.dataset.liteManagedWatchSuggestionsHidden !== 'true') return;
-                const previousDisplay = node.dataset.liteManagedWatchSuggestionsDisplay || '';
-                if (previousDisplay) {
-                    node.style.display = previousDisplay;
-                } else {
-                    node.style.removeProperty('display');
-                }
-                delete node.dataset.liteManagedWatchSuggestionsDisplay;
-                delete node.dataset.liteManagedWatchSuggestionsHidden;
-            });
-        };
         const parseTimestampSeconds = (rawValue) => {
             if (rawValue == null) return null;
             const normalized = `${rawValue}`.trim().toLowerCase();
@@ -544,24 +274,67 @@ try {
         };
 
         document.addEventListener('animationstart', (event) => {
-            if (event.animationName !== WATCH_LAYOUT_HOOK_ANIMATION_NAME) return;
             const target = event.target;
-            if (!(target instanceof Element)) return;
-            if (!target.matches?.(WATCH_LAYOUT_HOOK_SELECTOR)) return;
-            scheduleWatchLayoutSyncRetries();
+            if (
+                event.animationName !== 'nodeInserted' ||
+                !(target instanceof Element) ||
+                !target.matches?.('ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player')
+            ) return;
+
+            const pageClass = getPageClass(location.href);
+            const isWatch = pageClass === 'watch';
+            const isShorts = pageClass === 'shorts';
+            const player = document.querySelector('#movie_player');
+
+            if (player) {
+                if (isWatch) {
+                    player.mute?.();
+                    player.seekTo?.(player.getDuration?.() / 2);
+                    player.addEventListener('onStateChange', (state) => {
+                        if (state === 1) player.pauseVideo?.();
+                    });
+                } else if (isShorts) {
+                    player.unMute?.();
+                }
+            }
+
+            if (ro && player !== observedPlayer) {
+                ro.disconnect();
+                if (player) {
+                    ro.observe(player);
+                    observedPlayer = player;
+                } else {
+                    observedPlayer = null;
+                }
+            }
+
+            if (!isWatch) return;
+
+            document.getElementById('player-container-id')?.style.setProperty('background-color', 'black');
+            document.getElementById('player')?.style.setProperty('visibility', 'hidden');
+
+            if (document.querySelector('#content-wrapper')) {
+                setPlaylistSaftHeight();
+            }
+
+            document.querySelectorAll('.watch-below-the-player').forEach(node => {
+                if (node.dataset.captured === 'true') return;
+
+                ['touchmove', 'touchend'].forEach(type => {
+                    node.addEventListener(type, (event) => {
+                        event.stopPropagation();
+                    }, { passive: false, capture: true });
+                });
+
+                node.dataset.captured = 'true';
+            });
         }, true);
 
-        function runTimedTasks(pageClass) {
-            const taskState = {
-                adShowing: false,
-                needsRetry: false,
-            };
-            repairPlayerSurface(pageClass);
-            syncWatchSearchSuggestions(pageClass);
+        function run() {
+            const pageClass = getPageClass(location.href);
             // Skip ads
             if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');
-                taskState.adShowing = Boolean(video);
                 if (video) video.currentTime = video.duration;
             }
             // Add chat button on live page
@@ -698,11 +471,7 @@ try {
                               }
                             });
                             saveButton.parentElement?.insertBefore(chatButton, saveButton);
-                        } else {
-                            taskState.needsRetry = true;
                         }
-                    } else {
-                        taskState.needsRetry = true;
                     }
                 }
             } else {
@@ -715,25 +484,22 @@ try {
                 const chatButton = document.getElementById('chatButton');
                 if (chatButton) chatButton.remove();
             }
-            const existingDownloadButton = document.getElementById('downloadButton');
-            const existingQueueButton = document.getElementById('queueButton');
-            const downloadButton = existingDownloadButton;
-            const queueButton = existingQueueButton;
-            const shouldShowWatchQueueButtons = !isLive && pageClass === 'watch';
-            const removeManagedWatchButtons = () => {
-                if (existingDownloadButton) existingDownloadButton.remove();
-                if (existingQueueButton) queueButton.remove();
-            };
-            if (!shouldShowWatchQueueButtons) {
-                removeManagedWatchButtons();
+            // Add download and queue buttons
+            const oldDownloadButton = document.getElementById('downloadButton');
+            const oldQueueButton = document.getElementById('queueButton');
+            const downloadButton = oldDownloadButton;
+            const queueButton = oldQueueButton;
+            if (isLive || pageClass !== 'watch') {
+                if (oldDownloadButton) oldDownloadButton.remove();
+                if (oldQueueButton) queueButton.remove();
             } else {
                 const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
                 if (saveButton && saveButton.parentElement) {
                     const actionBar = saveButton.parentElement;
-                    if (existingDownloadButton && (existingDownloadButton.parentElement !== actionBar || !existingDownloadButton.isConnected)) {
+                    if (oldDownloadButton && (oldDownloadButton.parentElement !== actionBar || !oldDownloadButton.isConnected)) {
                         downloadButton.remove();
                     }
-                    if (existingQueueButton && (existingQueueButton.parentElement !== actionBar || !existingQueueButton.isConnected)) {
+                    if (oldQueueButton && (oldQueueButton.parentElement !== actionBar || !oldQueueButton.isConnected)) {
                         queueButton.remove();
                     }
                     if (!actionBar.querySelector('#downloadButton')) {
@@ -754,8 +520,6 @@ try {
                                 android.download(location.href)
                             });
                             actionBar.insertBefore(downloadButton, saveButton);
-                        } else {
-                            taskState.needsRetry = true;
                         }
                     }
                     if (!actionBar.querySelector('#queueButton')) {
@@ -790,12 +554,8 @@ try {
                                 }
                             });
                             actionBar.insertBefore(queueButton, saveButton);
-                        } else {
-                            taskState.needsRetry = true;
                         }
                     }
-                } else {
-                    taskState.needsRetry = true;
                 }
             }
 
@@ -826,8 +586,6 @@ try {
                         const index = Math.max(0, children.length - 1);
                         settings?.insertBefore(aboutButton, children[index]);
                     }
-                } else {
-                    taskState.needsRetry = true;
                 }
             }
             // Add download button on setting page
@@ -855,8 +613,6 @@ try {
                         });
                         settings?.insertBefore(downloadButton, button);
                     }
-                } else {
-                    taskState.needsRetry = true;
                 }
             }
 
@@ -885,14 +641,9 @@ try {
                         });
                         settings?.insertBefore(extensionButton, button);
                     }
-                } else {
-                    taskState.needsRetry = true;
                 }
             }
-
-            return taskState;
         }
-        TimerCoordinator.tick('init');
 
         const addTapEvent = (el, handler) => {
             let startX, startY;
