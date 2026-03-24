@@ -8,10 +8,10 @@ import static org.junit.Assert.assertTrue;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -52,26 +52,6 @@ public class DomLiteEngineInstrumentationTest {
     }
 
     @Test
-    public void addedNodes_areQueuedBeforeFlushAndReportedByDebugSurface() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            injectInitScript(webView);
-            evaluateScript(webView, "appendCards(3); null;");
-
-            final JSONObject debug = evaluateObject(webView, "readDebug()");
-
-            assertTrue("__liteDomDebug should be available", debug.getBoolean("available"));
-            final JSONObject snapshot = debug.getJSONObject("snapshot");
-            assertTrue("pendingAdds should be positive after a batch append", snapshot.getInt("pendingAdds") > 0);
-            assertTrue("flush should be scheduled after a batch append", snapshot.getBoolean("flushScheduled"));
-        }
-    }
-
-    @Test
     public void observer_targetsFixtureRootInsteadOfWholeDocument() throws Exception {
         try (ActivityScenario<Activity> scenario = launchScenario()) {
             final WebView webView = getWebView(scenario);
@@ -103,29 +83,37 @@ public class DomLiteEngineInstrumentationTest {
                     "injectObserverRootTrap('page-manager'); setVirtualPath('/watch?v=abc123def45'); readDebug();"
             ).getJSONObject("snapshot");
 
+            assertTrue("observer should stay connected after watch-page navigation", snapshot.getBoolean("observerConnected"));
             assertFalse("watch page should not lock onto a stale #page-manager trap", "#page-manager".equals(snapshot.getString("observerRootName")));
         }
     }
 
     @Test
-    public void timerCoordinator_onlyRunsMatchingTasksForCurrentPageClass() throws Exception {
+    public void mutationBatch_schedulesSingleFlushAndClearsDirtyRoots() throws Exception {
         try (ActivityScenario<Activity> scenario = launchScenario()) {
             final WebView webView = getWebView(scenario);
 
             loadFixture(webView, "https://m.youtube.com/");
             installAndroidStub(webView);
             enableInitDebugHooks(webView);
+            installSetTimeoutQueue(webView);
             injectInitScript(webView);
 
-            final JSONObject debug = evaluateObject(
-                    webView,
-                    "setVirtualPath('/watch?v=abc123def45'); appendCards(1); readDebug();"
-            );
+            evaluateScript(webView, "appendCards(3); appendCards(2); null;");
+            final JSONObject beforeFlush = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
 
-            assertTrue("__liteDomDebug should be available", debug.getBoolean("available"));
-            final JSONObject snapshot = debug.getJSONObject("snapshot");
-            assertEquals("watch", snapshot.getString("currentPageClass"));
-            assertTrue("watch task count should be positive", snapshot.getJSONObject("taskRuns").getInt("watch") > 0);
+            assertTrue("flush should be pending after mutation batch", beforeFlush.getBoolean("flushScheduled"));
+            assertTrue("dirty roots should be collected before flush", beforeFlush.getInt("dirtyRootCount") > 0);
+            assertEquals("only one flush callback should be scheduled while dirty", 1,
+                    Integer.parseInt(evaluateScript(webView, "window.__liteTimeoutQueue.scheduledCount")));
+
+            assertEquals("exactly one pending timeout callback should run", 1,
+                    Integer.parseInt(evaluateScript(webView, "window.__flushLiteTimeoutQueue()")));
+
+            final JSONObject afterFlush = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
+            assertFalse("flush should not remain scheduled after draining queue", afterFlush.getBoolean("flushScheduled"));
+            assertEquals("dirty roots should clear after flush", 0, afterFlush.getInt("dirtyRootCount"));
+            assertEquals("flush counter should increase after the scheduled run", 1, afterFlush.getInt("flushCount"));
         }
     }
 
@@ -138,6 +126,7 @@ public class DomLiteEngineInstrumentationTest {
             installAndroidStub(webView);
             enableInitDebugHooks(webView);
             injectInitScript(webView);
+            installWatchActionBarHost(webView);
 
             final JSONObject homeSnapshot = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
             assertFalse("home page should not keep the fallback timer armed", homeSnapshot.getBoolean("timerActive"));
@@ -148,124 +137,14 @@ public class DomLiteEngineInstrumentationTest {
                     "setVirtualPath('/watch?v=abc123def45'); readDebug();"
             ).getJSONObject("snapshot");
 
-            assertEquals("watch", watchSnapshot.getString("currentPageClass"));
-            assertEquals("watch navigation should be driven by replaceState", "replace-state", watchSnapshot.getString("lastTimerReason"));
-            assertTrue("watch task count should increase after navigation", watchSnapshot.getJSONObject("taskRuns").getInt("watch") > 0);
+            final JSONObject watchDomState = evaluateObject(webView, """
+                    (() => ({
+                        hasDownloadButton: Boolean(document.getElementById('downloadButton'))
+                    }))()
+                    """);
+            assertTrue("watch page should insert a download button when the action host exists", watchDomState.getBoolean("hasDownloadButton"));
             assertFalse("watch page should not keep an idle timer armed without ads or retries", watchSnapshot.getBoolean("timerActive"));
             assertTrue("watch page should not expose a follow-up timer delay without ads or retries", watchSnapshot.isNull("nextTimerDelayMs"));
-        }
-    }
-
-    @Test
-    public void addedNodes_useMoreVisibleEntranceAnimation() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            evaluateScript(webView, "window.requestAnimationFrame = () => 0; null;");
-            injectInitScript(webView);
-
-            evaluateScript(webView, "appendCards(1); null;");
-            Thread.sleep(80);
-
-            final JSONObject cardStyles = evaluateObject(webView, """
-                    (() => {
-                        const card = document.querySelector('[data-card-id="0"]');
-                        return {
-                            transition: card?.style.transition || '',
-                            transform: card?.style.transform || '',
-                            opacity: card?.style.opacity || ''
-                        };
-                    })()
-                    """);
-
-            assertEquals("opacity 320ms cubic-bezier(0.16, 1, 0.3, 1), transform 320ms cubic-bezier(0.16, 1, 0.3, 1)", cardStyles.getString("transition"));
-            assertEquals("translateY(24px) scale(0.94)", cardStyles.getString("transform"));
-            assertEquals("0", cardStyles.getString("opacity"));
-        }
-    }
-
-    @Test
-    public void removedNodes_leaveOnlyTransientGhostAndThenCleanup() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            injectInitScript(webView);
-
-            evaluateScript(webView, "appendCards(3); null;");
-            Thread.sleep(80);
-            evaluateScript(webView, "removeCard('1'); null;");
-            final JSONObject removalSnapshot = evaluateObject(webView, "readDebug()");
-
-            assertTrue("ghost count should be positive immediately after removal", removalSnapshot.getJSONObject("snapshot").getInt("ghostCount") > 0);
-
-            Thread.sleep(380);
-
-            final JSONObject settledSnapshot = evaluateObject(webView, "readDebug()");
-            assertEquals("ghosts should be cleaned up after the fade", 0, settledSnapshot.getJSONObject("snapshot").getInt("ghostCount"));
-            assertEquals("card count should reflect the removed card", 2, Integer.parseInt(evaluateScript(webView, "countCards()")));
-        }
-    }
-
-    @Test
-    public void reorderedNodes_receiveConservativeFlipWhenSafe() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            injectInitScript(webView);
-
-            evaluateScript(webView, "appendCards(3); reorderCards(); null;");
-            final JSONObject debug = evaluateObject(webView, "readDebug()");
-
-            assertTrue("reorder should record at least one FLIP transition", debug.getJSONObject("snapshot").getInt("lastFlipCount") > 0);
-            assertEquals("[\"2\",\"0\",\"1\"]", evaluateScript(webView, "cardOrder()"));
-        }
-    }
-
-    @Test
-    public void oversizedMutationBatch_disablesAnimationButPreservesDomCorrectness() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            injectInitScript(webView);
-
-            evaluateScript(webView, "appendCards(160); null;");
-            final JSONObject debug = evaluateObject(webView, "readDebug()");
-
-            assertEquals("batch-only", debug.getJSONObject("snapshot").getString("animationMode"));
-            assertFalse("large batches should disconnect the observer until a later wake-up", debug.getJSONObject("snapshot").getBoolean("observerConnected"));
-            assertEquals("large-batch", debug.getJSONObject("snapshot").getString("observerPauseReason"));
-            assertEquals("dom should still contain the full batch", 160, Integer.parseInt(evaluateScript(webView, "countCards()")));
-        }
-    }
-
-    @Test
-    public void largeRemovedNodes_skipDeepGhostCloneToLimitRemovalCost() throws Exception {
-        try (ActivityScenario<Activity> scenario = launchScenario()) {
-            final WebView webView = getWebView(scenario);
-
-            loadFixture(webView, "https://m.youtube.com/");
-            installAndroidStub(webView);
-            enableInitDebugHooks(webView);
-            injectInitScript(webView);
-
-            evaluateScript(webView, "removeCard(appendComplexCard(18)); null;");
-            final JSONObject snapshot = evaluateObject(webView, "readDebug()").getJSONObject("snapshot");
-
-            assertEquals("skipped-large-node", snapshot.getString("lastGhostStrategy"));
-            assertEquals("large removals should skip transient ghost creation", 0, snapshot.getInt("ghostCount"));
-            assertEquals("complex card should still be removed correctly", 0, Integer.parseInt(evaluateScript(webView, "countCards()")));
         }
     }
 
@@ -326,6 +205,54 @@ public class DomLiteEngineInstrumentationTest {
                     getPreferences() { return '{}'; }
                 };
                 null;
+                """);
+    }
+
+    private void installWatchActionBarHost(WebView webView) throws Exception {
+        evaluateScript(webView, """
+                (() => {
+                    if (document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button')) {
+                        return null;
+                    }
+                    const bar = document.createElement('div');
+                    bar.id = 'watch-action-bar';
+                    const host = document.createElement('button');
+                    host.className = 'ytSpecButtonViewModelHost slim_video_action_bar_renderer_button';
+                    const label = document.createElement('span');
+                    label.className = 'yt-spec-button-shape-next__button-text-content';
+                    label.textContent = 'Save';
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    svg.appendChild(path);
+                    host.appendChild(label);
+                    host.appendChild(svg);
+                    bar.appendChild(host);
+                    document.body.appendChild(bar);
+                    return null;
+                })();
+                """);
+    }
+
+    private void installSetTimeoutQueue(WebView webView) throws Exception {
+        evaluateScript(webView, """
+                (() => {
+                    const queue = [];
+                    window.__liteTimeoutQueue = {
+                        scheduledCount: 0,
+                        queue
+                    };
+                    window.setTimeout = (callback) => {
+                        window.__liteTimeoutQueue.scheduledCount += 1;
+                        queue.push(callback);
+                        return window.__liteTimeoutQueue.scheduledCount;
+                    };
+                    window.__flushLiteTimeoutQueue = () => {
+                        const callbacks = queue.splice(0, queue.length);
+                        callbacks.forEach((callback) => callback(performance.now()));
+                        return callbacks.length;
+                    };
+                    return null;
+                })();
                 """);
     }
 

@@ -47,914 +47,133 @@ try {
             return segments.join('/');
         };
 
-        const NativeHttpBridge = (() => {
-            const androidBridge = window.android;
-            if (!androidBridge || typeof androidBridge.enqueueNativeHttpRequest !== 'function') {
-                return {
-                    install() {},
-                };
-            }
-
-            const MAX_NATIVE_BODY_BYTES = 4 * 1024 * 1024;
-            const BODYLESS_METHODS = new Set(['GET', 'HEAD']);
-            const BRIDGE_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
-            const ALLOWED_DOMAINS = [
-                'youtube.com',
-                'youtube.googleapis.com',
-                'googlevideo.com',
-                'ytimg.com',
-                'googleusercontent.com',
-                'apis.google.com',
-                'gstatic.com',
-            ];
-            const FETCH_DESTINATION = 'empty';
-            const OriginalFetch = typeof window.fetch === 'function'
-                ? window.fetch.bind(window)
-                : null;
-            const OriginalXMLHttpRequest = window.XMLHttpRequest;
-            const pendingRequests = new Map();
-            let requestSequence = 0;
-
-            const hasHeader = (headers, name) => Object.keys(headers)
-                .some(headerName => headerName.toLowerCase() === name.toLowerCase());
-            const setHeaderIfMissing = (headers, name, value) => {
-                if (!value || hasHeader(headers, name)) return;
-                headers[name] = value;
-            };
-            const appendHeaderSource = (headers, source) => {
-                if (!source) return;
-                if (source instanceof Headers) {
-                    source.forEach((value, key) => {
-                        headers[key] = value;
-                    });
-                    return;
-                }
-                if (Array.isArray(source)) {
-                    for (const entry of source) {
-                        if (!Array.isArray(entry) || entry.length < 2) continue;
-                        const [key, value] = entry;
-                        if (key == null || value == null) continue;
-                        headers[String(key)] = String(value);
-                    }
-                    return;
-                }
-                if (typeof source === 'object') {
-                    for (const [key, value] of Object.entries(source)) {
-                        if (value == null) continue;
-                        headers[key] = Array.isArray(value)
-                            ? value.join(', ')
-                            : String(value);
-                    }
-                }
-            };
-            const mergeHeaders = (...sources) => {
-                const headers = {};
-                sources.forEach(source => appendHeaderSource(headers, source));
-                return headers;
-            };
-            const bytesToBase64 = (bytes) => {
-                if (!bytes || bytes.length === 0) return '';
-                let binary = '';
-                const chunkSize = 0x8000;
-                for (let index = 0; index < bytes.length; index += chunkSize) {
-                    const chunk = bytes.subarray(index, index + chunkSize);
-                    binary += String.fromCharCode(...chunk);
-                }
-                return btoa(binary);
-            };
-            const base64ToBytes = (base64) => {
-                if (!base64) return new Uint8Array(0);
-                const binary = atob(base64);
-                const bytes = new Uint8Array(binary.length);
-                for (let index = 0; index < binary.length; index += 1) {
-                    bytes[index] = binary.charCodeAt(index);
-                }
-                return bytes;
-            };
-            const textEncoder = new TextEncoder();
-            const textDecoder = new TextDecoder();
-            const decodeUtf8 = (bytes) => textDecoder.decode(bytes);
-            const encodeUtf8 = (text) => textEncoder.encode(text || '');
-            const createAbortError = () => {
-                try {
-                    return new DOMException('The operation was aborted.', 'AbortError');
-                } catch (error) {
-                    const abortError = new Error('The operation was aborted.');
-                    abortError.name = 'AbortError';
-                    return abortError;
-                }
-            };
-            const getSiteKey = (hostname) => {
-                const parts = hostname.toLowerCase().split('.').filter(Boolean);
-                if (parts.length <= 2) return parts.join('.');
-                return parts.slice(-2).join('.');
-            };
-            const computeFetchSite = (url) => {
-                if (url.origin === location.origin) return 'same-origin';
-                return getSiteKey(url.hostname) === getSiteKey(location.hostname)
-                    ? 'same-site'
-                    : 'cross-site';
-            };
-            const isGoogleAccountsHost = (hostname) => {
-                const lowerHostname = (hostname || '').toLowerCase();
-                return lowerHostname === 'accounts.google'
-                    || lowerHostname === 'accounts.google.com'
-                    || lowerHostname.startsWith('accounts.google.')
-                    || lowerHostname === 'accounts.youtube.com';
-            };
-            const isAllowedUrl = (urlValue) => {
-                try {
-                    if (isGoogleAccountsHost(location.hostname)) return false;
-                    const url = new URL(urlValue, location.href);
-                    if (!['http:', 'https:'].includes(url.protocol)) return false;
-                    const hostname = url.hostname.toLowerCase();
-                    if (isGoogleAccountsHost(hostname)) return false;
-                    return ALLOWED_DOMAINS.some(domain =>
-                        hostname === domain || hostname.endsWith(`.${domain}`));
-                } catch (error) {
-                    return false;
-                }
-            };
-            const shouldIncludeCookies = (credentials, urlValue) => {
-                if (credentials === 'omit') return false;
-                if (credentials === 'include') return true;
-                try {
-                    return new URL(urlValue, location.href).origin === location.origin;
-                } catch (error) {
-                    return false;
-                }
-            };
-            const applySyntheticHeaders = (headers, requestLike) => {
-                const targetUrl = new URL(requestLike.url, location.href);
-                setHeaderIfMissing(headers, 'accept', '*/*');
-                setHeaderIfMissing(headers, 'accept-language',
-                    Array.isArray(navigator.languages) && navigator.languages.length > 0
-                        ? navigator.languages.join(',')
-                        : navigator.language);
-                setHeaderIfMissing(headers, 'user-agent', navigator.userAgent);
-                setHeaderIfMissing(headers, 'origin', location.origin);
-                setHeaderIfMissing(headers, 'referer', location.href);
-                setHeaderIfMissing(headers, 'sec-fetch-dest', FETCH_DESTINATION);
-                setHeaderIfMissing(headers, 'sec-fetch-mode', requestLike.mode || 'cors');
-                setHeaderIfMissing(headers, 'sec-fetch-site', computeFetchSite(targetUrl));
-                setHeaderIfMissing(headers, 'sec-ch-dpr', String(window.devicePixelRatio || 1));
-                setHeaderIfMissing(headers, 'sec-ch-viewport-width',
-                    String(window.innerWidth || document.documentElement?.clientWidth || 0));
-                if (navigator.deviceMemory) {
-                    setHeaderIfMissing(headers, 'device-memory', String(navigator.deviceMemory));
-                }
-                if (navigator.userAgentData?.brands?.length) {
-                    setHeaderIfMissing(
-                        headers,
-                        'sec-ch-ua',
-                        navigator.userAgentData.brands
-                            .map(brand => `"${brand.brand}";v="${brand.version}"`)
-                            .join(', '),
-                    );
-                    setHeaderIfMissing(
-                        headers,
-                        'sec-ch-ua-mobile',
-                        navigator.userAgentData.mobile ? '?1' : '?0',
-                    );
-                    if (navigator.userAgentData.platform) {
-                        setHeaderIfMissing(
-                            headers,
-                            'sec-ch-ua-platform',
-                            `"${navigator.userAgentData.platform}"`,
-                        );
-                    }
-                }
-                if (targetUrl.hostname.endsWith('.youtube.com') || targetUrl.hostname === 'youtube.com') {
-                    setHeaderIfMissing(headers, 'x-origin', location.origin);
-                }
-            };
-            const serializeRequestBody = async (request) => {
-                if (BODYLESS_METHODS.has(request.method.toUpperCase())) return '';
-                const buffer = await request.clone().arrayBuffer();
-                if (buffer.byteLength > MAX_NATIVE_BODY_BYTES) return null;
-                const bytes = new Uint8Array(buffer);
-                return bytesToBase64(bytes);
-            };
-            const createFetchRequest = (input, init) => {
-                try {
-                    return new Request(input, init);
-                } catch (error) {
-                    return null;
-                }
-            };
-            const createXhrRequest = (url, method, headers, body, credentials) => {
-                try {
-                    const absoluteUrl = new URL(url, location.href).toString();
-                    const sameOrigin = new URL(absoluteUrl).origin === location.origin;
-                    const normalizedMethod = String(method || 'GET').toUpperCase();
-                    return new Request(absoluteUrl, {
-                        body: BODYLESS_METHODS.has(normalizedMethod) ? undefined : body,
-                        credentials,
-                        headers: new Headers(headers),
-                        method: normalizedMethod,
-                        mode: sameOrigin ? 'same-origin' : 'cors',
-                        redirect: 'follow',
-                    });
-                } catch (error) {
-                    return null;
-                }
-            };
-            const buildBridgeRequestMetadata = (request, ...additionalHeaderSources) => {
-                if (!request) return null;
-                const method = request.method.toUpperCase();
-                if (!BRIDGE_METHODS.has(method) || !isAllowedUrl(request.url)) return null;
-                return {
-                    url: request.url,
-                    method,
-                    headers: mergeHeaders(request.headers, ...additionalHeaderSources),
-                };
-            };
-            const shouldBridgeRequest = (metadata) => {
-                if (!metadata) return false;
-                return !BODYLESS_METHODS.has(metadata.method) || hasHeader(metadata.headers, 'range');
-            };
-            const buildNativePayload = async (request, metadata) => {
-                if (!metadata) return null;
-                let bodyBase64;
-                try {
-                    bodyBase64 = await serializeRequestBody(request);
-                } catch (error) {
-                    return null;
-                }
-                if (bodyBase64 == null) return null;
-                applySyntheticHeaders(metadata.headers, request);
-                return {
-                    ...metadata,
-                    bodyBase64,
-                    includeCookies: shouldIncludeCookies(request.credentials, request.url),
-                };
-            };
-            const nextRequestId = () => `lite-native-http-${Date.now()}-${++requestSequence}`;
-            const resolvePendingRequest = (result) => {
-                const requestId = result?.requestId;
-                if (!requestId) return;
-                const pending = pendingRequests.get(requestId);
-                if (!pending) return;
-                pendingRequests.delete(requestId);
-                pending.cleanup?.();
-                pending.resolve(result);
-            };
-            window.__liteNativeHttp = window.__liteNativeHttp || {};
-            window.__liteNativeHttp.onNativeResult = (encodedResult) => {
-                try {
-                    resolvePendingRequest(JSON.parse(decodeUtf8(base64ToBytes(encodedResult))));
-                } catch (error) {}
-            };
-            const dispatchNativeRequest = (payload, signal, onStart) => new Promise((resolve) => {
-                const requestId = nextRequestId();
-                onStart?.(requestId);
-                const pending = {
-                    resolve,
-                    cleanup: null,
-                };
-                if (signal) {
-                    if (signal.aborted) {
-                        resolve({
-                            requestId,
-                            intercepted: true,
-                            error: 'aborted',
-                            aborted: true,
-                        });
-                        return;
-                    }
-                    const onAbort = () => {
-                        pendingRequests.delete(requestId);
-                        androidBridge.cancelNativeHttpRequest?.(requestId);
-                        resolve({
-                            requestId,
-                            intercepted: true,
-                            error: 'aborted',
-                            aborted: true,
-                        });
-                    };
-                    signal.addEventListener('abort', onAbort, { once: true });
-                    pending.cleanup = () => signal.removeEventListener('abort', onAbort);
-                }
-                pendingRequests.set(requestId, pending);
-                androidBridge.enqueueNativeHttpRequest(requestId, JSON.stringify(payload));
-            });
-            const executeNativePayload = (payload, {
-                signal = null,
-                onStart = null,
-            } = {}) => {
-                if (!payload) return Promise.resolve(null);
-                return dispatchNativeRequest(payload, signal, onStart);
-            };
-            const resultHasTextBody = (result) => !result?.binaryBody;
-            const getResultText = (result) => resultHasTextBody(result)
-                ? (result?.bodyText || '')
-                : decodeUtf8(base64ToBytes(result?.bodyBase64 || ''));
-            const decorateFetchResponse = (response, result) => new Proxy(response, {
-                get(target, property) {
-                    if (property === 'redirected') return Boolean(result.redirected);
-                    if (property === 'url') return result.url || '';
-                    if (property === 'clone') {
-                        return () => decorateFetchResponse(target.clone(), result);
-                    }
-                    const value = Reflect.get(target, property, target);
-                    return typeof value === 'function' ? value.bind(target) : value;
-                },
-            });
-            const buildFetchResponse = (result) => {
-                const responseBody = resultHasTextBody(result)
-                    ? (result.bodyText || '')
-                    : base64ToBytes(result.bodyBase64 || '');
-                const response = new Response(responseBody, {
-                    headers: result.headers || {},
-                    status: result.status,
-                    statusText: result.statusText || '',
-                });
-                return decorateFetchResponse(response, result);
-            };
-            const performNativeFetch = async (input, init) => {
-                const request = createFetchRequest(input, init);
-                if (!request || request.keepalive) {
-                    return null;
-                }
-                const headerSources = [input instanceof Request ? input.headers : null, init?.headers];
-                const metadata = buildBridgeRequestMetadata(request, ...headerSources);
-                if (!shouldBridgeRequest(metadata)) return null;
-                const payload = await buildNativePayload(request, metadata);
-                const result = await executeNativePayload(payload, { signal: request.signal });
-                if (!result) return null;
-                if (!result?.intercepted) return null;
-                if (result.aborted) throw createAbortError();
-                if (result.error) throw new TypeError(result.error);
-                return buildFetchResponse(result);
-            };
-            const createEventTarget = () => document.createDocumentFragment();
-            const dispatchXhrEvent = (xhr, type, init = {}) => {
-                const event = typeof ProgressEvent === 'function'
-                    && ['loadstart', 'progress', 'load', 'loadend'].includes(type)
-                    ? new ProgressEvent(type, init)
-                    : new Event(type);
-                xhr._eventTarget.dispatchEvent(event);
-                const handler = xhr[`on${type}`];
-                if (typeof handler === 'function') {
-                    handler.call(xhr, event);
-                }
-            };
-            const normalizeArrayBuffer = (bytes) => bytes.buffer.slice(
-                bytes.byteOffset,
-                bytes.byteOffset + bytes.byteLength,
-            );
-            const contentTypeFromHeaders = (headers) => {
-                if (!headers) return '';
-                return headers['content-type']
-                    || headers['Content-Type']
-                    || '';
-            };
-            const syncWrapperFromDelegate = (wrapper, delegate) => {
-                wrapper.readyState = delegate.readyState;
-                wrapper.responseURL = delegate.responseURL;
-                wrapper.status = delegate.status;
-                wrapper.statusText = delegate.statusText;
-                wrapper.response = delegate.response;
-                try {
-                    wrapper.responseText = delegate.responseText;
-                } catch (error) {
-                    wrapper.responseText = '';
-                }
-            };
-            const NativeXMLHttpRequest = function () {
-                this.readyState = 0;
-                this.response = null;
-                this.responseText = '';
-                this.responseType = '';
-                this.responseURL = '';
-                this.responseXML = null;
-                this.status = 0;
-                this.statusText = '';
-                this.timeout = 0;
-                this.withCredentials = false;
-                this.onreadystatechange = null;
-                this.onload = null;
-                this.onerror = null;
-                this.onabort = null;
-                this.onloadend = null;
-                this.onloadstart = null;
-                this.ontimeout = null;
-                this.onprogress = null;
-                this.upload = createEventTarget();
-                this._eventTarget = createEventTarget();
-                this._headers = {};
-                this._method = 'GET';
-                this._url = '';
-                this._async = true;
-                this._delegate = null;
-                this._responseHeaders = '';
-                this._nativeRequestId = null;
-                this._aborted = false;
-                this._overrideMimeType = null;
-            };
-            NativeXMLHttpRequest.UNSENT = 0;
-            NativeXMLHttpRequest.OPENED = 1;
-            NativeXMLHttpRequest.HEADERS_RECEIVED = 2;
-            NativeXMLHttpRequest.LOADING = 3;
-            NativeXMLHttpRequest.DONE = 4;
-            NativeXMLHttpRequest.prototype.UNSENT = 0;
-            NativeXMLHttpRequest.prototype.OPENED = 1;
-            NativeXMLHttpRequest.prototype.HEADERS_RECEIVED = 2;
-            NativeXMLHttpRequest.prototype.LOADING = 3;
-            NativeXMLHttpRequest.prototype.DONE = 4;
-            NativeXMLHttpRequest.prototype.addEventListener = function (...args) {
-                this._eventTarget.addEventListener(...args);
-            };
-            NativeXMLHttpRequest.prototype.removeEventListener = function (...args) {
-                this._eventTarget.removeEventListener(...args);
-            };
-            NativeXMLHttpRequest.prototype.dispatchEvent = function (event) {
-                return this._eventTarget.dispatchEvent(event);
-            };
-            NativeXMLHttpRequest.prototype.open = function (method, url, async = true) {
-                this._method = String(method || 'GET').toUpperCase();
-                this._url = new URL(url, location.href).toString();
-                this._async = async !== false;
-                this._headers = {};
-                this._delegate = null;
-                this._aborted = false;
-                this._nativeRequestId = null;
-                this._responseHeaders = '';
-                this.response = null;
-                this.responseText = '';
-                this.responseURL = '';
-                this.status = 0;
-                this.statusText = '';
-                this.readyState = NativeXMLHttpRequest.OPENED;
-                dispatchXhrEvent(this, 'readystatechange');
-            };
-            NativeXMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-                this._headers[name] = value;
-            };
-            NativeXMLHttpRequest.prototype.overrideMimeType = function (mimeType) {
-                this._overrideMimeType = mimeType;
-            };
-            NativeXMLHttpRequest.prototype.getAllResponseHeaders = function () {
-                if (this._delegate) return this._delegate.getAllResponseHeaders();
-                return this.readyState >= NativeXMLHttpRequest.HEADERS_RECEIVED
-                    ? this._responseHeaders
-                    : '';
-            };
-            NativeXMLHttpRequest.prototype.getResponseHeader = function (name) {
-                if (this._delegate) return this._delegate.getResponseHeader(name);
-                const lines = this.getAllResponseHeaders().split(/\r?\n/).filter(Boolean);
-                const lowerName = name.toLowerCase();
-                for (const line of lines) {
-                    const separatorIndex = line.indexOf(':');
-                    if (separatorIndex < 0) continue;
-                    if (line.substring(0, separatorIndex).trim().toLowerCase() === lowerName) {
-                        return line.substring(separatorIndex + 1).trim();
-                    }
-                }
-                return null;
-            };
-            NativeXMLHttpRequest.prototype.abort = function () {
-                this._aborted = true;
-                if (this._delegate) {
-                    this._delegate.abort();
-                    return;
-                }
-                if (this._nativeRequestId) {
-                    const requestId = this._nativeRequestId;
-                    const pending = pendingRequests.get(requestId);
-                    pendingRequests.delete(requestId);
-                    pending?.cleanup?.();
-                    pending?.resolve({
-                        requestId,
-                        intercepted: true,
-                        error: 'aborted',
-                        aborted: true,
-                    });
-                    androidBridge.cancelNativeHttpRequest?.(requestId);
-                    this._nativeRequestId = null;
-                }
-                if (this.readyState !== NativeXMLHttpRequest.UNSENT
-                    && this.readyState !== NativeXMLHttpRequest.DONE) {
-                    this.readyState = NativeXMLHttpRequest.DONE;
-                    dispatchXhrEvent(this, 'readystatechange');
-                    dispatchXhrEvent(this, 'abort');
-                    dispatchXhrEvent(this, 'loadend');
-                }
-            };
-            NativeXMLHttpRequest.prototype._wireDelegate = function (delegate) {
-                delegate.onreadystatechange = (event) => {
-                    syncWrapperFromDelegate(this, delegate);
-                    dispatchXhrEvent(this, 'readystatechange');
-                    if (delegate.readyState === NativeXMLHttpRequest.DONE) {
-                        this._responseHeaders = delegate.getAllResponseHeaders();
-                    }
-                };
-                delegate.onloadstart = (event) => dispatchXhrEvent(this, 'loadstart', event);
-                delegate.onprogress = (event) => dispatchXhrEvent(this, 'progress', event);
-                delegate.onload = (event) => dispatchXhrEvent(this, 'load', event);
-                delegate.onerror = (event) => dispatchXhrEvent(this, 'error', event);
-                delegate.onabort = (event) => dispatchXhrEvent(this, 'abort', event);
-                delegate.ontimeout = (event) => dispatchXhrEvent(this, 'timeout', event);
-                delegate.onloadend = (event) => dispatchXhrEvent(this, 'loadend', event);
-            };
-            NativeXMLHttpRequest.prototype._sendWithDelegate = function (body) {
-                const delegate = new OriginalXMLHttpRequest();
-                this._delegate = delegate;
-                this._wireDelegate(delegate);
-                delegate.open(this._method, this._url, this._async);
-                delegate.responseType = this.responseType;
-                delegate.timeout = this.timeout;
-                delegate.withCredentials = this.withCredentials;
-                if (this._overrideMimeType) {
-                    delegate.overrideMimeType(this._overrideMimeType);
-                }
-                for (const [name, value] of Object.entries(this._headers)) {
-                    delegate.setRequestHeader(name, value);
-                }
-                delegate.send(body);
-            };
-            NativeXMLHttpRequest.prototype._applyNativeResult = function (result) {
-                const responseType = this.responseType || '';
-                const contentType = contentTypeFromHeaders(result.headers);
-                const text = resultHasTextBody(result) ? (result.bodyText || '') : null;
-                let bytes = null;
-                const getBytes = () => {
-                    if (bytes) return bytes;
-                    bytes = text != null
-                        ? encodeUtf8(text)
-                        : base64ToBytes(result.bodyBase64 || '');
-                    return bytes;
-                };
-                const bodyLength = text != null
-                    ? text.length
-                    : getBytes().length;
-                this.status = result.status;
-                this.statusText = result.statusText || '';
-                this.responseURL = result.url || this._url;
-                this._responseHeaders = Object.entries(result.headers || {})
-                    .map(([name, value]) => `${name}: ${value}`)
-                    .join('\r\n');
-                this.readyState = NativeXMLHttpRequest.HEADERS_RECEIVED;
-                dispatchXhrEvent(this, 'readystatechange');
-                this.readyState = NativeXMLHttpRequest.LOADING;
-                dispatchXhrEvent(this, 'readystatechange');
-                dispatchXhrEvent(this, 'progress', {
-                    lengthComputable: bodyLength > 0,
-                    loaded: bodyLength,
-                    total: bodyLength,
-                });
-                if (responseType === 'arraybuffer') {
-                    this.response = normalizeArrayBuffer(getBytes());
-                    this.responseText = '';
-                } else if (responseType === 'blob') {
-                    this.response = new Blob([getBytes()], { type: contentType });
-                    this.responseText = '';
-                } else {
-                    const responseText = text != null ? text : getResultText(result);
-                    this.responseText = responseText;
-                    if (responseType === 'json') {
-                        try {
-                            this.response = JSON.parse(responseText);
-                        } catch (error) {
-                            this.response = null;
-                        }
-                    } else {
-                        this.response = responseText;
-                    }
-                }
-                this.readyState = NativeXMLHttpRequest.DONE;
-                dispatchXhrEvent(this, 'readystatechange');
-                dispatchXhrEvent(this, 'load');
-                dispatchXhrEvent(this, 'loadend');
-            };
-            NativeXMLHttpRequest.prototype.send = function (body = null) {
-                const shouldAttemptNative = this._async
-                    && this.timeout === 0
-                    && this.responseType !== 'document';
-                if (!shouldAttemptNative) {
-                    this._sendWithDelegate(body);
-                    return;
-                }
-                const credentials = this.withCredentials ? 'include' : 'same-origin';
-                const request = createXhrRequest(
-                    this._url,
-                    this._method,
-                    this._headers,
-                    BODYLESS_METHODS.has(this._method) ? undefined : body,
-                    credentials,
-                );
-                if (!request) {
-                    this._sendWithDelegate(body);
-                    return;
-                }
-                const metadata = buildBridgeRequestMetadata(request, this._headers);
-                if (!shouldBridgeRequest(metadata)) {
-                    this._sendWithDelegate(body);
-                    return;
-                }
-                queueMicrotask(async () => {
-                    const payload = await buildNativePayload(request, metadata);
-                    if (!payload) {
-                        this._sendWithDelegate(body);
-                        return;
-                    }
-                    dispatchXhrEvent(this, 'loadstart');
-                    const result = await executeNativePayload(payload, {
-                        onStart: requestId => {
-                            this._nativeRequestId = requestId;
-                        },
-                    });
-                    if (this._aborted) return;
-                    if (!result?.intercepted) {
-                        this._sendWithDelegate(body);
-                        return;
-                    }
-                    if (result.error) {
-                        this.readyState = NativeXMLHttpRequest.DONE;
-                        dispatchXhrEvent(this, 'readystatechange');
-                        dispatchXhrEvent(this, result.aborted ? 'abort' : 'error');
-                        dispatchXhrEvent(this, 'loadend');
-                        this._nativeRequestId = null;
-                        return;
-                    }
-                    this._applyNativeResult(result);
-                    this._nativeRequestId = null;
-                });
-            };
-
-            const install = () => {
-                if (OriginalFetch) {
-                    window.fetch = async function (input, init) {
-                        const nativeResponse = await performNativeFetch(input, init);
-                        if (nativeResponse) return nativeResponse;
-                        return OriginalFetch(input, init);
-                    };
-                }
-                if (typeof OriginalXMLHttpRequest === 'function') {
-                    window.XMLHttpRequest = NativeXMLHttpRequest;
-                }
-            };
-
-            return {
-                install,
-            };
-        })();
-        NativeHttpBridge.install();
-
-        const DomLiteEngine = (() => {
+        const DomRepairPipeline = (() => {
             const timing = {
-                requestAnimationFrame: typeof window.requestAnimationFrame === 'function'
-                    ? window.requestAnimationFrame.bind(window)
-                    : (callback) => window.setTimeout(callback, 16),
                 setTimeout: window.setTimeout.bind(window),
             };
             const state = {
-                pendingAdds: new Set(),
-                flushScheduled: false,
-                ghostCount: 0,
-                lastGhostStrategy: 'none',
-                lastFlipCount: 0,
-                animationMode: 'full',
                 currentPageClass: getPageClass(location.href),
+                flushScheduled: false,
+                flushCount: 0,
+                lastFlushReason: null,
                 observerRootName: null,
                 observerConnected: false,
-                observerPauseReason: '',
             };
-            let addObserver = null;
+            const dirtyRoots = new Set();
+            const repairRootSelector = [
+                '#card-list',
+                '#panel-container',
+                '.watch-below-the-player',
+                'ytm-settings',
+                'ytm-watch',
+                'ytm-app',
+                'main',
+                'body',
+            ].join(', ');
+            let observer = null;
             let observerRoot = null;
-            let wrappedApis = false;
-            const ENTER_ANIMATION_DURATION_MS = 320;
-            const ENTER_ANIMATION_TRANSLATE_Y_PX = 24;
-            const ENTER_ANIMATION_START_SCALE = 0.94;
-            const EXIT_ANIMATION_DURATION_MS = 320;
-            const EXIT_ANIMATION_TRANSLATE_Y_PX = 18;
-            const EXIT_ANIMATION_END_SCALE = 0.9;
 
-            const isElementNode = (node) => node?.nodeType === Node.ELEMENT_NODE;
-            const isGhostNode = (node) => node?.classList?.contains('lite-dom-ghost');
             const describeNode = (node) => {
                 if (!node) return 'none';
                 if (node.id) return `#${node.id}`;
                 return node.tagName || node.nodeName || 'unknown';
             };
-            const resolveObserverRoot = () => {
-                const pageClass = getPageClass(location.href);
+            const resolveObserverRoot = (pageClass = state.currentPageClass) => {
                 const selectors = ['#card-list'];
                 if (pageClass === 'watch') {
-                    selectors.push('ytm-watch', 'ytm-app', 'main', 'body');
+                    selectors.push('#panel-container', '.watch-below-the-player', 'ytm-watch');
                 } else if (pageClass === 'select_site') {
-                    selectors.push('ytm-settings', 'ytm-app', 'main', 'body');
-                } else {
-                    selectors.push('ytm-app', 'main', 'body');
+                    selectors.push('ytm-settings');
                 }
+                selectors.push('ytm-app', 'main', 'body');
                 for (const selector of selectors) {
                     const node = document.querySelector(selector);
                     if (node) return node;
                 }
                 return document.body || document.documentElement;
             };
-            const isObservedNode = (node) => {
-                if (!isElementNode(node)) return false;
-                if (!observerRoot) return true;
-                return node === observerRoot || observerRoot.contains(node);
+            const normalizeElement = (node) => {
+                if (!node) return null;
+                if (node.nodeType === Node.ELEMENT_NODE) return node;
+                return node.parentElement || null;
             };
-            const shouldAnimateNode = (node) => {
-                if (!isObservedNode(node) || isGhostNode(node)) return false;
-                const tagName = node.tagName;
-                if (!tagName) return false;
-                return !['BODY', 'HTML', 'IFRAME', 'INPUT', 'TEXTAREA', 'VIDEO', 'SCRIPT', 'STYLE'].includes(tagName);
+            const resolveDirtyRoot = (node) => {
+                const element = normalizeElement(node);
+                const candidate = element?.closest?.(repairRootSelector);
+                if (candidate) return candidate;
+                return observerRoot || resolveObserverRoot();
             };
-            const shouldDeepCloneGhost = (node, rect) => {
-                if (!rect) return false;
-                const area = rect.width * rect.height;
-                return area <= 120000 && node.childElementCount <= 12 && (node.textContent?.length || 0) <= 280;
+            const flushDomRepairs = (reason = 'flush') => {
+                state.flushScheduled = false;
+                state.currentPageClass = getPageClass(location.href);
+                attachObserver(state.currentPageClass);
+                state.lastFlushReason = reason;
+                const roots = Array.from(dirtyRoots);
+                dirtyRoots.clear();
+                if (roots.length === 0) return;
+                state.flushCount += 1;
+                runTimedTasks(state.currentPageClass);
             };
-
-            const applyAddAnimation = (node) => {
-                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node)) return;
-                node.style.transition = `opacity ${ENTER_ANIMATION_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), transform ${ENTER_ANIMATION_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
-                node.style.opacity = '0';
-                node.style.transform = `translateY(${ENTER_ANIMATION_TRANSLATE_Y_PX}px) scale(${ENTER_ANIMATION_START_SCALE})`;
-                timing.requestAnimationFrame(() => {
-                    node.style.opacity = '';
-                    node.style.transform = '';
-                });
-            };
-
-            const createGhost = (node, rect, onCleanup) => {
-                const ghost = node.cloneNode(true);
-                ghost.classList.add('lite-dom-ghost');
-                ghost.style.position = 'fixed';
-                ghost.style.left = `${rect.left}px`;
-                ghost.style.top = `${rect.top}px`;
-                ghost.style.width = `${rect.width}px`;
-                ghost.style.height = `${rect.height}px`;
-                ghost.style.margin = '0';
-                ghost.style.pointerEvents = 'none';
-                ghost.style.zIndex = '2147483647';
-                ghost.style.transform = 'translateY(0) scale(1)';
-                ghost.style.transition = `opacity ${EXIT_ANIMATION_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1), transform ${EXIT_ANIMATION_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-                ghost.style.opacity = '1';
-                document.body.appendChild(ghost);
-                timing.requestAnimationFrame(() => {
-                    ghost.style.opacity = '0';
-                    ghost.style.transform = `translateY(-${EXIT_ANIMATION_TRANSLATE_Y_PX}px) scale(${EXIT_ANIMATION_END_SCALE})`;
-                });
-                timing.setTimeout(() => {
-                    ghost.remove();
-                    onCleanup();
-                }, EXIT_ANIMATION_DURATION_MS + 20);
-            };
-
-            const registerRemoval = (node) => {
-                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node)) return;
-                const rect = node.getBoundingClientRect?.();
-                if (!rect || (!rect.width && !rect.height)) {
-                    state.lastGhostStrategy = 'skipped-empty-rect';
-                    return;
-                }
-                if (!shouldDeepCloneGhost(node, rect)) {
-                    state.lastGhostStrategy = 'skipped-large-node';
-                    return;
-                }
-                state.lastGhostStrategy = 'deep-clone';
-                state.ghostCount += 1;
-                const cleanupGhost = () => {
-                    state.ghostCount = Math.max(0, state.ghostCount - 1);
-                };
-                createGhost(node, rect, cleanupGhost);
-            };
-
-            const animateReorder = (node, firstRect) => {
-                if (state.animationMode === 'batch-only' || !shouldAnimateNode(node) || !firstRect) return;
-                const lastRect = node.getBoundingClientRect?.();
-                if (!lastRect) return;
-                const dx = firstRect.left - lastRect.left;
-                const dy = firstRect.top - lastRect.top;
-                state.lastFlipCount = (dx || dy) ? 1 : 0;
-                if (!state.lastFlipCount) return;
-                node.style.transition = 'transform 140ms ease';
-                node.style.transform = `translate(${dx}px, ${dy}px)`;
-                timing.requestAnimationFrame(() => {
-                    node.style.transform = '';
-                });
-                timing.setTimeout(() => {
-                    if (node.isConnected) {
-                        node.style.transition = '';
-                    }
-                }, 180);
-            };
-
-            const registerAddedNode = (node) => {
-                if (!shouldAnimateNode(node)) return;
-                state.pendingAdds.add(node);
-                if (state.pendingAdds.size > 120) {
-                    state.animationMode = 'batch-only';
-                    if (addObserver) {
-                        addObserver.disconnect();
-                    }
-                    state.observerConnected = false;
-                    state.observerPauseReason = 'large-batch';
-                }
-                scheduleFlush();
-            };
-
-            const scheduleFlush = () => {
+            const scheduleFlush = (reason = 'mutation') => {
                 if (state.flushScheduled) return;
                 state.flushScheduled = true;
                 timing.setTimeout(() => {
-                    state.flushScheduled = false;
-                    state.currentPageClass = getPageClass(location.href);
-                    state.pendingAdds.forEach(applyAddAnimation);
-                    state.pendingAdds.clear();
+                    flushDomRepairs(reason);
                 }, 32);
             };
-
-            const wrapDomApis = () => {
-                if (wrappedApis) return;
-                wrappedApis = true;
-                const originalInsertBefore = Node.prototype.insertBefore;
-                const originalRemoveChild = Node.prototype.removeChild;
-                const originalElementRemove = Element.prototype.remove;
-
-                Node.prototype.insertBefore = function (node, child) {
-                    const shouldFlip = node?.parentNode === this && shouldAnimateNode(node);
-                    const firstRect = shouldFlip ? node.getBoundingClientRect() : null;
-                    const result = originalInsertBefore.call(this, node, child);
-                    if (shouldFlip) {
-                        animateReorder(node, firstRect);
-                    }
-                    return result;
-                };
-
-                Node.prototype.removeChild = function (node) {
-                    registerRemoval(node);
-                    return originalRemoveChild.call(this, node);
-                };
-
-                Element.prototype.remove = function () {
-                    registerRemoval(this);
-                    return originalElementRemove.call(this);
-                };
+            const markDirty = (node = null, reason = 'mutation') => {
+                const root = resolveDirtyRoot(node);
+                if (root) {
+                    dirtyRoots.add(root);
+                }
+                scheduleFlush(reason);
             };
-
-            const observeAddedNodes = () => {
+            const attachObserver = (pageClass = state.currentPageClass) => {
                 if (!document.documentElement) return;
-                if (!addObserver) {
-                    addObserver = new MutationObserver(mutations => {
+                if (!observer) {
+                    observer = new MutationObserver((mutations) => {
                         for (const mutation of mutations) {
-                            mutation.addedNodes.forEach(registerAddedNode);
+                            markDirty(mutation.target, 'mutation');
+                            mutation.addedNodes.forEach((node) => markDirty(node, 'mutation'));
+                            mutation.removedNodes.forEach((node) => markDirty(node, 'mutation'));
                         }
                     });
                 }
-                if (state.animationMode === 'batch-only' && state.observerPauseReason) {
-                    return;
-                }
-                const nextRoot = resolveObserverRoot();
+                const nextRoot = resolveObserverRoot(pageClass);
                 if (!nextRoot) return;
                 if (observerRoot === nextRoot && state.observerConnected) return;
-                if (addObserver) {
-                    addObserver.disconnect();
-                }
+                observer.disconnect();
                 observerRoot = nextRoot;
                 state.observerRootName = describeNode(observerRoot);
-                addObserver.observe(observerRoot, {
+                observer.observe(observerRoot, {
                     childList: true,
                     subtree: true,
                 });
                 state.observerConnected = true;
-                state.observerPauseReason = '';
             };
 
-            const debugSnapshot = () => ({
-                pendingAdds: state.pendingAdds.size,
-                flushScheduled: state.flushScheduled,
-                ghostCount: state.ghostCount,
-                lastGhostStrategy: state.lastGhostStrategy,
-                lastFlipCount: state.lastFlipCount,
-                animationMode: state.animationMode,
-                currentPageClass: state.currentPageClass,
-                observerRootName: state.observerRootName,
-                observerConnected: state.observerConnected,
-                observerPauseReason: state.observerPauseReason || null,
-            });
-
-            wrapDomApis();
-            observeAddedNodes();
+            attachObserver();
 
             return {
-                debugSnapshot,
+                markDirty,
+                debugSnapshot() {
+                    return {
+                        currentPageClass: state.currentPageClass,
+                        flushScheduled: state.flushScheduled,
+                        flushCount: state.flushCount,
+                        dirtyRootCount: dirtyRoots.size,
+                        lastFlushReason: state.lastFlushReason,
+                        observerRootName: state.observerRootName,
+                        observerConnected: state.observerConnected,
+                    };
+                },
                 updateCurrentPageClass(pageClass = getPageClass(location.href)) {
-                    const pageChanged = state.currentPageClass !== pageClass;
                     state.currentPageClass = pageClass;
-                    if (pageChanged && state.animationMode === 'batch-only') {
-                        state.animationMode = 'full';
-                    }
-                    observeAddedNodes();
+                    attachObserver(pageClass);
+                    markDirty(observerRoot, 'page-class-change');
                 },
             };
         })();
-
         const PageTaskDiagnostics = (() => {
             const state = {
                 timerActive: false,
@@ -991,14 +210,6 @@ try {
             };
         })();
 
-        if (window.__liteDomEnableDebug === true) {
-            window.__liteDomDebug = Object.freeze({
-                getSnapshot: () => ({
-                    ...DomLiteEngine.debugSnapshot(),
-                    ...PageTaskDiagnostics.debugSnapshot(),
-                }),
-            });
-        }
         const TimerCoordinator = (() => {
             let timerId = null;
             let wakePending = false;
@@ -1045,7 +256,7 @@ try {
                 wakePending = false;
                 clearScheduledTick();
                 const pageClass = getPageClass(location.href);
-                DomLiteEngine.updateCurrentPageClass(pageClass);
+                DomRepairPipeline.updateCurrentPageClass(pageClass);
                 PageTaskDiagnostics.incrementTaskRun('global');
                 if (pageClass === 'watch') {
                     PageTaskDiagnostics.incrementTaskRun('watch');
@@ -1087,7 +298,7 @@ try {
             const currentPageClass = getPageClass(location.href);
             if (currentPageClass && window.pageClass !== currentPageClass) {
                 window.pageClass = currentPageClass;
-                DomLiteEngine.updateCurrentPageClass(currentPageClass);
+                DomRepairPipeline.updateCurrentPageClass(currentPageClass);
                 window.dispatchEvent(new Event('onPageClassChange'));
             }
         };
@@ -1190,57 +401,56 @@ try {
         }
 
         const ro = new ResizeObserver(window.changePlayerHeight);
+        let observedPlayer = null;
 
-        document.addEventListener('animationstart', (e) => {
-            if (e.animationName !== 'nodeInserted') return;
-            const node = e.target;
-            const pageClass = getPageClass(location.href);
-
-            if (node.id === 'movie_player') {
+        const ensureWatchTouchCapture = (node) => {
+            if (!node || node.dataset.liteTouchCaptureBound === 'true') return;
+            ['touchmove', 'touchend'].forEach((eventName) => {
+                node.addEventListener(eventName, (event) => {
+                    event.stopPropagation();
+                }, { passive: false, capture: true });
+            });
+            node.dataset.liteTouchCaptureBound = 'true';
+        };
+        const repairPlayerSurface = (pageClass) => {
+            const moviePlayer = document.querySelector('#movie_player');
+            if (moviePlayer) {
+                if (observedPlayer !== moviePlayer) {
+                    ro.disconnect();
+                    ro.observe(moviePlayer);
+                    observedPlayer = moviePlayer;
+                }
                 if (pageClass === 'watch') {
-                    node.mute();
-                    node.seekTo(node.getDuration() / 2);
-                    node.addEventListener('onStateChange', (state) => {
-                        if (state === 1) node.pauseVideo();
-                    });
+                    moviePlayer.mute?.();
+                    if (moviePlayer.dataset.litePauseOnStateChange !== 'true') {
+                        moviePlayer.seekTo?.(moviePlayer.getDuration?.() / 2);
+                        moviePlayer.addEventListener('onStateChange', (state) => {
+                            if (state === 1) moviePlayer.pauseVideo?.();
+                        });
+                        moviePlayer.dataset.litePauseOnStateChange = 'true';
+                    }
                 } else if (pageClass === 'shorts') {
-                    node.unMute();
-                }
-                ro.disconnect();
-                ro.observe(node);
-                TimerCoordinator.wake('movie-player-ready');
-            } else if (pageClass === 'watch') {
-                if (node.id === 'player') {
-                    node.style.visibility = 'hidden';
-                } else if (node.id === 'player-container-id') {
-                    node.style.backgroundColor = 'black';
-                } else if (node.classList.contains('watch-below-the-player')) {
-                    ['touchmove', 'touchend'].forEach(event => {
-                        node.addEventListener(event, e => {
-                            e.stopPropagation();
-                        }, { passive: false, capture: true });
-                    });
-                }
-                if (
-                    node.id === 'player' ||
-                    node.id === 'player-container-id' ||
-                    node.classList.contains('watch-below-the-player') ||
-                    node.classList.contains('ytSpecButtonViewModelHost')
-                ) {
-                    TimerCoordinator.wake('watch-dom-ready');
-                }
-            } else if (pageClass === 'select_site') {
-                if (node.closest?.('ytm-settings')) {
-                    TimerCoordinator.wake('settings-dom-ready');
+                    moviePlayer.unMute?.();
                 }
             }
-        }, false);
+            if (pageClass !== 'watch') return;
+            const playerContainer = document.getElementById('player-container-id');
+            if (playerContainer) {
+                playerContainer.style.backgroundColor = 'black';
+            }
+            const playerShell = document.getElementById('player');
+            if (playerShell) {
+                playerShell.style.visibility = 'hidden';
+            }
+            document.querySelectorAll('.watch-below-the-player').forEach(ensureWatchTouchCapture);
+        };
 
         function runTimedTasks(pageClass) {
             const taskState = {
                 adShowing: false,
                 needsRetry: false,
             };
+            repairPlayerSurface(pageClass);
             // Skip ads
             if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');

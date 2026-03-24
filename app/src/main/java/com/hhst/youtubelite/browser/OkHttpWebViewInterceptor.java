@@ -7,7 +7,6 @@ import android.webkit.WebResourceResponse;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.media3.common.util.Consumer;
 import androidx.media3.common.util.UnstableApi;
 
 import com.hhst.youtubelite.Constant;
@@ -67,34 +66,20 @@ public final class OkHttpWebViewInterceptor {
 	private static final long MAX_BUFFERED_IMAGE_BYTES = 4L * 1024L * 1024L;
 	static final int RESOURCE_MAX_REQUESTS = 48;
 	static final int RESOURCE_MAX_REQUESTS_PER_HOST = 12;
-	static final int NATIVE_MAX_REQUESTS = 32;
-	static final int NATIVE_MAX_REQUESTS_PER_HOST = 10;
 	private static final long RESOURCE_CALL_TIMEOUT_SECONDS = 18L;
 	private static final long RESOURCE_CONNECT_TIMEOUT_SECONDS = 6L;
 	private static final long RESOURCE_WRITE_TIMEOUT_SECONDS = 10L;
 	private static final long RESOURCE_READ_TIMEOUT_SECONDS = 12L;
-	private static final long NATIVE_CALL_TIMEOUT_SECONDS = 20L;
-	private static final long NATIVE_CONNECT_TIMEOUT_SECONDS = 6L;
-	private static final long NATIVE_WRITE_TIMEOUT_SECONDS = 10L;
-	private static final long NATIVE_READ_TIMEOUT_SECONDS = 12L;
 
 	@NonNull
 	private final OkHttpClient client;
 	@NonNull
-	private final OkHttpClient nativeRequestClient;
-	@NonNull
-	private final NativeHttpRequestExecutor nativeHttpRequestExecutor;
-	@NonNull
 	private final CookieAccessCoordinator cookieAccessCoordinator;
-	@NonNull
-	private final NativeRequestDeduplicator<NativeHttpRequestExecutor.ResponsePayload> nativeRequestDeduplicator = new NativeRequestDeduplicator<>();
 	@NonNull
 	private final Set<String> refreshingUrls = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	public OkHttpWebViewInterceptor(@NonNull final OkHttpClient client) {
 		this.client = createResourceClient(client);
-		this.nativeRequestClient = createNativeRequestClient(client);
-		this.nativeHttpRequestExecutor = new NativeHttpRequestExecutor(Constant.USER_AGENT);
 		this.cookieAccessCoordinator = CookieAccessCoordinator.create(CookieManager.getInstance());
 	}
 
@@ -115,18 +100,6 @@ public final class OkHttpWebViewInterceptor {
 							}
 							return rewriteCacheHeaders(response);
 						})
-						.build();
-	}
-
-	@NonNull
-	static OkHttpClient createNativeRequestClient(@NonNull final OkHttpClient client) {
-		return client.newBuilder()
-						.dispatcher(createDispatcher(NATIVE_MAX_REQUESTS, NATIVE_MAX_REQUESTS_PER_HOST))
-						.cache(null)
-						.callTimeout(NATIVE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-						.connectTimeout(NATIVE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-						.writeTimeout(NATIVE_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-						.readTimeout(NATIVE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.build();
 	}
 
@@ -222,45 +195,6 @@ public final class OkHttpWebViewInterceptor {
 		final Response response = client.newCall(request).execute();
 		cookieAccessCoordinator.syncFromResponse(response);
 		return response;
-	}
-
-	public void enqueueNativeRequest(@NonNull final String requestId,
-	                                 @Nullable final String payloadJson,
-	                                 @NonNull final Consumer<String> onComplete) {
-		final NativeHttpRequestExecutor.PreparedRequest prepared = nativeHttpRequestExecutor.prepare(payloadJson, cookieAccessCoordinator::getCookie);
-		if (!prepared.intercepted() || prepared.request() == null) {
-			onComplete.accept(nativeHttpRequestExecutor.toJson(nativeHttpRequestExecutor.buildUnsupportedPayload(requestId, prepared.reason())));
-			return;
-		}
-
-		nativeRequestDeduplicator.enqueue(
-						requestId,
-						prepared.dedupeKey(),
-						payload -> onComplete.accept(nativeHttpRequestExecutor.toJson(payload.withRequestId(requestId))),
-						completion -> {
-							final Call call = nativeRequestClient.newCall(Objects.requireNonNull(prepared.request()));
-							call.enqueue(new Callback() {
-								@Override
-								public void onFailure(@NonNull final Call call, @NonNull final IOException e) {
-									completion.complete(nativeHttpRequestExecutor.buildFailurePayload(null, e));
-								}
-
-								@Override
-								public void onResponse(@NonNull final Call call, @NonNull final Response response) {
-									try (response) {
-										cookieAccessCoordinator.syncFromResponse(response);
-										completion.complete(nativeHttpRequestExecutor.buildResponsePayload(null, response));
-									} catch (final IOException e) {
-										completion.complete(nativeHttpRequestExecutor.buildFailurePayload(null, e));
-									}
-								}
-							});
-							return call::cancel;
-						});
-	}
-
-	public void cancelNativeRequest(@Nullable final String requestId) {
-		nativeRequestDeduplicator.cancel(requestId);
 	}
 
 	@NonNull
