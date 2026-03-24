@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Rational;
 import android.view.View;
@@ -26,6 +27,7 @@ import androidx.media3.ui.SubtitleView;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
+import com.hhst.youtubelite.player.controller.ControllerMachine;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.util.ViewUtils;
@@ -97,40 +99,18 @@ public class LitePlayerView extends PlayerView {
 		});
 	}
 
-	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode) {
+	public void applyControllerState(@NonNull final ControllerMachine.State previousState,
+	                                 @NonNull final ControllerMachine.State newState,
+	                                 final boolean isPortraitVideo,
+	                                 final int defaultResizeMode) {
 		post(() -> {
-			if (isInPictureInPictureMode) {
-				if (!isFs) normalHeight = playerHeight;
-				updatePlayerLayout(true);
-				setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-			} else {
-				updatePlayerLayout(isFs);
-				setResizeMode(prefs.getResizeMode());
+			switch (newState) {
+				case NORMAL -> applyNormalState(defaultResizeMode);
+				case FULLSCREEN_UNLOCKED, FULLSCREEN_LOCKED ->
+								applyFullscreenState(previousState, isPortraitVideo, defaultResizeMode);
+				case PIP -> applyPictureInPictureState(previousState);
 			}
 		});
-	}
-
-	public void enterFullscreen(final boolean isPortraitVideo) {
-		isFs = true;
-		if (!activity.isInPictureInPictureMode()) normalHeight = playerHeight;
-		activity.setRequestedOrientation(isPortraitVideo
-						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-
-		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
-		updatePlayerLayout(true);
-		final ImageButton fsBtn = findViewById(R.id.btn_fullscreen);
-		fsBtn.setImageResource(R.drawable.ic_fullscreen_exit);
-	}
-
-	public void exitFullscreen() {
-		isFs = false;
-		activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), false);
-		updatePlayerLayout(false);
-		setResizeMode(prefs.getResizeMode());
-		final ImageButton fsBtn = findViewById(R.id.btn_fullscreen);
-		fsBtn.setImageResource(R.drawable.ic_fullscreen);
 	}
 
 	public void updatePlayerLayout(final boolean fullscreen) {
@@ -150,9 +130,61 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	public void enterPiP() {
+		if (activity.isInPictureInPictureMode()) return;
+		if (!isFs) normalHeight = playerHeight;
+		updatePlayerLayout(true);
+		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
 		final Rational aspectRatio = new Rational(16, 9);
-		final PictureInPictureParams params = new PictureInPictureParams.Builder().setAspectRatio(aspectRatio).build();
+		final PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
+						.setAspectRatio(aspectRatio);
+		final Rect sourceRectHint = new Rect();
+		if (getGlobalVisibleRect(sourceRectHint)) {
+			builder.setSourceRectHint(sourceRectHint);
+		}
+		final PictureInPictureParams params = builder.build();
 		activity.enterPictureInPictureMode(params);
+	}
+
+	private void applyNormalState(final int defaultResizeMode) {
+		isFs = false;
+		activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), false);
+		updatePlayerLayout(false);
+		setResizeMode(defaultResizeMode);
+		updateFullscreenButton(false);
+	}
+
+	private void applyFullscreenState(@NonNull final ControllerMachine.State previousState,
+	                                  final boolean isPortraitVideo,
+	                                  final int defaultResizeMode) {
+		isFs = true;
+		if (previousState == ControllerMachine.State.NORMAL && !activity.isInPictureInPictureMode()) {
+			normalHeight = playerHeight;
+		}
+		activity.setRequestedOrientation(isPortraitVideo
+						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
+		updatePlayerLayout(true);
+		setResizeMode(defaultResizeMode);
+		updateFullscreenButton(true);
+	}
+
+	private void applyPictureInPictureState(@NonNull final ControllerMachine.State previousState) {
+		isFs = false;
+		if (!previousState.isFullscreen()) {
+			normalHeight = playerHeight;
+		}
+		updatePlayerLayout(true);
+		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
+	}
+
+	private void updateFullscreenButton(final boolean fullscreen) {
+		final ImageButton fullscreenButton = findViewById(R.id.btn_fullscreen);
+		if (fullscreenButton != null) {
+			fullscreenButton.setImageResource(
+							fullscreen ? R.drawable.ic_fullscreen_exit : R.drawable.ic_fullscreen);
+		}
 	}
 
 	public void cueing(@NonNull final CueGroup cueGroup) {

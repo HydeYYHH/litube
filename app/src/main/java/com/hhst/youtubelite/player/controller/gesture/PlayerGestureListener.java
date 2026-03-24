@@ -220,9 +220,9 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		if (Math.abs(deltaY) < threshold) return;
 
 		fullscreenSwipeTriggered = true;
-		if (deltaY < 0 && !playerView.isFs()) {
+		if (deltaY < 0 && !controller.isFullscreen()) {
 			controller.enterFullscreen();
-		} else if (deltaY > 0 && playerView.isFs()) {
+		} else if (deltaY > 0 && controller.isFullscreen()) {
 			controller.exitFullscreen();
 		}
 	}

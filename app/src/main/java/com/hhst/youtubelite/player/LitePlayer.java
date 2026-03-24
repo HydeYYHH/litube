@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.player;
 
 import android.app.Activity;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -277,7 +278,7 @@ public class LitePlayer {
 	}
 
 	public boolean isFullscreen() {
-		return playerView.isFs();
+		return controller.isFullscreen();
 	}
 
 	public void enterFullscreen() {
@@ -286,6 +287,14 @@ public class LitePlayer {
 
 	public void exitFullscreen() {
 		controller.exitFullscreen();
+	}
+
+	public void enterPictureInPicture() {
+		playerView.enterPiP();
+	}
+
+	public boolean shouldAutoEnterPictureInPicture() {
+		return playerView.getVisibility() == View.VISIBLE;
 	}
 
 	public void onPictureInPictureModeChanged(final boolean isInPiP) {

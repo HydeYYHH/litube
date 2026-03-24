@@ -1,13 +1,16 @@
 package com.hhst.youtubelite.player;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.app.Activity;
+import android.view.View;
 
 import androidx.media3.common.PlaybackException;
 import androidx.media3.datasource.DataSpec;
@@ -36,6 +39,8 @@ import java.util.concurrent.Executor;
 
 public class LitePlayerTest {
 	private LitePlayer player;
+	private LitePlayerView playerView;
+	private Controller controller;
 	private YoutubeExtractor extractor;
 	private MMKV kv;
 	private MockedStatic<MMKV> mmkvStatic;
@@ -44,8 +49,8 @@ public class LitePlayerTest {
 	public void setUp() throws Exception {
 		final Activity activity = mock(Activity.class);
 		extractor = mock(YoutubeExtractor.class);
-		final LitePlayerView playerView = mock(LitePlayerView.class);
-		final Controller controller = mock(Controller.class);
+		playerView = mock(LitePlayerView.class);
+		controller = mock(Controller.class);
 		final Engine engine = mock(Engine.class);
 		final SponsorBlockManager sponsor = mock(SponsorBlockManager.class);
 		final Executor executor = Runnable::run;
@@ -115,6 +120,42 @@ public class LitePlayerTest {
 		assertSame(original, streamDetails.getAudioStreams().get(0));
 		streamDetails.getAudioStreams().clear();
 		assertEquals(0, streamDetails.getAudioStreams().size());
+	}
+
+	@Test
+	public void isFullscreen_delegatesToControllerState() {
+		when(controller.isFullscreen()).thenReturn(true, false);
+
+		assertTrue(player.isFullscreen());
+		assertFalse(player.isFullscreen());
+	}
+
+	@Test
+	public void enterPictureInPicture_delegatesToPlayerView() {
+		player.enterPictureInPicture();
+
+		verify(playerView).enterPiP();
+	}
+
+	@Test
+	public void shouldAutoEnterPictureInPicture_returnsTrueWhenPlayerViewIsVisible() {
+		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
+
+		assertTrue(player.shouldAutoEnterPictureInPicture());
+	}
+
+	@Test
+	public void shouldAutoEnterPictureInPicture_returnsFalseWhenPlayerViewIsHidden() {
+		when(playerView.getVisibility()).thenReturn(View.GONE);
+
+		assertFalse(player.shouldAutoEnterPictureInPicture());
+	}
+
+	@Test
+	public void onPictureInPictureModeChanged_delegatesToController() {
+		player.onPictureInPictureModeChanged(true);
+
+		verify(controller).onPictureInPictureModeChanged(true);
 	}
 
 	private static PlaybackException sourceOpenFailure() {
