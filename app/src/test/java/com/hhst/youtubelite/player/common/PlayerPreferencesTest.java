@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.player.common;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,5 +41,33 @@ public class PlayerPreferencesTest {
 		assertEquals(230, state.widthDp());
 		assertEquals(12.5f, state.translationXDp(), 0.0f);
 		assertEquals(-8.0f, state.translationYDp(), 0.0f);
+	}
+
+	@Test
+	public void loopMode_defaultsToPlaylistNextWhenNothingPersisted() {
+		when(mmkv.decodeInt("loop_mode", Integer.MIN_VALUE)).thenReturn(Integer.MIN_VALUE);
+		when(mmkv.decodeBool("loop_enabled", false)).thenReturn(false);
+
+		assertSame(PlayerLoopMode.PLAYLIST_NEXT, preferences.getLoopMode());
+	}
+
+	@Test
+	public void loopMode_fallsBackToLegacyLoopEnabledFlag() {
+		when(mmkv.decodeInt("loop_mode", Integer.MIN_VALUE)).thenReturn(Integer.MIN_VALUE);
+		when(mmkv.decodeBool("loop_enabled", false)).thenReturn(true);
+
+		assertSame(PlayerLoopMode.LOOP_ONE, preferences.getLoopMode());
+	}
+
+	@Test
+	public void loopMode_roundTripsPersistedModeAndLegacyFlag() {
+		preferences.setLoopMode(PlayerLoopMode.PLAYLIST_RANDOM);
+
+		verify(mmkv).encode("loop_mode", 3);
+		verify(mmkv).encode("loop_enabled", false);
+
+		when(mmkv.decodeInt("loop_mode", Integer.MIN_VALUE)).thenReturn(2);
+
+		assertSame(PlayerLoopMode.PAUSE_AT_END, preferences.getLoopMode());
 	}
 }

@@ -44,6 +44,7 @@ import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
@@ -86,6 +87,8 @@ public class Engine {
 	private final TabManager tabManager;
 	@NonNull
 	private final SponsorBlockManager sponsor;
+	@NonNull
+	private PlayerLoopMode loopMode = PlayerLoopMode.PLAYLIST_NEXT;
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
 	private String vid;
@@ -149,7 +152,7 @@ public class Engine {
 
 			@Override
 			public void onPlaybackStateChanged(final int state) {
-				if (state == Player.STATE_ENDED) skipToNext();
+				if (state == Player.STATE_ENDED) handlePlaybackEnded();
 			}
 
 			@Override
@@ -164,6 +167,16 @@ public class Engine {
 			}
 		});
 		playerView.setPlayer(this.player);
+	}
+
+	private void handlePlaybackEnded() {
+		if (loopMode.skipsToNextOnEnded()) {
+			skipToNext();
+			return;
+		}
+		if (loopMode.selectsRandomPlaylistItemOnEnded()) {
+			playRandomPlaylistItem();
+		}
 	}
 
 	public boolean isPlaying() {
@@ -379,6 +392,10 @@ public class Engine {
 		skipByPlaylistOffset(-1);
 	}
 
+	public void playRandomPlaylistItem() {
+		this.tabManager.evaluateJavascriptForPlayback(buildRandomPlaylistNavigationScript(), null);
+	}
+
 	private void skipByPlaylistOffset(final int playlistOffset) {
 		this.tabManager.evaluateJavascriptForPlayback(buildPlaylistNavigationScript(playlistOffset), null);
 	}
@@ -480,6 +497,11 @@ public class Engine {
 
 	public void setRepeatMode(final int mode) {
 		this.player.setRepeatMode(mode);
+	}
+
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		this.loopMode = mode;
+		setRepeatMode(mode.repeatMode());
 	}
 
 	public int getPlaybackState() {
@@ -609,5 +631,28 @@ public class Engine {
 						})();
 						""",
 						playlistOffset);
+	}
+
+	static String buildRandomPlaylistNavigationScript() {
+		return """
+						(function(){
+						const playlistContents=globalThis.ytInitialData?.contents?.singleColumnWatchNextResults?.playlist?.playlist?.contents;
+						if(!Array.isArray(playlistContents) || playlistContents.length===0) return 'missing-playlist';
+						const currentVideoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
+						if(!currentVideoId) return 'missing-current-video-id';
+						const currentIndex=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === currentVideoId);
+						if(currentIndex < 0) return 'missing-current-video';
+						const candidateIndices=playlistContents
+							.map((item,index)=>item?.playlistPanelVideoRenderer ? index : -1)
+							.filter(index=>index >= 0 && (playlistContents.length === 1 || index !== currentIndex));
+						if(candidateIndices.length === 0) return 'missing-random-target';
+						const targetIndex=candidateIndices[Math.floor(Math.random() * candidateIndices.length)];
+						const targetVideo=playlistContents[targetIndex]?.playlistPanelVideoRenderer;
+						const targetUrl=targetVideo?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+						if(typeof targetUrl !== 'string' || targetUrl.length === 0) return 'missing-target-url';
+						location.href = new URL(targetUrl, location.origin).toString();
+						return 'navigating';
+						})();
+						""";
 	}
 }

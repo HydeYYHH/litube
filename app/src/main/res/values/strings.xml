@@ -58,6 +58,10 @@
     <string name="debug_info_copied">Debug info copied to clipboard</string>
     <string name="repeat_on">Loop On</string>
     <string name="repeat_off">Loop Off</string>
+    <string name="playback_end_next">Play next</string>
+    <string name="playback_end_loop">Loop video</string>
+    <string name="playback_end_pause">Pause at end</string>
+    <string name="playback_end_playlist_random">Playlist shuffle</string>
     <string name="subtitles">Captions</string>
     <string name="subtitles_on">Captions on</string>
     <string name="subtitles_off">Captions off</string>

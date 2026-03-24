@@ -55,6 +55,10 @@
     <string name="debug_info_copied">調試資訊已複製到剪貼板</string>
     <string name="repeat_on">循環開啟</string>
     <string name="repeat_off">循環關閉</string>
+    <string name="playback_end_next">播完後播放下一個</string>
+    <string name="playback_end_loop">播完後單曲循環</string>
+    <string name="playback_end_pause">播完後暫停</string>
+    <string name="playback_end_playlist_random">播完後隨機播放清單</string>
     <string name="subtitles">字幕</string>
     <string name="subtitles_on">字幕開啟</string>
     <string name="subtitles_off">字幕關閉</string>

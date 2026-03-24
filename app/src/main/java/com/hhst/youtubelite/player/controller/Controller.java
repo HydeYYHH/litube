@@ -41,6 +41,7 @@ import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.gesture.PlayerGestureListener;
@@ -257,20 +258,41 @@ public class Controller {
 
 		final ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
 		if (loopBtn != null) {
-			boolean loopEnabled = prefs.isLoopEnabled();
-			engine.setRepeatMode(loopEnabled ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
-			loopBtn.setImageResource(loopEnabled ? R.drawable.ic_repeat_on : R.drawable.ic_repeat_off);
+			applyLoopMode(loopBtn, prefs.getLoopMode());
 			loopBtn.setOnClickListener(v -> {
-				boolean newEnabled = !prefs.isLoopEnabled();
-				prefs.setLoopEnabled(newEnabled);
-				engine.setRepeatMode(newEnabled ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
-				loopBtn.setImageResource(newEnabled ? R.drawable.ic_repeat_on : R.drawable.ic_repeat_off);
-				showHint(activity.getString(newEnabled ? R.string.repeat_on : R.string.repeat_off), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
+				final PlayerLoopMode newMode = prefs.getLoopMode().next();
+				prefs.setLoopMode(newMode);
+				applyLoopMode(loopBtn, newMode);
+				showHint(activity.getString(getLoopModeLabelRes(newMode)), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 				setControlsVisible(true);
 			});
 		}
 
 		setClick(R.id.btn_reset, v -> zoomListener.reset());
+	}
+
+	private void applyLoopMode(@NonNull final ImageButton loopBtn, @NonNull final PlayerLoopMode mode) {
+		engine.setLoopMode(mode);
+		loopBtn.setImageResource(getLoopModeIconRes(mode));
+		loopBtn.setContentDescription(activity.getString(getLoopModeLabelRes(mode)));
+	}
+
+	private int getLoopModeIconRes(@NonNull final PlayerLoopMode mode) {
+		return switch (mode) {
+			case PLAYLIST_NEXT -> R.drawable.ic_playback_end_next;
+			case LOOP_ONE -> R.drawable.ic_playback_end_loop;
+			case PAUSE_AT_END -> R.drawable.ic_playback_end_pause;
+			case PLAYLIST_RANDOM -> R.drawable.ic_playback_end_shuffle;
+		};
+	}
+
+	private int getLoopModeLabelRes(@NonNull final PlayerLoopMode mode) {
+		return switch (mode) {
+			case PLAYLIST_NEXT -> R.string.playback_end_next;
+			case LOOP_ONE -> R.string.playback_end_loop;
+			case PAUSE_AT_END -> R.string.playback_end_pause;
+			case PLAYLIST_RANDOM -> R.string.playback_end_playlist_random;
+		};
 	}
 
 	private void setupQualityAndSpeedButtons() {

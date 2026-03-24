@@ -25,6 +25,7 @@ import lombok.NoArgsConstructor;
 public final class PlayerPreferences {
 	private static final String KEY_PLAYBACK_SPEED = "playback_speed";
 	private static final String KEY_VIDEO_QUALITY = "video_quality";
+	private static final String KEY_LOOP_MODE = "loop_mode";
 	private static final String KEY_LOOP_ENABLED = "loop_enabled";
 	private static final String KEY_SUBTITLE_ENABLED = "subtitle_enabled";
 	private static final String KEY_SUBTITLE_LANGUAGE = "subtitle_language";
@@ -79,12 +80,18 @@ public final class PlayerPreferences {
 		mmkv.encode(KEY_VIDEO_QUALITY, quality);
 	}
 
-	public boolean isLoopEnabled() {
-		return mmkv.decodeBool(KEY_LOOP_ENABLED, false);
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		final int persistedMode = mmkv.decodeInt(KEY_LOOP_MODE, Integer.MIN_VALUE);
+		if (persistedMode != Integer.MIN_VALUE) {
+			return PlayerLoopMode.fromPersistedValue(persistedMode);
+		}
+		return mmkv.decodeBool(KEY_LOOP_ENABLED, false) ? PlayerLoopMode.LOOP_ONE : PlayerLoopMode.PLAYLIST_NEXT;
 	}
 
-	public void setLoopEnabled(final boolean enabled) {
-		mmkv.encode(KEY_LOOP_ENABLED, enabled);
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		mmkv.encode(KEY_LOOP_MODE, mode.persistedValue());
+		mmkv.encode(KEY_LOOP_ENABLED, mode == PlayerLoopMode.LOOP_ONE);
 	}
 
 	public boolean isSubtitleEnabled() {

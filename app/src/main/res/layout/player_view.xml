@@ -94,9 +94,9 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/action_repeat"
+                    android:contentDescription="@string/playback_end_next"
                     android:padding="4dp"
-                    android:src="@drawable/ic_repeat_off" />
+                    android:src="@drawable/ic_playback_end_next" />
 
                 <ImageButton
                     android:id="@+id/btn_more"
