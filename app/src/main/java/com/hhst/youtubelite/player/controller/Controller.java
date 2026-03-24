@@ -260,9 +260,8 @@ public class Controller {
 		if (loopBtn != null) {
 			applyLoopMode(loopBtn, prefs.getLoopMode());
 			loopBtn.setOnClickListener(v -> {
-				final PlayerLoopMode newMode = prefs.getLoopMode().next();
-				prefs.setLoopMode(newMode);
-				applyLoopMode(loopBtn, newMode);
+				final PlayerLoopMode newMode = getLoopMode().next();
+				setLoopMode(newMode);
 				showHint(activity.getString(getLoopModeLabelRes(newMode)), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 				setControlsVisible(true);
 			});
@@ -275,6 +274,21 @@ public class Controller {
 		engine.setLoopMode(mode);
 		loopBtn.setImageResource(getLoopModeIconRes(mode));
 		loopBtn.setContentDescription(activity.getString(getLoopModeLabelRes(mode)));
+	}
+
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		prefs.setLoopMode(mode);
+		final ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
+		if (loopBtn != null) {
+			applyLoopMode(loopBtn, mode);
+		} else {
+			engine.setLoopMode(mode);
+		}
+	}
+
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		return prefs.getLoopMode();
 	}
 
 	private int getLoopModeIconRes(@NonNull final PlayerLoopMode mode) {
@@ -846,6 +860,7 @@ public class Controller {
 		if (scrim != null) {
 			ViewUtils.animateViewAlpha(scrim, showScrim ? 1.0f : 0.0f, View.GONE);
 		}
+		updateVisibility(R.id.btn_mini_queue, showControls);
 		updateVisibility(R.id.btn_mini_close, showControls);
 		updateVisibility(R.id.btn_mini_restore, showControls);
 		updateVisibility(R.id.mini_bottom_controls, showControls);

@@ -204,6 +204,24 @@ public class TabManager {
 		if (webview != null) webview.evaluateJavascript(script, callback);
 	}
 
+	public void playInPlaybackSession(@NonNull final String url) {
+		player.get().play(url);
+		final YoutubeWebview webview = resolvePlaybackWebview();
+		if (webview != null) {
+			webview.loadUrl(url);
+			return;
+		}
+		openTab(url, UrlUtils.getPageClass(url));
+	}
+
+	@Nullable
+	public String getPlaybackSessionUrl() {
+		if (isWatchSession(suspendedWatchFragment)) {
+			return suspendedWatchFragment != null ? suspendedWatchFragment.getUrl() : null;
+		}
+		return isWatchSession(tab) && tab != null ? tab.getUrl() : null;
+	}
+
 	public void loadUrl(@NonNull final String url) {
 		final YoutubeWebview webview = getWebview();
 		if (webview != null) webview.loadUrl(url);

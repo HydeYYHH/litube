@@ -49,4 +49,10 @@ public class MainActivityPipTest {
 
 		verify(player).onPictureInPictureModeChanged(true);
 	}
+
+	@Test
+	public void shouldShowQueueUi_hidesQueueEntryPointsDuringPip() {
+		assertTrue(MainActivity.shouldShowQueueUi(false));
+		assertFalse(MainActivity.shouldShowQueueUi(true));
+	}
 }

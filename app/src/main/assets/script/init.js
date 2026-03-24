@@ -11,14 +11,14 @@ try {
         const getLocalizedText = (key) => {
             // Automatically translated by AI
             const languages = {
-                'zh': { 'download': '下载', 'extension': '扩展', 'chat': '聊天室', 'about': '关于' },
-                'zt': { 'download': '下載', 'extension': '擴充功能', 'chat': '聊天室', 'about': '關於' },
-                'en': { 'download': 'Download', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
-                'ja': { 'download': 'ダウンロード', 'extension': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
-                'ko': { 'download': '다운로드', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
-                'fr': { 'download': 'Télécharger', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
-                'ru': { 'download': 'Скачать', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
-                'tr': { 'download': 'İndir', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
+                'zh': { 'download': '下载', 'add_to_queue': '加入队列', 'extension': '扩展', 'chat': '聊天室', 'about': '关于' },
+                'zt': { 'download': '下載', 'add_to_queue': '加入佇列', 'extension': '擴充功能', 'chat': '聊天室', 'about': '關於' },
+                'en': { 'download': 'Download', 'add_to_queue': 'Add to queue', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
+                'ja': { 'download': 'ダウンロード', 'add_to_queue': 'キューに追加', 'extension': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
+                'ko': { 'download': '다운로드', 'add_to_queue': '대기열에 추가', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
+                'fr': { 'download': 'Télécharger', 'add_to_queue': 'Ajouter à la file', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
+                'ru': { 'download': 'Скачать', 'add_to_queue': 'Добавить в очередь', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
+                'tr': { 'download': 'İndir', 'add_to_queue': 'Kuyruğa ekle', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
             const lang = (document.documentElement.lang || 'en').toLowerCase();
             let keyLang = lang.substring(0, 2);
@@ -715,30 +715,84 @@ try {
                 const chatButton = document.getElementById('chatButton');
                 if (chatButton) chatButton.remove();
             }
-            // Add download button on watching page
-            if (!isLive && pageClass === 'watch' && !document.getElementById('downloadButton')) {
+            const existingDownloadButton = document.getElementById('downloadButton');
+            const existingQueueButton = document.getElementById('queueButton');
+            const downloadButton = existingDownloadButton;
+            const queueButton = existingQueueButton;
+            const shouldShowWatchQueueButtons = !isLive && pageClass === 'watch';
+            const removeManagedWatchButtons = () => {
+                if (existingDownloadButton) existingDownloadButton.remove();
+                if (existingQueueButton) queueButton.remove();
+            };
+            if (!shouldShowWatchQueueButtons) {
+                removeManagedWatchButtons();
+            } else {
                 const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
-                if (saveButton) {
-                    const downloadButton = saveButton.cloneNode(true);
-                    downloadButton.id = 'downloadButton';
-                    const textContent = downloadButton.querySelector('.yt-spec-button-shape-next__button-text-content');
-                    if (textContent) {
-                        textContent.innerText = getLocalizedText('download');
+                if (saveButton && saveButton.parentElement) {
+                    const actionBar = saveButton.parentElement;
+                    if (existingDownloadButton && (existingDownloadButton.parentElement !== actionBar || !existingDownloadButton.isConnected)) {
+                        downloadButton.remove();
                     }
-                    const svg = downloadButton.querySelector('svg');
-                    if (svg) {
-                        svg.setAttribute("viewBox", "0 -960 960 960");
-                        const path = svg.querySelector('path');
-                        if (path) {
-                            path.setAttribute("d", "M480-328.46 309.23-499.23l42.16-43.38L450-444v-336h60v336l98.61-98.61 42.16 43.38L480-328.46ZM252.31-180Q222-180 201-201q-21-21-21-51.31v-108.46h60v108.46q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85h455.38q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46v-108.46h60v108.46Q780-222 759-201q-21 21-51.31 21H252.31Z");
+                    if (existingQueueButton && (existingQueueButton.parentElement !== actionBar || !existingQueueButton.isConnected)) {
+                        queueButton.remove();
+                    }
+                    if (!actionBar.querySelector('#downloadButton')) {
+                        const downloadButton = saveButton.cloneNode(true);
+                        downloadButton.id = 'downloadButton';
+                        const textContent = downloadButton.querySelector('.yt-spec-button-shape-next__button-text-content');
+                        if (textContent) {
+                            textContent.innerText = getLocalizedText('download');
                         }
-                        downloadButton.addEventListener('click', () => {
-                            // opt: fetch video details
-                            android.download(location.href)
-                        });
-                        saveButton.parentElement?.insertBefore(downloadButton, saveButton);
-                    } else {
-                        taskState.needsRetry = true; // avoid using an incomplete clone
+                        const svg = downloadButton.querySelector('svg');
+                        if (svg) {
+                            svg.setAttribute("viewBox", "0 -960 960 960");
+                            const path = svg.querySelector('path');
+                            if (path) {
+                                path.setAttribute("d", "M480-328.46 309.23-499.23l42.16-43.38L450-444v-336h60v336l98.61-98.61 42.16 43.38L480-328.46ZM252.31-180Q222-180 201-201q-21-21-21-51.31v-108.46h60v108.46q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85h455.38q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46v-108.46h60v108.46Q780-222 759-201q-21 21-51.31 21H252.31Z");
+                            }
+                            downloadButton.addEventListener('click', () => {
+                                android.download(location.href)
+                            });
+                            actionBar.insertBefore(downloadButton, saveButton);
+                        } else {
+                            taskState.needsRetry = true;
+                        }
+                    }
+                    if (!actionBar.querySelector('#queueButton')) {
+                        const queueButton = saveButton.cloneNode(true);
+                        queueButton.id = 'queueButton';
+                        const queueText = queueButton.querySelector('.yt-spec-button-shape-next__button-text-content');
+                        if (queueText) {
+                            queueText.innerText = getLocalizedText('add_to_queue');
+                        }
+                        const queueSvg = queueButton.querySelector('svg');
+                        if (queueSvg) {
+                            queueSvg.setAttribute("viewBox", "0 -960 960 960");
+                            const queuePath = queueSvg.querySelector('path');
+                            if (queuePath) {
+                                queuePath.setAttribute("d", "M120-320v-80h280v80H120Zm0-160v-80h440v80H120Zm0-160v-80h440v80H120Zm520 480v-160H480v-80h160v-160h80v160h160v80H720v160h-80Z");
+                            }
+                            queueButton.addEventListener('click', () => {
+                                const playerDetails = globalThis.ytInitialPlayerResponse?.videoDetails ?? {};
+                                const videoId = getVideoId(location.href);
+                                const thumbnails = playerDetails.thumbnail?.thumbnails;
+                                const thumbnailUrl = Array.isArray(thumbnails) && thumbnails.length > 0
+                                    ? thumbnails[thumbnails.length - 1]?.url
+                                    : document.querySelector('meta[property=\"og:image\"]')?.content ?? null;
+                                if (videoId) {
+                                    android.addToQueue(JSON.stringify({
+                                        videoId,
+                                        url: location.href,
+                                        title: playerDetails.title ?? document.title,
+                                        author: playerDetails.author ?? '',
+                                        thumbnailUrl
+                                    }));
+                                }
+                            });
+                            actionBar.insertBefore(queueButton, saveButton);
+                        } else {
+                            taskState.needsRetry = true;
+                        }
                     }
                 } else {
                     taskState.needsRetry = true;

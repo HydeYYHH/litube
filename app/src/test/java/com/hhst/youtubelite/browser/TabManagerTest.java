@@ -276,6 +276,24 @@ public class TabManagerTest {
 	}
 
 	@Test
+	public void playInPlaybackSession_targetsSuspendedWatchAndStartsPlayback() throws Exception {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		final TabManager tabManager = createTabManager(player, extensionManager);
+		final YoutubeFragment current = createFragment("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
+		final YoutubeFragment suspendedWatch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
+		final YoutubeWebview suspendedWatchWebView = mock(YoutubeWebview.class);
+		setField(suspendedWatch, "webview", suspendedWatchWebView);
+		seedTabs(tabManager, current);
+		setField(tabManager, "suspendedWatchFragment", suspendedWatch);
+
+		tabManager.playInPlaybackSession("https://m.youtube.com/watch?v=new");
+
+		verify(player).play("https://m.youtube.com/watch?v=new");
+		verify(suspendedWatchWebView).loadUrl("https://m.youtube.com/watch?v=new");
+	}
+
+	@Test
 	public void evaluateJavascriptForPlayback_skipsExecutionWhenNoWatchSessionExists() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);

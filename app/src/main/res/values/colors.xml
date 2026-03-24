@@ -12,4 +12,7 @@
     <color name="surface_variant">#F1F1F1</color>
     <color name="on_surface_variant">#606060</color>
     <color name="outline">#E5E5E5</color>
+    <color name="queue_switch_red_track">#66FF0000</color>
+    <color name="queue_switch_neutral_track">#52000000</color>
+    <color name="queue_switch_thumb_off">#FFFFFF</color>
 </resources>

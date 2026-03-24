@@ -15,6 +15,11 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.webkit.WebView;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -30,6 +35,9 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
@@ -40,8 +48,13 @@ import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
+import com.hhst.youtubelite.player.queue.LocalQueueRepository;
+import com.hhst.youtubelite.player.queue.QueueItem;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.UrlUtils;
+import com.hhst.youtubelite.util.ViewUtils;
+import com.squareup.picasso.Picasso;
 
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
 import org.schabi.newpipe.extractor.NewPipe;
@@ -75,10 +88,14 @@ public final class MainActivity extends AppCompatActivity {
 	LitePlayer player;
 	@Inject
 	YoutubeExtractor youtubeExtractor;
+	@Inject
+	LocalQueueRepository localQueueRepository;
 	@Nullable
 	private PlaybackService playbackService;
 	@Nullable
 	private ServiceConnection playbackServiceConnection;
+	@Nullable
+	private BottomSheetDialog queueBottomSheetDialog;
 	private long lastBackTime = 0;
 
 	@Override
@@ -98,6 +115,7 @@ public final class MainActivity extends AppCompatActivity {
 		});
 
 		setupNativeContextMenu();
+		setupQueueUi();
 		requestPermissions();
 		startPlaybackService();
 		setupBackNavigation();
@@ -124,6 +142,7 @@ public final class MainActivity extends AppCompatActivity {
 	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 		dispatchPictureInPictureModeChanged(player, isInPictureInPictureMode);
+		syncQueueUiVisibility(isInPictureInPictureMode);
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
@@ -174,6 +193,10 @@ public final class MainActivity extends AppCompatActivity {
 		if (player != null) {
 			player.onPictureInPictureModeChanged(isInPictureInPictureMode);
 		}
+	}
+
+	static boolean shouldShowQueueUi(final boolean isInPictureInPictureMode) {
+		return !isInPictureInPictureMode;
 	}
 
 	private String extractUrlFromText(String text) {
@@ -238,6 +261,36 @@ public final class MainActivity extends AppCompatActivity {
 						.show();
 	}
 
+	private void setupQueueUi() {
+		final View playerRoot = findViewById(R.id.playerView);
+		if (playerRoot == null) return;
+		playerRoot.post(() -> {
+			final View queueButton = findViewById(R.id.btn_queue);
+			if (queueButton != null) {
+				queueButton.setOnClickListener(v -> showQueueBottomSheet());
+			}
+			final View miniQueueButton = findViewById(R.id.btn_mini_queue);
+			if (miniQueueButton != null) {
+				miniQueueButton.setOnClickListener(v -> showQueueBottomSheet());
+			}
+			syncQueueUiVisibility(DeviceUtils.isInPictureInPictureMode(this));
+		});
+	}
+
+	private void syncQueueUiVisibility(final boolean isInPictureInPictureMode) {
+		final View queueButton = findViewById(R.id.btn_queue);
+		final View miniQueueButton = findViewById(R.id.btn_mini_queue);
+		if (shouldShowQueueUi(isInPictureInPictureMode)) {
+			if (queueButton != null) queueButton.setVisibility(View.VISIBLE);
+			return;
+		}
+		if (queueButton != null) queueButton.setVisibility(View.GONE);
+		if (miniQueueButton != null) miniQueueButton.setVisibility(View.GONE);
+		if (queueBottomSheetDialog != null && queueBottomSheetDialog.isShowing()) {
+			queueBottomSheetDialog.dismiss();
+		}
+	}
+
 	private void triggerDownload(String url) {
 		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
 		final Toast fetchToast = Toast.makeText(this, "Fetching download links...", Toast.LENGTH_SHORT);
@@ -287,6 +340,149 @@ public final class MainActivity extends AppCompatActivity {
 				mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG).show());
 			}
 		}).start();
+	}
+
+	private void triggerQueueDownload() {
+		final String playbackUrl = tabManager != null ? tabManager.getPlaybackSessionUrl() : null;
+		if (playbackUrl != null && playbackUrl.contains("list=")) {
+			triggerPlaylistDownload(playbackUrl);
+			return;
+		}
+		final List<QueueItem> items = localQueueRepository.getItems();
+		if (items.isEmpty()) {
+			Toast.makeText(this, R.string.queue_download_unavailable, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		Toast.makeText(this, getString(R.string.downloading_queue_count, items.size()), Toast.LENGTH_LONG).show();
+		for (int i = 0; i < items.size(); i++) {
+			final String itemUrl = items.get(i).getUrl();
+			if (itemUrl == null || itemUrl.isBlank()) continue;
+			mainHandler.postDelayed(() -> triggerDownload(itemUrl), i * 250L);
+		}
+	}
+
+	private void showQueueBottomSheet() {
+		if (!shouldShowQueueUi(DeviceUtils.isInPictureInPictureMode(this))) return;
+		final BottomSheetDialog dialog = new BottomSheetDialog(this);
+		queueBottomSheetDialog = dialog;
+		final View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_queue, new android.widget.FrameLayout(this), false);
+		dialog.setContentView(sheetView);
+
+		final android.widget.FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+		if (bottomSheet != null) {
+			final BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
+			sheetView.measure(View.MeasureSpec.makeMeasureSpec(ViewUtils.getScreenWidth(this), View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+			behavior.setPeekHeight(sheetView.getMeasuredHeight());
+		}
+
+		final ImageButton closeButton = sheetView.findViewById(R.id.btn_queue_close);
+		final SwitchMaterial enabledSwitch = sheetView.findViewById(R.id.switch_queue_enabled);
+		final ImageButton downloadButton = sheetView.findViewById(R.id.btn_queue_download);
+		final ImageButton orderButton = sheetView.findViewById(R.id.btn_queue_order);
+		final ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
+		final LinearLayout itemsContainer = sheetView.findViewById(R.id.queue_items_container);
+		final TextView emptyView = sheetView.findViewById(R.id.queue_empty);
+
+		if (closeButton != null) {
+			closeButton.setOnClickListener(v -> dialog.dismiss());
+		}
+		if (enabledSwitch != null) {
+			enabledSwitch.setChecked(localQueueRepository.isEnabled());
+			enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+				localQueueRepository.setEnabled(isChecked);
+				Toast.makeText(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off, Toast.LENGTH_SHORT).show();
+			});
+		}
+		if (downloadButton != null) {
+			downloadButton.setOnClickListener(v -> {
+				dialog.dismiss();
+				triggerQueueDownload();
+			});
+		}
+		if (orderButton != null) {
+			renderLoopModeButton(orderButton, player.getLoopMode());
+			orderButton.setOnClickListener(v -> {
+				final PlayerLoopMode newMode = player.getLoopMode().next();
+				player.setLoopMode(newMode);
+				renderLoopModeButton(orderButton, newMode);
+			});
+		}
+		if (clearButton != null) {
+			clearButton.setOnClickListener(v -> confirmClearQueue(dialog, itemsContainer, emptyView));
+		}
+		dialog.setOnDismissListener(d -> {
+			if (queueBottomSheetDialog == dialog) {
+				queueBottomSheetDialog = null;
+			}
+		});
+		populateQueueItems(dialog, itemsContainer, emptyView);
+		dialog.show();
+	}
+
+	private void confirmClearQueue(@NonNull final BottomSheetDialog dialog,
+	                               @NonNull final LinearLayout itemsContainer,
+	                               @NonNull final TextView emptyView) {
+		new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.clear_queue_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> {
+							localQueueRepository.clear();
+							populateQueueItems(dialog, itemsContainer, emptyView);
+						})
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+	}
+
+	private void populateQueueItems(@NonNull final BottomSheetDialog dialog,
+	                                @NonNull final LinearLayout itemsContainer,
+	                                @NonNull final TextView emptyView) {
+		itemsContainer.removeAllViews();
+		final List<QueueItem> items = localQueueRepository.getItems();
+		final String currentVideoId = player.getLoadedVideoId();
+		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+		for (final QueueItem item : items) {
+			final View itemView = getLayoutInflater().inflate(R.layout.item_queue_entry, itemsContainer, false);
+			final ImageView thumbnailView = itemView.findViewById(R.id.queue_item_thumbnail);
+			final TextView titleView = itemView.findViewById(R.id.queue_item_title);
+			final TextView authorView = itemView.findViewById(R.id.queue_item_author);
+			titleView.setText(item.getTitle() == null || item.getTitle().isBlank() ? item.getUrl() : item.getTitle());
+			authorView.setText(item.getAuthor() == null || item.getAuthor().isBlank()
+							? getString(R.string.queue_unknown_author)
+							: item.getAuthor());
+			if (item.getThumbnailUrl() != null && !item.getThumbnailUrl().isBlank()) {
+				Picasso.get().load(item.getThumbnailUrl()).placeholder(R.drawable.ic_broken_image).error(R.drawable.ic_broken_image).into(thumbnailView);
+			} else {
+				thumbnailView.setImageResource(R.drawable.ic_broken_image);
+			}
+			itemView.setAlpha(item.getVideoId() != null && item.getVideoId().equals(currentVideoId) ? 1.0f : 0.88f);
+			itemView.setOnClickListener(v -> {
+				dialog.dismiss();
+				if (item.getUrl() != null) {
+					tabManager.playInPlaybackSession(item.getUrl());
+				}
+			});
+			itemsContainer.addView(itemView);
+		}
+	}
+
+	private void renderLoopModeButton(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {
+		switch (mode) {
+			case PLAYLIST_NEXT -> {
+				button.setImageResource(R.drawable.ic_playback_end_next);
+				button.setContentDescription(getString(R.string.playback_end_next));
+			}
+			case LOOP_ONE -> {
+				button.setImageResource(R.drawable.ic_playback_end_loop);
+				button.setContentDescription(getString(R.string.playback_end_loop));
+			}
+			case PAUSE_AT_END -> {
+				button.setImageResource(R.drawable.ic_playback_end_pause);
+				button.setContentDescription(getString(R.string.playback_end_pause));
+			}
+			case PLAYLIST_RANDOM -> {
+				button.setImageResource(R.drawable.ic_playback_end_shuffle);
+				button.setContentDescription(getString(R.string.playback_end_playlist_random));
+			}
+		}
 	}
 
 	private void shareUrl(String url) {

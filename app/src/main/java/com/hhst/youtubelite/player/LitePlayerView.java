@@ -62,6 +62,7 @@ public class LitePlayerView extends PlayerView {
 	private static final int MINI_SIDE_CONTROL_SIZE_DP = 30;
 	private static final int MINI_CENTER_CONTROL_SIZE_DP = 34;
 	private static final int[] MINI_PLAYER_TAP_TARGET_IDS = {
+					R.id.btn_mini_queue,
 					R.id.btn_mini_close,
 					R.id.btn_mini_prev,
 					R.id.btn_mini_play,

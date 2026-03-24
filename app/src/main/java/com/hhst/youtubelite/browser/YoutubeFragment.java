@@ -17,6 +17,7 @@ import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.controller.Controller;
+import com.hhst.youtubelite.player.queue.LocalQueueRepository;
 
 import java.util.Objects;
 
@@ -44,6 +45,8 @@ public final class YoutubeFragment extends Fragment {
 	ExtensionManager extensionManager;
 	@Inject
 	TabManager tabManager;
+	@Inject
+	LocalQueueRepository localQueueRepository;
 	@Inject
 	OkHttpClient okHttpClient;
 
@@ -105,6 +108,7 @@ public final class YoutubeFragment extends Fragment {
 		webview.setPlayer(player);
 		webview.setExtensionManager(extensionManager);
 		webview.setTabManager(tabManager);
+		webview.setLocalQueueRepository(localQueueRepository);
 		webview.setOkHttpClient(okHttpClient);
 		webview.setUpdateVisitedHistory(url -> {
 			YoutubeFragment.this.url = url;

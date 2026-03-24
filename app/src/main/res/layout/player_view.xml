@@ -72,6 +72,15 @@
                     android:textStyle="bold" />
 
                 <ImageButton
+                    android:id="@+id/btn_queue"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/queue"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_queue" />
+
+                <ImageButton
                     android:id="@+id/btn_segments"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
@@ -317,6 +326,17 @@
         app:cardElevation="0dp"
         app:strokeColor="#12FFFFFF"
         app:strokeWidth="1dp" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_queue"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/queue"
+        android:padding="12dp"
+        android:src="@drawable/ic_queue"
+        android:visibility="gone" />
 
     <ImageButton
         android:id="@+id/btn_mini_close"

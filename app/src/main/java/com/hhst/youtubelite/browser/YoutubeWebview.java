@@ -31,6 +31,7 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.queue.LocalQueueRepository;
 import com.hhst.youtubelite.ui.MainActivity;
 import com.hhst.youtubelite.ui.widget.LoadingProgressBar;
 import com.hhst.youtubelite.util.StreamIOUtils;
@@ -76,6 +77,8 @@ public class YoutubeWebview extends WebView {
 	private ExtensionManager extensionManager;
 	@Setter
 	private TabManager tabManager;
+	@Setter
+	private LocalQueueRepository localQueueRepository;
 	@Nullable
 	private LoadingProgressBar progressBar;
 
@@ -136,7 +139,7 @@ public class YoutubeWebview extends WebView {
 		settings.setMediaPlaybackRequiresUserGesture(false);
 		settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
-		final JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager);
+		final JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager, localQueueRepository);
 		addJavascriptInterface(jsInterface, "android");
 		setTag(jsInterface);
 

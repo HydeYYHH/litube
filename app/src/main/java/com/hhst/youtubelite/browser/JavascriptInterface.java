@@ -19,12 +19,19 @@ import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.queue.LocalQueueRepository;
+import com.hhst.youtubelite.player.queue.QueueItem;
 import com.hhst.youtubelite.ui.AboutActivity;
+import com.hhst.youtubelite.R;
+
+import android.widget.Toast;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @UnstableApi
 public final class JavascriptInterface {
@@ -41,17 +48,25 @@ public final class JavascriptInterface {
 	@NonNull
 	private final TabManager tabManager;
 	@NonNull
+	private final LocalQueueRepository localQueueRepository;
+	@NonNull
 	private final Gson gson = new Gson();
 	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
 
-	public JavascriptInterface(@NonNull final YoutubeWebview webview, @NonNull final YoutubeExtractor youtubeExtractor, @NonNull final LitePlayer player, @NonNull final ExtensionManager extensionManager, @NonNull final TabManager tabManager) {
+	public JavascriptInterface(@NonNull final YoutubeWebview webview,
+	                           @NonNull final YoutubeExtractor youtubeExtractor,
+	                           @NonNull final LitePlayer player,
+	                           @NonNull final ExtensionManager extensionManager,
+	                           @NonNull final TabManager tabManager,
+	                           @NonNull final LocalQueueRepository localQueueRepository) {
 		this.context = webview.getContext();
 		this.webview = webview;
 		this.youtubeExtractor = youtubeExtractor;
 		this.player = player;
 		this.extensionManager = extensionManager;
 		this.tabManager = tabManager;
+		this.localQueueRepository = localQueueRepository;
 	}
 
 
@@ -102,6 +117,30 @@ public final class JavascriptInterface {
 	@android.webkit.JavascriptInterface
 	public void play(@Nullable final String url) {
 		if (url != null) handler.post(() -> player.play(url));
+	}
+
+	@android.webkit.JavascriptInterface
+	public void addToQueue(@Nullable final String itemJson) {
+		if (itemJson == null) return;
+		handler.post(() -> {
+			try {
+				final QueueItem item = gson.fromJson(itemJson, QueueItem.class);
+				if (item == null || item.getUrl() == null) return;
+				final String canonicalVideoId = extractVideoId(item.getUrl());
+				if (canonicalVideoId == null) return;
+				item.setVideoId(canonicalVideoId);
+				localQueueRepository.add(item);
+				Toast.makeText(context, R.string.queue_item_added, Toast.LENGTH_SHORT).show();
+			} catch (final Exception ignored) {
+			}
+		});
+	}
+
+	@Nullable
+	private String extractVideoId(@Nullable final String url) {
+		if (url == null) return null;
+		final Matcher matcher = Pattern.compile("[?&]v=([\\w-]{6,})", Pattern.CASE_INSENSITIVE).matcher(url);
+		return matcher.find() ? matcher.group(1) : null;
 	}
 
 	@android.webkit.JavascriptInterface

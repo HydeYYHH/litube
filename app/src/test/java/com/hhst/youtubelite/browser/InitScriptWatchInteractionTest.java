@@ -31,6 +31,27 @@ public class InitScriptWatchInteractionTest {
 		assertTrue(script.contains("document.addEventListener('click', handleWatchTimestampClick, true);"));
 	}
 
+	@Test
+	public void initScript_addsWatchQueueButtonAndDelegatesToNativeQueueSave() throws Exception {
+		final String script = readInitScript();
+
+		assertTrue(script.contains("!actionBar.querySelector('#queueButton')"));
+		assertTrue(script.contains("queueButton.id = 'queueButton';"));
+		assertTrue(script.contains("getLocalizedText('add_to_queue')"));
+		assertTrue(script.contains("const videoId = getVideoId(location.href);"));
+		assertTrue(script.contains("android.addToQueue("));
+	}
+
+	@Test
+	public void initScript_cleansUpAndReinjectsWatchQueueButtonsAcrossNavigation() throws Exception {
+		final String script = readInitScript();
+
+		assertTrue(script.contains("queueButton.remove()"));
+		assertTrue(script.contains("downloadButton.remove()"));
+		assertTrue(script.contains("const existingQueueButton"));
+		assertTrue(script.contains("const existingDownloadButton"));
+	}
+
 	private String readInitScript() throws IOException {
 		return new String(Files.readAllBytes(resolveInitScriptPath()), StandardCharsets.UTF_8);
 	}

@@ -20,6 +20,7 @@ import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
@@ -360,6 +361,20 @@ public class LitePlayer {
 
 	public void setHeight(int height) {
 		playerView.post(() -> playerView.setHeight(height));
+	}
+
+	@Nullable
+	public String getLoadedVideoId() {
+		return loadedVideoId;
+	}
+
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		return controller.getLoopMode();
+	}
+
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		controller.setLoopMode(mode);
 	}
 
 	public void release() {

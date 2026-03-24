@@ -47,6 +47,8 @@ import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.common.PlayerUtils;
+import com.hhst.youtubelite.player.queue.LocalQueueRepository;
+import com.hhst.youtubelite.player.queue.QueueItem;
 import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.util.StringUtils;
@@ -88,6 +90,8 @@ public class Engine {
 	@NonNull
 	private final SponsorBlockManager sponsor;
 	@NonNull
+	private final LocalQueueRepository localQueueRepository;
+	@NonNull
 	private PlayerLoopMode loopMode = PlayerLoopMode.PLAYLIST_NEXT;
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Nullable
@@ -128,11 +132,13 @@ public class Engine {
 	              @Nullable final SimpleCache simpleCache,
 	              @NonNull final PlayerPreferences prefs,
 	              @NonNull final TabManager tabManager,
-	              @NonNull final SponsorBlockManager sponsor) {
+	              @NonNull final SponsorBlockManager sponsor,
+	              @NonNull final LocalQueueRepository localQueueRepository) {
 		this.simpleCache = simpleCache;
 		this.prefs = prefs;
 		this.tabManager = tabManager;
 		this.sponsor = sponsor;
+		this.localQueueRepository = localQueueRepository;
 		final DefaultTrackSelector trackSelector = new DefaultTrackSelector(context, new AdaptiveTrackSelection.Factory());
 		trackSelector.setParameters(trackSelector.buildUponParameters().setTunnelingEnabled(true).build());
 		this.player = new ExoPlayer.Builder(context)
@@ -385,19 +391,52 @@ public class Engine {
 	}
 
 	public void skipToNext() {
+		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
+			navigateWithinLocalQueue(1);
+			return;
+		}
 		skipByPlaylistOffset(1);
 	}
 
 	public void skipToPrevious() {
+		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
+			navigateWithinLocalQueue(-1);
+			return;
+		}
 		skipByPlaylistOffset(-1);
 	}
 
 	public void playRandomPlaylistItem() {
+		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
+			navigateRandomLocalQueueItem();
+			return;
+		}
 		this.tabManager.evaluateJavascriptForPlayback(buildRandomPlaylistNavigationScript(), null);
 	}
 
 	private void skipByPlaylistOffset(final int playlistOffset) {
 		this.tabManager.evaluateJavascriptForPlayback(buildPlaylistNavigationScript(playlistOffset), null);
+	}
+
+	private boolean navigateWithinLocalQueue(final int offset) {
+		if (!localQueueRepository.isEnabled()) return false;
+		final QueueItem item = localQueueRepository.findRelative(vid, offset);
+		if (item == null || item.getUrl() == null) return false;
+		tabManager.playInPlaybackSession(item.getUrl());
+		return true;
+	}
+
+	private boolean navigateRandomLocalQueueItem() {
+		if (!localQueueRepository.isEnabled()) return false;
+		final QueueItem item = localQueueRepository.findRandom(vid);
+		if (item == null || item.getUrl() == null) return false;
+		tabManager.playInPlaybackSession(item.getUrl());
+		return true;
+	}
+
+	static boolean shouldUseLocalQueueNavigation(final boolean localQueueEnabled,
+	                                             final boolean currentVideoInQueue) {
+		return localQueueEnabled && currentVideoInQueue;
 	}
 
 	@Nullable
