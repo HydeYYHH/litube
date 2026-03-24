@@ -106,7 +106,7 @@ public final class JavascriptInterface {
 
 	@android.webkit.JavascriptInterface
 	public void hidePlayer() {
-		handler.post(player::hide);
+		handler.post(tabManager::hidePlayer);
 	}
 
 	@android.webkit.JavascriptInterface

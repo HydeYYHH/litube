@@ -75,6 +75,11 @@ public class LitePlayer {
 	private String loadedVideoId;
 	@Nullable
 	private ExtractionSession extractionSession;
+	@Nullable
+	private Runnable onMiniPlayerRestore;
+	@Nullable
+	private Runnable onMiniPlayerClose;
+	private boolean inAppMiniPlayer;
 
 	@Inject
 	public LitePlayer(@NonNull final Activity activity,
@@ -263,6 +268,8 @@ public class LitePlayer {
 		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		activity.runOnUiThread(() -> {
+			exitInAppMiniPlayer();
+			setMiniPlayerCallbacks(null, null);
 			playerView.hide();
 			engine.clear();
 			if (playbackService != null) {
@@ -295,12 +302,47 @@ public class LitePlayer {
 		playerView.enterPiP();
 	}
 
+	public boolean isSuspendableWatchSession() {
+		return playerView.getVisibility() == View.VISIBLE;
+	}
+
+	public void enterInAppMiniPlayer() {
+		inAppMiniPlayer = true;
+		playerView.enterInAppMiniPlayer();
+		controller.enterMiniPlayer();
+	}
+
+	public void exitInAppMiniPlayer() {
+		inAppMiniPlayer = false;
+		playerView.exitInAppMiniPlayer();
+		controller.exitMiniPlayer();
+	}
+
+	public boolean isInAppMiniPlayer() {
+		return inAppMiniPlayer;
+	}
+
+	public void stopAndCloseFromMiniPlayer() {
+		hide();
+	}
+
+	public void setMiniPlayerCallbacks(@Nullable final Runnable onRestore, @Nullable final Runnable onClose) {
+		onMiniPlayerRestore = onRestore;
+		onMiniPlayerClose = onClose;
+		playerView.setMiniPlayerCallbacks(
+						onRestore != null ? this::dispatchMiniPlayerRestore : null,
+						onClose != null ? this::dispatchMiniPlayerClose : null);
+	}
+
 	public boolean shouldAutoEnterPictureInPicture() {
 		return playerView.getVisibility() == View.VISIBLE;
 	}
 
 	public void onPictureInPictureModeChanged(final boolean isInPiP) {
 		controller.onPictureInPictureModeChanged(isInPiP);
+		if (!isInPiP && inAppMiniPlayer && onMiniPlayerRestore != null) {
+			dispatchMiniPlayerRestore();
+		}
 	}
 
 	public void setHeight(int height) {
@@ -311,7 +353,29 @@ public class LitePlayer {
 		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		loadedVideoId = null;
+		onMiniPlayerRestore = null;
+		onMiniPlayerClose = null;
+		final boolean wasInMiniPlayer = inAppMiniPlayer;
+		activity.runOnUiThread(() -> {
+			playerView.setMiniPlayerCallbacks(null, null);
+			if (wasInMiniPlayer) {
+				playerView.exitInAppMiniPlayer();
+				controller.exitMiniPlayer();
+			}
+		});
+		inAppMiniPlayer = false;
 		engine.release();
+	}
+
+	private void dispatchMiniPlayerRestore() {
+		if (onMiniPlayerRestore != null) onMiniPlayerRestore.run();
+	}
+
+	private void dispatchMiniPlayerClose() {
+		final Runnable onClose = onMiniPlayerClose;
+		if (onClose == null) return;
+		stopAndCloseFromMiniPlayer();
+		onClose.run();
 	}
 
 	void invalidatePlaybackCacheIfSourceOpenFailure(@NonNull final PlaybackException error) {

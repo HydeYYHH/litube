@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.extension;
 
 import static com.hhst.youtubelite.Constant.ENABLE_BACKGROUND_PLAY;
+import static com.hhst.youtubelite.Constant.ENABLE_IN_APP_MINI_PLAYER;
 import static com.hhst.youtubelite.Constant.ENABLE_PIP;
 import static com.hhst.youtubelite.Constant.REMEMBER_LAST_POSITION;
 import static com.hhst.youtubelite.Constant.REMEMBER_RESIZE_MODE;
@@ -27,6 +28,7 @@ public record Extension(String key, int description, List<Extension> children) {
 										new Extension(Constant.REMEMBER_PLAYBACK_SPEED, R.string.remember_playback_speed, null),
 										new Extension(REMEMBER_RESIZE_MODE, R.string.remember_resize_mode, null),
 										new Extension(Constant.ENABLE_PLAYER_GESTURES, R.string.player_gestures, null),
+										new Extension(ENABLE_IN_APP_MINI_PLAYER, R.string.in_app_mini_player, null),
 										new Extension(ENABLE_BACKGROUND_PLAY, R.string.background_play, null)
 						)),
 						new Extension(null, R.string.skip_sponsors, List.of(

@@ -8,6 +8,7 @@ public final class ControllerMachine {
 		NORMAL,
 		FULLSCREEN_UNLOCKED,
 		FULLSCREEN_LOCKED,
+		MINI_PLAYER,
 		PIP;
 
 		public boolean isFullscreen() {
@@ -22,6 +23,8 @@ public final class ControllerMachine {
 					boolean showProgressBar,
 					boolean showResetButton,
 					boolean showLockButton,
+					boolean showMiniControls,
+					boolean showMiniScrim,
 					boolean locked,
 					boolean fullscreen,
 					boolean pip,
@@ -48,6 +51,10 @@ public final class ControllerMachine {
 		return state.isInPictureInPicture();
 	}
 
+	public boolean isInMiniPlayer() {
+		return state.isInMiniPlayer();
+	}
+
 	public boolean isControlsVisible() {
 		return state.controlsVisible();
 	}
@@ -66,6 +73,14 @@ public final class ControllerMachine {
 
 	public void toggleLock() {
 		state = state.toggleLock();
+	}
+
+	public void enterMiniPlayer() {
+		state = state.enterMiniPlayer();
+	}
+
+	public void exitMiniPlayer() {
+		state = state.exitMiniPlayer();
 	}
 
 	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode) {
@@ -97,6 +112,8 @@ public final class ControllerMachine {
 						uiState.progressVisible(),
 						uiState.resetVisible(),
 						uiState.lockButtonVisible(),
+						uiState.miniControlsVisible(),
+						uiState.miniScrimVisible(),
 						state.isLocked(),
 						uiState.fullscreen(),
 						state.isInPictureInPicture(),
@@ -109,6 +126,7 @@ public final class ControllerMachine {
 			case NORMAL -> State.NORMAL;
 			case FULLSCREEN_UNLOCK -> State.FULLSCREEN_UNLOCKED;
 			case FULLSCREEN_LOCK -> State.FULLSCREEN_LOCKED;
+			case MINI_PLAYER -> State.MINI_PLAYER;
 			case PIP -> State.PIP;
 		};
 	}

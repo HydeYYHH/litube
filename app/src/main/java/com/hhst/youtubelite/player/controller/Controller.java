@@ -71,7 +71,7 @@ import lombok.Setter;
 public class Controller {
 	private static final int HINT_PADDING_DP = 8;
 	private static final int HINT_TOP_MARGIN_DP = 24;
-	private static final int CONTROLS_HIDE_DELAY_MS = 1000;
+	private static final int CONTROLS_HIDE_DELAY_MS = 3000;
 	@NonNull
 	private final Activity activity;
 	@NonNull
@@ -108,6 +108,7 @@ public class Controller {
 		this.zoomListener = zoomListener;
 		this.tabManager = tabManager;
 		this.extensionManager = extensionManager;
+		this.playerView.setOnMiniPlayerBackgroundTap(() -> setControlsVisible(!isControlsVisible()));
 		this.zoomListener.setOnShowReset(show ->
 						showReset(show && isControlsVisible() && stateMachine.getState() == ControllerMachine.State.FULLSCREEN_UNLOCKED));
 
@@ -122,10 +123,8 @@ public class Controller {
 	}
 
 	private void updatePlayPauseButtons(boolean isPlaying) {
-		final View play = playerView.findViewById(R.id.btn_play);
-		final View pause = playerView.findViewById(R.id.btn_pause);
-		if (play != null) play.setVisibility(!isPlaying ? View.VISIBLE : View.GONE);
-		if (pause != null) pause.setVisibility(isPlaying ? View.VISIBLE : View.GONE);
+		updatePlayPauseVisibility(R.id.btn_play, R.id.btn_pause, isPlaying);
+		updatePlayPauseVisibility(R.id.btn_mini_play, R.id.btn_mini_pause, isPlaying);
 	}
 
 	private void setupHintOverlay() {
@@ -144,6 +143,9 @@ public class Controller {
 		final PlayerGestureListener gestureListener = new PlayerGestureListener(activity, playerView, engine, this);
 		final GestureDetector detector = new GestureDetector(activity, gestureListener);
 		playerView.setOnTouchListener((v, ev) -> {
+			if (stateMachine.isInMiniPlayer()) {
+				return false;
+			}
 			final int action = ev.getAction();
 			if (action == MotionEvent.ACTION_DOWN && isControlsVisible()) {
 				handler.removeCallbacks(hideControls);
@@ -167,7 +169,7 @@ public class Controller {
 			public void onIsPlayingChanged(boolean isPlaying) {
 				updatePlayPauseButtons(isPlaying);
 				playerView.setKeepScreenOn(isPlaying);
-				if (!isPlaying && isControlsVisible()) hideControlsAutomatically();
+				if (isControlsVisible()) hideControlsAutomatically();
 			}
 
 			@Override
@@ -216,19 +218,19 @@ public class Controller {
 	}
 
 	private void setupPlaybackButtons() {
-		setClick(R.id.btn_play, v -> {
+		setClicks(new int[]{R.id.btn_play, R.id.btn_mini_play}, v -> {
 			engine.play();
 			setControlsVisible(true);
 		});
-		setClick(R.id.btn_pause, v -> {
+		setClicks(new int[]{R.id.btn_pause, R.id.btn_mini_pause}, v -> {
 			engine.pause();
 			setControlsVisible(true);
 		});
-		setClick(R.id.btn_prev, v -> {
+		setClicks(new int[]{R.id.btn_prev, R.id.btn_mini_prev}, v -> {
 			engine.skipToPrevious();
 			setControlsVisible(true);
 		});
-		setClick(R.id.btn_next, v -> {
+		setClicks(new int[]{R.id.btn_next, R.id.btn_mini_next}, v -> {
 			engine.skipToNext();
 			setControlsVisible(true);
 		});
@@ -583,12 +585,31 @@ public class Controller {
 		applyControllerState(previousState, !isInPiP);
 	}
 
+	public void enterMiniPlayer() {
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.enterMiniPlayer();
+		applyControllerState(previousState, true);
+	}
+
+	public void exitMiniPlayer() {
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.exitMiniPlayer();
+		applyControllerState(previousState, true);
+	}
+
 	public void setControlsVisible(boolean visible) {
 		stateMachine.setControlsVisible(visible);
+		handler.removeCallbacks(hideControls);
 		final ControllerMachine.RenderState renderState = stateMachine.currentRenderState(
 						engine.getPlaybackState() == Player.STATE_BUFFERING,
 						zoomListener.isZoomed());
-		handler.removeCallbacks(hideControls);
+		applyRenderState(renderState);
+		if (renderState.controlsVisible()) {
+			hideControlsAutomatically();
+		}
+	}
+
+	private void applyRenderState(@NonNull final ControllerMachine.RenderState renderState) {
 		View center = playerView.findViewById(R.id.center_controls);
 		View other = playerView.findViewById(R.id.other_controls);
 		View bar = playerView.findViewById(R.id.exo_progress);
@@ -607,7 +628,7 @@ public class Controller {
 		if (lockBtn != null) {
 			ViewUtils.animateViewAlpha(lockBtn, renderState.showLockButton() ? 1.0f : 0.0f, View.GONE);
 		}
-		if (renderState.controlsVisible()) hideControlsAutomatically();
+		updateMiniControls(renderState.showMiniControls(), renderState.showMiniScrim());
 	}
 
 	private void showReset(boolean show) {
@@ -617,13 +638,13 @@ public class Controller {
 
 	private void hideControlsAutomatically() {
 		handler.removeCallbacks(hideControls);
-		if (engine.isPlaying() && !stateMachine.isInPictureInPicture()) {
+		if (engine.isPlaying() && !stateMachine.isInPictureInPicture() && !stateMachine.isInMiniPlayer()) {
 			handler.postDelayed(hideControls, CONTROLS_HIDE_DELAY_MS);
 		}
 	}
 
 	public void showHint(@NonNull String text, long durationMs) {
-		if (hintText == null || activity.isInPictureInPictureMode() || stateMachine.isInPictureInPicture()) return;
+		if (hintText == null || activity.isInPictureInPictureMode() || stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) return;
 		hintText.setText(text);
 		ViewUtils.animateViewAlpha(hintText, 1.0f, View.GONE);
 		handler.removeCallbacks(this::hideHint);
@@ -651,7 +672,7 @@ public class Controller {
 						stateMachine.getState(),
 						PlayerUtils.isPortrait(engine),
 						prefs.getResizeMode());
-		if (stateMachine.isInPictureInPicture()) {
+		if (stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) {
 			hideHint();
 		}
 		setControlsVisible(controlsVisible);
@@ -783,6 +804,36 @@ public class Controller {
 	private void setClick(int id, View.OnClickListener l) {
 		View v = playerView.findViewById(id);
 		if (v != null) v.setOnClickListener(l);
+	}
+
+	private void setClicks(@NonNull int[] ids, @NonNull View.OnClickListener listener) {
+		for (int id : ids) {
+			setClick(id, listener);
+		}
+	}
+
+	private void updatePlayPauseVisibility(final int playId, final int pauseId, final boolean isPlaying) {
+		final View play = playerView.findViewById(playId);
+		final View pause = playerView.findViewById(pauseId);
+		if (play != null) play.setVisibility(!isPlaying ? View.VISIBLE : View.GONE);
+		if (pause != null) pause.setVisibility(isPlaying ? View.VISIBLE : View.GONE);
+	}
+
+	private void updateMiniControls(final boolean showControls, final boolean showScrim) {
+		final View scrim = playerView.findViewById(R.id.mini_controller_scrim);
+		if (scrim != null) {
+			ViewUtils.animateViewAlpha(scrim, showScrim ? 1.0f : 0.0f, View.GONE);
+		}
+		updateVisibility(R.id.btn_mini_close, showControls);
+		updateVisibility(R.id.btn_mini_restore, showControls);
+		updateVisibility(R.id.mini_bottom_controls, showControls);
+	}
+
+	private void updateVisibility(final int viewId, final boolean visible) {
+		final View view = playerView.findViewById(viewId);
+		if (view != null) {
+			view.setVisibility(visible ? View.VISIBLE : View.GONE);
+		}
 	}
 
 	private interface SelectionCallback {

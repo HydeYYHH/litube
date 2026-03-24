@@ -227,6 +227,22 @@ public class LitePlayerTest {
 	}
 
 	@Test
+	public void enterInAppMiniPlayer_delegatesToPlayerView() {
+		player.enterInAppMiniPlayer();
+
+		verify(playerView).enterInAppMiniPlayer();
+		verify(controller).enterMiniPlayer();
+	}
+
+	@Test
+	public void exitInAppMiniPlayer_delegatesToPlayerView() {
+		player.exitInAppMiniPlayer();
+
+		verify(playerView).exitInAppMiniPlayer();
+		verify(controller).exitMiniPlayer();
+	}
+
+	@Test
 	public void shouldAutoEnterPictureInPicture_returnsTrueWhenPlayerViewIsVisible() {
 		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
 
@@ -245,6 +261,28 @@ public class LitePlayerTest {
 		player.setHeight(480);
 
 		verify(playerView).setHeight(480);
+	}
+
+	@Test
+	public void isSuspendableWatchSession_returnsTrueWhenLoadedAndPlayerViewIsShown() {
+		when(playerView.isShown()).thenReturn(true);
+
+		assertTrue(player.isSuspendableWatchSession());
+	}
+
+	@Test
+	public void isSuspendableWatchSession_returnsTrueWhenPlayerViewIsVisibleEvenIfVideoStillLoading() throws Exception {
+		setField(player, "loadedVideoId", null);
+		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
+
+		assertTrue(player.isSuspendableWatchSession());
+	}
+
+	@Test
+	public void onPictureInPictureModeChanged_delegatesToController() {
+		player.onPictureInPictureModeChanged(true);
+
+		verify(controller).onPictureInPictureModeChanged(true);
 	}
 
 	@Test
@@ -453,6 +491,18 @@ public class LitePlayerTest {
 						StreamType.VIDEO_STREAM);
 	}
 
+	@Test
+	public void onPictureInPictureModeChanged_exitsToWatchWhenMiniPlayerSessionExists() {
+		final Runnable onRestore = mock(Runnable.class);
+		player.setMiniPlayerCallbacks(onRestore, null);
+		player.enterInAppMiniPlayer();
+
+		player.onPictureInPictureModeChanged(false);
+
+		verify(controller).onPictureInPictureModeChanged(false);
+		verify(onRestore).run();
+	}
+
 	private static PlaybackException sourceOpenFailure() {
 		final HttpDataSource.HttpDataSourceException cause = new HttpDataSource.HttpDataSourceException(
 						new IOException("GET 403"),
@@ -481,3 +531,4 @@ public class LitePlayerTest {
 		field.set(target, value);
 	}
 }
+

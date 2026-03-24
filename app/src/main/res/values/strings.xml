@@ -46,6 +46,7 @@
     <string name="player_time_separator"> / </string>
     <string name="action_repeat">Repeat</string>
     <string name="action_fullscreen">Fullscreen</string>
+    <string name="action_restore_watch">Return to video</string>
     <string name="hint_volume">Volume %1$d%%</string>
     <string name="hint_brightness">Brightness %1$d%%</string>
     <string name="hint_seek_plus">+%1$ds</string>
@@ -64,6 +65,7 @@
     <string name="jumped_to_segment">Jumped to: %1$s</string>
     <string name="jump">Jump</string>
     <string name="remember_resize_mode">Remember resize mode</string>
+    <string name="in_app_mini_player">In-app mini-player</string>
     <string name="bitrate">Bitrate</string>
     <string name="dropped_frames">Dropped Frames</string>
     <string name="resolution">Resolution</string>

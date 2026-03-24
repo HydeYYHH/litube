@@ -73,8 +73,6 @@ import dagger.hilt.android.scopes.ActivityScoped;
 @UnstableApi
 @ActivityScoped
 public class Engine {
-	private static final String JS_NEXT_VIDEO = "document.querySelector('#movie_player')?.nextVideo();";
-	private static final String JS_PREV_VIDEO = "document.querySelector('#movie_player')?.previousVideo();";
 	private static final int UPDATE_INTERVAL_MS = 1000;
 	private static final int SAFE_ZONE_MS = 5000;
 
@@ -374,11 +372,15 @@ public class Engine {
 	}
 
 	public void skipToNext() {
-		this.tabManager.evaluateJavascript(JS_NEXT_VIDEO, null);
+		skipByPlaylistOffset(1);
 	}
 
 	public void skipToPrevious() {
-		this.tabManager.evaluateJavascript(JS_PREV_VIDEO, null);
+		skipByPlaylistOffset(-1);
+	}
+
+	private void skipByPlaylistOffset(final int playlistOffset) {
+		this.tabManager.evaluateJavascriptForPlayback(buildPlaylistNavigationScript(playlistOffset), null);
 	}
 
 	@Nullable
@@ -586,5 +588,26 @@ public class Engine {
 	public void release() {
 		handler.removeCallbacks(onTimeUpdate);
 		this.player.release();
+	}
+
+	static String buildPlaylistNavigationScript(final int playlistOffset) {
+		return String.format("""
+						(function(){
+						const playlistContents=globalThis.ytInitialData?.contents?.singleColumnWatchNextResults?.playlist?.playlist?.contents;
+						if(!Array.isArray(playlistContents) || playlistContents.length===0) return 'missing-playlist';
+						const currentVideoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
+						if(!currentVideoId) return 'missing-current-video-id';
+						const currentIndex=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === currentVideoId);
+						if(currentIndex < 0) return 'missing-current-video';
+						const targetIndex=currentIndex + %1$d;
+						if(targetIndex < 0 || targetIndex >= playlistContents.length) return 'target-out-of-range';
+						const targetVideo=playlistContents[targetIndex]?.playlistPanelVideoRenderer;
+						const targetUrl=targetVideo?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+						if(typeof targetUrl !== 'string' || targetUrl.length === 0) return 'missing-target-url';
+						location.href = new URL(targetUrl, location.origin).toString();
+						return 'navigating';
+						})();
+						""",
+						playlistOffset);
 	}
 }

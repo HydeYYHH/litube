@@ -303,6 +303,106 @@
         android:src="@drawable/ic_unlock"
         android:visibility="gone" />
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mini_controller_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="0dp"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        app:cardBackgroundColor="#66000000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeColor="#12FFFFFF"
+        app:strokeWidth="1dp" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_close"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/close"
+        android:padding="12dp"
+        android:src="@drawable/ic_close"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_restore"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/action_restore_watch"
+        android:padding="10dp"
+        android:src="@drawable/ic_fullscreen"
+        android:translationY="0dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/mini_bottom_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:translationY="-4dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btn_mini_prev"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_previous"
+            android:padding="5dp"
+            android:src="@drawable/ic_previous" />
+
+        <Space
+            android:id="@+id/mini_controls_space_start"
+            android:layout_width="18dp"
+            android:layout_height="1dp" />
+
+        <FrameLayout
+            android:layout_width="34dp"
+            android:layout_height="34dp">
+
+            <ImageButton
+                android:id="@+id/btn_mini_play"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_play"
+                android:padding="5dp"
+                android:src="@drawable/ic_play" />
+
+            <ImageButton
+                android:id="@+id/btn_mini_pause"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_pause"
+                android:padding="5dp"
+                android:src="@drawable/ic_pause" />
+        </FrameLayout>
+
+        <Space
+            android:id="@+id/mini_controls_space_end"
+            android:layout_width="18dp"
+            android:layout_height="1dp" />
+
+        <ImageButton
+            android:id="@+id/btn_mini_next"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_next"
+            android:padding="5dp"
+            android:src="@drawable/ic_next" />
+    </LinearLayout>
+
 </FrameLayout>
 
 

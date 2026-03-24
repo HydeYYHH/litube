@@ -121,4 +121,32 @@ public class ControllerStateTest {
 		assertFalse(uiState.centerControlsVisible());
 		assertTrue(uiState.progressVisible());
 	}
+
+	@Test
+	public void miniPlayerState_showsOnlyMiniControls() {
+		final ControllerState state = ControllerState.initial().enterMiniPlayer();
+		final ControllerState.UiState uiState = state.toUiState(false, false);
+
+		assertEquals(ControllerState.Mode.MINI_PLAYER, state.mode());
+		assertTrue(state.controlsVisible());
+		assertFalse(uiState.otherControlsVisible());
+		assertFalse(uiState.centerControlsVisible());
+		assertFalse(uiState.progressVisible());
+		assertFalse(uiState.lockButtonVisible());
+		assertFalse(uiState.resetVisible());
+		assertTrue(uiState.miniControlsVisible());
+		assertTrue(uiState.miniScrimVisible());
+	}
+
+	@Test
+	public void miniPlayerState_canHideMiniControls() {
+		final ControllerState state = ControllerState.initial()
+						.enterMiniPlayer()
+						.withControlsVisible(false);
+		final ControllerState.UiState uiState = state.toUiState(false, false);
+
+		assertFalse(state.controlsVisible());
+		assertFalse(uiState.miniControlsVisible());
+		assertFalse(uiState.miniScrimVisible());
+	}
 }

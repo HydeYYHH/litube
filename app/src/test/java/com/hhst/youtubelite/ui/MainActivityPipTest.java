@@ -32,6 +32,16 @@ public class MainActivityPipTest {
 	}
 
 	@Test
+	public void shouldEnterPictureInPictureOnUserLeaveHint_returnsFalseWhenPlayerDisallowsIt() {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		when(extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_PIP)).thenReturn(true);
+		when(player.shouldAutoEnterPictureInPicture()).thenReturn(false);
+
+		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false));
+	}
+
+	@Test
 	public void dispatchPictureInPictureModeChanged_forwardsToPlayer() {
 		final LitePlayer player = mock(LitePlayer.class);
 

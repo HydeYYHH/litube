@@ -65,6 +65,8 @@ public final class YoutubeFragment extends Fragment {
 		args.putString(ARG_URL, url);
 		args.putString(ARG_TAG, tag);
 		fragment.setArguments(args);
+		fragment.url = url;
+		fragment.mTag = tag;
 		return fragment;
 	}
 

@@ -50,6 +50,29 @@ public class ControllerMachineTest {
 	}
 
 	@Test
+	public void miniPlayer_exitRestoresPreviousMode() {
+		stateMachine.enterFullscreen();
+		stateMachine.enterMiniPlayer();
+
+		assertEquals(ControllerMachine.State.MINI_PLAYER, stateMachine.getState());
+
+		stateMachine.exitMiniPlayer();
+
+		assertEquals(ControllerMachine.State.FULLSCREEN_UNLOCKED, stateMachine.getState());
+	}
+
+	@Test
+	public void pictureInPicture_restoresMiniPlayerWhenEnteredFromMiniPlayer() {
+		stateMachine.enterMiniPlayer();
+
+		stateMachine.onPictureInPictureModeChanged(true);
+		assertEquals(ControllerMachine.State.PIP, stateMachine.getState());
+
+		stateMachine.onPictureInPictureModeChanged(false);
+		assertEquals(ControllerMachine.State.MINI_PLAYER, stateMachine.getState());
+	}
+
+	@Test
 	public void renderState_forFullscreenLocked_showsOnlyLockButton() {
 		stateMachine.enterFullscreen();
 		stateMachine.toggleLock();
@@ -80,5 +103,22 @@ public class ControllerMachineTest {
 		assertFalse(renderState.showProgressBar());
 		assertFalse(renderState.showResetButton());
 		assertFalse(renderState.showLockButton());
+	}
+
+	@Test
+	public void miniPlayerRenderState_hidesStandardControllerUi() {
+		stateMachine.enterMiniPlayer();
+
+		final ControllerMachine.RenderState renderState =
+						stateMachine.currentRenderState(false, false);
+
+		assertTrue(renderState.controlsVisible());
+		assertFalse(renderState.showCenterControls());
+		assertFalse(renderState.showOtherControls());
+		assertFalse(renderState.showProgressBar());
+		assertFalse(renderState.showResetButton());
+		assertFalse(renderState.showLockButton());
+		assertTrue(renderState.showMiniControls());
+		assertTrue(renderState.showMiniScrim());
 	}
 }
