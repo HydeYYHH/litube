@@ -34,6 +34,22 @@ public class InitScriptAnimationTuningTest {
         assertFalse(script.contains("window.__liteDomEnableDebug"));
     }
 
+    @Test
+    public void initScript_retriesWatchLayoutSyncFromHookOnly() throws Exception {
+        final String script = readInitScript();
+
+        assertTrue(script.contains("const WATCH_LAYOUT_SYNC_DELAYS_MS = [16, 32, 64"));
+        assertTrue(script.contains("document.addEventListener('animationstart', (event) => {"));
+        assertTrue(script.contains("WATCH_LAYOUT_SYNC_DELAYS_MS.forEach((delayMs) => {"));
+        assertTrue(script.contains("window.setTimeout(() => {"));
+        assertTrue(script.contains("window.changePlayerHeight();"));
+
+        assertFalse(script.contains("new ResizeObserver(window.changePlayerHeight)"));
+        assertFalse(script.contains("window.addEventListener('resize', window.changePlayerHeight"));
+        assertFalse(script.contains("window.visualViewport?.addEventListener('resize', window.changePlayerHeight"));
+        assertFalse(script.contains("window.changePlayerHeight?.();"));
+    }
+
     private String readInitScript() throws IOException {
         return new String(Files.readAllBytes(resolveInitScriptPath()), StandardCharsets.UTF_8);
     }

@@ -392,16 +392,50 @@ try {
         };
 
 
-        // Set player dynamic height
-        window.changePlayerHeight = () => {
-            if (getPageClass(location.href) !== 'watch') return;
-            const player = document.querySelector('#movie_player');
-            if (!player) return;
-            android.setPlayerHeight(player.clientHeight);
-        }
+        const WATCH_CONTENT_WRAPPER_OFFSET = 200;
+        const WATCH_CONTENT_WRAPPER_MIN_HEIGHT = 60;
+        const WATCH_LAYOUT_HOOK_ANIMATION_NAME = 'nodeInserted';
+        const WATCH_LAYOUT_HOOK_SELECTOR = 'ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player';
+        const WATCH_LAYOUT_SYNC_DELAYS_MS = [16, 32, 64, 128, 256, 512, 1024];
+        let watchLayoutSyncToken = 0;
 
-        const ro = new ResizeObserver(window.changePlayerHeight);
-        let observedPlayer = null;
+        const applyWatchContentWrapperMaxHeight = (pageClass = getPageClass(location.href), player = document.querySelector('#movie_player')) => {
+            const contentWrapper = document.querySelector('#content-wrapper');
+            if (!contentWrapper) return;
+
+            if (pageClass !== 'watch' || !player) {
+                if (contentWrapper.dataset.liteManagedMaxHeight === 'true') {
+                    contentWrapper.style.maxHeight = '';
+                    delete contentWrapper.dataset.liteManagedMaxHeight;
+                }
+                return;
+            }
+
+            const viewportHeight = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+            const nextMaxHeight = `${Math.max(WATCH_CONTENT_WRAPPER_MIN_HEIGHT, Math.floor(viewportHeight - player.clientHeight - WATCH_CONTENT_WRAPPER_OFFSET))}px`;
+            if (contentWrapper.style.maxHeight !== nextMaxHeight) {
+                contentWrapper.style.maxHeight = nextMaxHeight;
+            }
+            contentWrapper.dataset.liteManagedMaxHeight = 'true';
+        };
+
+        // Keep native player height and watch content wrapper height in sync.
+        window.changePlayerHeight = () => {
+            const pageClass = getPageClass(location.href);
+            const player = document.querySelector('#movie_player');
+            applyWatchContentWrapperMaxHeight(pageClass, player);
+            if (pageClass !== 'watch' || !player) return;
+            android.setPlayerHeight(player.clientHeight);
+        };
+        const scheduleWatchLayoutSyncRetries = () => {
+            const syncToken = ++watchLayoutSyncToken;
+            WATCH_LAYOUT_SYNC_DELAYS_MS.forEach((delayMs) => {
+                window.setTimeout(() => {
+                    if (syncToken !== watchLayoutSyncToken) return;
+                    window.changePlayerHeight();
+                }, delayMs);
+            });
+        };
 
         const ensureWatchTouchCapture = (node) => {
             if (!node || node.dataset.liteTouchCaptureBound === 'true') return;
@@ -415,11 +449,6 @@ try {
         const repairPlayerSurface = (pageClass) => {
             const moviePlayer = document.querySelector('#movie_player');
             if (moviePlayer) {
-                if (observedPlayer !== moviePlayer) {
-                    ro.disconnect();
-                    ro.observe(moviePlayer);
-                    observedPlayer = moviePlayer;
-                }
                 if (pageClass === 'watch') {
                     moviePlayer.mute?.();
                     if (moviePlayer.dataset.litePauseOnStateChange !== 'true') {
@@ -444,6 +473,14 @@ try {
             }
             document.querySelectorAll('.watch-below-the-player').forEach(ensureWatchTouchCapture);
         };
+
+        document.addEventListener('animationstart', (event) => {
+            if (event.animationName !== WATCH_LAYOUT_HOOK_ANIMATION_NAME) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (!target.matches?.(WATCH_LAYOUT_HOOK_SELECTOR)) return;
+            scheduleWatchLayoutSyncRetries();
+        }, true);
 
         function runTimedTasks(pageClass) {
             const taskState = {
