@@ -72,7 +72,7 @@ public class LitePlayer {
 	@Nullable
 	private String vid = null;
 	@Nullable
-	private String loadedVideoId;
+	private volatile String loadedVideoId;
 	@Nullable
 	private ExtractionSession extractionSession;
 	@Nullable
@@ -284,6 +284,19 @@ public class LitePlayer {
 
 	public void pause() {
 		engine.pause();
+	}
+
+	public void seekToIfLoaded(final long positionMs) {
+		if (loadedVideoId == null || positionMs < 0L) return;
+		activity.runOnUiThread(() -> engine.seekTo(positionMs));
+	}
+
+	public boolean seekLoadedVideo(@Nullable final String url, final long positionMs) {
+		if (positionMs < 0L || url == null) return false;
+		final String videoId = YoutubeExtractor.getVideoId(url);
+		if (videoId == null || !Objects.equals(loadedVideoId, videoId)) return false;
+		seekToIfLoaded(positionMs);
+		return true;
 	}
 
 	public boolean isFullscreen() {

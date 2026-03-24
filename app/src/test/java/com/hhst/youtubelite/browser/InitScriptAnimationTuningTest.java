@@ -50,6 +50,21 @@ public class InitScriptAnimationTuningTest {
         assertFalse(script.contains("window.changePlayerHeight?.();"));
     }
 
+    @Test
+    public void initScript_hidesWatchSearchSuggestionsAndInterceptsTimestampLinks() throws Exception {
+        final String script = readInitScript();
+
+        assertTrue(script.contains("const WATCH_SEARCH_SUGGESTIONS_SELECTOR = '.yt-searchbox-suggestions-container';"));
+        assertTrue(script.contains("const syncWatchSearchSuggestions = (pageClass) => {"));
+        assertTrue(script.contains("node.dataset.liteManagedWatchSuggestionsHidden"));
+        assertTrue(script.contains("const parseTimestampSeconds = (rawValue) => {"));
+        assertTrue(script.contains("const handleWatchTimestampClick = (event) => {"));
+        assertTrue(script.contains("const currentVideoId = getVideoId(location.href);"));
+        assertTrue(script.contains("android.seekLoadedVideo?.(targetUrl.toString(), timestampSeconds * 1000)"));
+        assertTrue(script.contains("event.preventDefault();"));
+        assertTrue(script.contains("event.stopImmediatePropagation();"));
+    }
+
     private String readInitScript() throws IOException {
         return new String(Files.readAllBytes(resolveInitScriptPath()), StandardCharsets.UTF_8);
     }

@@ -397,6 +397,7 @@ try {
         const WATCH_LAYOUT_HOOK_ANIMATION_NAME = 'nodeInserted';
         const WATCH_LAYOUT_HOOK_SELECTOR = 'ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player';
         const WATCH_LAYOUT_SYNC_DELAYS_MS = [16, 32, 64, 128, 256, 512, 1024];
+        const WATCH_SEARCH_SUGGESTIONS_SELECTOR = '.yt-searchbox-suggestions-container';
         let watchLayoutSyncToken = 0;
 
         const applyWatchContentWrapperMaxHeight = (pageClass = getPageClass(location.href), player = document.querySelector('#movie_player')) => {
@@ -473,6 +474,74 @@ try {
             }
             document.querySelectorAll('.watch-below-the-player').forEach(ensureWatchTouchCapture);
         };
+        const syncWatchSearchSuggestions = (pageClass) => {
+            document.querySelectorAll(WATCH_SEARCH_SUGGESTIONS_SELECTOR).forEach((node) => {
+                if (!(node instanceof HTMLElement)) return;
+                if (pageClass === 'watch') {
+                    if (node.dataset.liteManagedWatchSuggestionsHidden !== 'true') {
+                        node.dataset.liteManagedWatchSuggestionsDisplay = node.style.display || '';
+                    }
+                    node.style.setProperty('display', 'none', 'important');
+                    node.dataset.liteManagedWatchSuggestionsHidden = 'true';
+                    return;
+                }
+                if (node.dataset.liteManagedWatchSuggestionsHidden !== 'true') return;
+                const previousDisplay = node.dataset.liteManagedWatchSuggestionsDisplay || '';
+                if (previousDisplay) {
+                    node.style.display = previousDisplay;
+                } else {
+                    node.style.removeProperty('display');
+                }
+                delete node.dataset.liteManagedWatchSuggestionsDisplay;
+                delete node.dataset.liteManagedWatchSuggestionsHidden;
+            });
+        };
+        const parseTimestampSeconds = (rawValue) => {
+            if (rawValue == null) return null;
+            const normalized = `${rawValue}`.trim().toLowerCase();
+            if (!normalized) return null;
+            if (/^\d+$/.test(normalized)) return Number(normalized);
+            if (/^\d+s$/.test(normalized)) return Number(normalized.slice(0, -1));
+
+            let totalSeconds = 0;
+            let matched = false;
+            for (const part of normalized.matchAll(/(\d+)(h|m|s)/g)) {
+                const amount = Number(part[1]);
+                matched = true;
+                if (part[2] === 'h') totalSeconds += amount * 3600;
+                if (part[2] === 'm') totalSeconds += amount * 60;
+                if (part[2] === 's') totalSeconds += amount;
+            }
+            if (!matched) return null;
+            const consumed = Array.from(normalized.matchAll(/(\d+)(h|m|s)/g), (part) => part[0]).join('');
+            return consumed === normalized ? totalSeconds : null;
+        };
+        const handleWatchTimestampClick = (event) => {
+            if (getPageClass(location.href) !== 'watch') return;
+            const link = event.target.closest('a');
+            if (!link) return;
+            const href = link.getAttribute('href') || link.href;
+            if (!href || !href.includes('t=')) return;
+
+            let targetUrl;
+            try {
+                targetUrl = new URL(link.href, location.href);
+            } catch (error) {
+                return;
+            }
+            if (getPageClass(targetUrl.toString()) !== 'watch') return;
+
+            const currentVideoId = getVideoId(location.href);
+            const targetVideoId = getVideoId(targetUrl.toString());
+            if (!currentVideoId || currentVideoId !== targetVideoId) return;
+
+            const timestampSeconds = parseTimestampSeconds(targetUrl.searchParams.get('t') ?? targetUrl.searchParams.get('start'));
+            if (timestampSeconds == null) return;
+            if (!android.seekLoadedVideo?.(targetUrl.toString(), timestampSeconds * 1000)) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
 
         document.addEventListener('animationstart', (event) => {
             if (event.animationName !== WATCH_LAYOUT_HOOK_ANIMATION_NAME) return;
@@ -488,6 +557,7 @@ try {
                 needsRetry: false,
             };
             repairPlayerSurface(pageClass);
+            syncWatchSearchSuggestions(pageClass);
             // Skip ads
             if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');
@@ -794,6 +864,8 @@ try {
             const renderer = e.target.closest('ytm-post-multi-image-renderer');
             if (renderer) android.onPosterLongPress(JSON.stringify([...renderer.querySelectorAll('ytm-backstage-image-renderer')].map(el => el?.data?.image?.thumbnails?.at(-1)?.url)));
         });
+
+        document.addEventListener('click', handleWatchTimestampClick, true);
         
         document.addEventListener(
             'click',

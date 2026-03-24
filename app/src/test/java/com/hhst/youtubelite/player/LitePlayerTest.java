@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -200,6 +201,31 @@ public class LitePlayerTest {
 	}
 
 	@Test
+	public void seekLoadedVideo_seeksWhenTimestampMatchesLoadedVideo() throws Exception {
+		setField(player, "loadedVideoId", VIDEO_ID);
+
+		assertTrue(player.seekLoadedVideo(WATCH_URL + "&t=173s", 173_000L));
+
+		verify(engine).seekTo(173_000L);
+	}
+
+	@Test
+	public void seekLoadedVideo_ignoresTimestampWhenNoVideoLoaded() {
+		assertFalse(player.seekLoadedVideo(WATCH_URL + "&t=173s", 173_000L));
+
+		verify(engine, never()).seekTo(anyLong());
+	}
+
+	@Test
+	public void seekLoadedVideo_ignoresTimestampWhenLoadedVideoDiffers() throws Exception {
+		setField(player, "loadedVideoId", VIDEO_ID);
+
+		assertFalse(player.seekLoadedVideo(NEXT_WATCH_URL + "&t=173s", 173_000L));
+
+		verify(engine, never()).seekTo(anyLong());
+	}
+
+	@Test
 	public void isPlaying_andIsFullscreen_delegateToCollaborators() {
 		when(controller.isFullscreen()).thenReturn(true, false);
 
@@ -261,6 +287,22 @@ public class LitePlayerTest {
 		player.setHeight(480);
 
 		verify(playerView).setHeight(480);
+	}
+
+	@Test
+	public void seekToIfLoaded_delegatesToEngineWhenVideoIsLoaded() throws Exception {
+		setField(player, "loadedVideoId", VIDEO_ID);
+
+		player.seekToIfLoaded(2_000L);
+
+		verify(engine).seekTo(2_000L);
+	}
+
+	@Test
+	public void seekToIfLoaded_ignoresRequestsWhenNoVideoIsLoaded() {
+		player.seekToIfLoaded(2_000L);
+
+		verify(engine, never()).seekTo(anyLong());
 	}
 
 	@Test

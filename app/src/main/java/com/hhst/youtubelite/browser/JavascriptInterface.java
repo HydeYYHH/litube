@@ -115,6 +115,11 @@ public final class JavascriptInterface {
 	}
 
 	@android.webkit.JavascriptInterface
+	public boolean seekLoadedVideo(@Nullable final String url, final long positionMs) {
+		return player.seekLoadedVideo(url, positionMs);
+	}
+
+	@android.webkit.JavascriptInterface
 	public void onPosterLongPress(@Nullable final String urlsJson) {
 		if (urlsJson != null) {
 			handler.post(() -> {
