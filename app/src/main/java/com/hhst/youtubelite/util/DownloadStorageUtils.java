@@ -108,8 +108,11 @@ public final class DownloadStorageUtils {
 	@Nullable
 	public static String getMimeType(@NonNull final Context context, @Nullable final String outputReference, @NonNull final String fileName) {
 		if (outputReference != null && isContentUri(outputReference)) {
-			final String contentType = context.getContentResolver().getType(Uri.parse(outputReference));
-			if (contentType != null && !contentType.isBlank()) return contentType;
+			try {
+				final String contentType = context.getContentResolver().getType(Uri.parse(outputReference));
+				if (contentType != null && !contentType.isBlank()) return contentType;
+			} catch (RuntimeException ignored) {
+			}
 		}
 		if (outputReference != null && !outputReference.isBlank() && !isContentUri(outputReference)) {
 			final String outputMimeType = guessMimeType(new File(outputReference).getName());

@@ -4,62 +4,114 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import android.app.Activity;
 import android.view.View;
 
 import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSpec;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.ui.DefaultTimeBar;
 
+import com.hhst.youtubelite.PlaybackService;
+import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.extractor.ExtractionException;
+import com.hhst.youtubelite.extractor.ExtractionSession;
+import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
+import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
+import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
+import com.hhst.youtubelite.ui.ErrorDialog;
 import com.tencent.mmkv.MMKV;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 public class LitePlayerTest {
+	private static final String VIDEO_ID = "mAdodMaERp0";
+	private static final String WATCH_URL = "https://www.youtube.com/watch?v=" + VIDEO_ID;
+	private static final String NEXT_VIDEO_ID = "dQw4w9WgXcQ";
+	private static final String NEXT_WATCH_URL = "https://www.youtube.com/watch?v=" + NEXT_VIDEO_ID;
+
 	private LitePlayer player;
-	private LitePlayerView playerView;
-	private Controller controller;
 	private YoutubeExtractor extractor;
 	private MMKV kv;
 	private MockedStatic<MMKV> mmkvStatic;
+	private Activity activity;
+	private LitePlayerView playerView;
+	private Controller controller;
+	private Engine engine;
+	private SponsorBlockManager sponsor;
+	private SponsorOverlayView sponsorOverlayView;
+	private DefaultTimeBar timeBar;
+	private Player.Listener listener;
 
 	@Before
 	public void setUp() throws Exception {
-		final Activity activity = mock(Activity.class);
+		activity = mock(Activity.class);
 		extractor = mock(YoutubeExtractor.class);
 		playerView = mock(LitePlayerView.class);
 		controller = mock(Controller.class);
-		final Engine engine = mock(Engine.class);
-		final SponsorBlockManager sponsor = mock(SponsorBlockManager.class);
+		engine = mock(Engine.class);
+		sponsor = mock(SponsorBlockManager.class);
 		final Executor executor = Runnable::run;
 		kv = mock(MMKV.class);
+		sponsorOverlayView = mock(SponsorOverlayView.class);
+		timeBar = mock(DefaultTimeBar.class);
+
+		doAnswer(invocation -> {
+			invocation.<Runnable>getArgument(0).run();
+			return null;
+		}).when(activity).runOnUiThread(any(Runnable.class));
+		doAnswer(invocation -> {
+			final int viewId = invocation.getArgument(0);
+			if (viewId == R.id.sponsor_overlay) return sponsorOverlayView;
+			if (viewId == R.id.exo_progress) return timeBar;
+			return null;
+		}).when(playerView).findViewById(any(Integer.class));
+		doAnswer(invocation -> {
+			invocation.<Runnable>getArgument(0).run();
+			return true;
+		}).when(playerView).post(any(Runnable.class));
+		when(engine.position()).thenReturn(321L);
+		when(engine.getPlaybackRate()).thenReturn(1.25f);
+		when(engine.isPlaying()).thenReturn(true);
 
 		mmkvStatic = org.mockito.Mockito.mockStatic(MMKV.class);
 		mmkvStatic.when(MMKV::defaultMMKV).thenReturn(kv);
 		player = new LitePlayer(activity, extractor, playerView, controller, engine, sponsor, executor);
-		setField(player, "loadedVideoId", "video-id");
+		final ArgumentCaptor<Player.Listener> listenerCaptor = ArgumentCaptor.forClass(Player.Listener.class);
+		verify(engine).addListener(listenerCaptor.capture());
+		listener = listenerCaptor.getValue();
 	}
 
 	@After
@@ -70,64 +122,101 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void playerSourceError_invalidatesCachedPlaybackEntryForCurrentVideo() {
-		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+	public void play_invalidUrl_returnsWithoutSideEffects() {
+		player.play("https://example.com/not-a-youtube-watch-url");
 
-		verify(extractor).invalidatePlaybackCacheByVideoId("video-id");
+		verifyNoInteractions(extractor, sponsor);
+		verify(engine, never()).clear();
+		verify(playerView, never()).show();
 	}
 
 	@Test
-	public void nonOpenFailure_doesNotInvalidateCachedPlaybackEntry() {
-		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceReadFailure());
+	public void play_sameVideoId_returnsWithoutRestartingExtraction() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		player.play(WATCH_URL);
+		clearInvocations(extractor, sponsor, engine, playerView);
 
-		verify(extractor, never()).invalidatePlaybackCacheByVideoId("video-id");
+		player.play(WATCH_URL);
+
+		verifyNoInteractions(extractor, sponsor);
+		verify(engine, never()).clear();
+		verify(playerView, never()).show();
 	}
 
 	@Test
-	public void sourceError_usesLoadedVideoIdInsteadOfRequestedVideoId() throws Exception {
-		setField(player, "vid", "requested-video");
-		setField(player, "loadedVideoId", "loaded-video");
-
-		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
-
-		verify(extractor).invalidatePlaybackCacheByVideoId("loaded-video");
-		verify(extractor, never()).invalidatePlaybackCacheByVideoId("requested-video");
-	}
-
-	@Test
-	public void applyAudioPreference_prefersOriginalTrackAndKeepsMutableList() throws Exception {
-		final AudioStream dubbed = mock(AudioStream.class);
-		final AudioStream original = mock(AudioStream.class);
-		when(kv.decodeString("last_audio_lang", "und")).thenReturn("en");
-		when(dubbed.getAudioTrackName()).thenReturn("French");
-		when(original.getAudioTrackName()).thenReturn("English original");
-		when(dubbed.getAudioLocale()).thenReturn(Locale.FRENCH);
-		when(original.getAudioLocale()).thenReturn(Locale.ENGLISH);
-		when(dubbed.getAverageBitrate()).thenReturn(128);
-		when(original.getAverageBitrate()).thenReturn(128);
-
+	public void play_successLoadsPlaybackAndUpdatesUi() throws Exception {
+		final VideoDetails videoDetails = new VideoDetails();
+		videoDetails.setTitle("Demo title");
+		videoDetails.setAuthor("Demo author");
+		videoDetails.setThumbnail("https://example.com/thumb.jpg");
+		videoDetails.setDuration(60L);
 		final StreamDetails streamDetails = new StreamDetails(
-						null,
-						List.of(dubbed, original),
-						null,
-						null,
-						null,
+						new ArrayList<>(List.of(mock(VideoStream.class))),
+						new ArrayList<>(),
+						new ArrayList<>(),
+						"https://example.com/dash.mpd",
+						"https://example.com/hls.m3u8",
 						StreamType.VIDEO_STREAM);
+		when(extractor.getPlaybackDetails(eq(WATCH_URL), any(ExtractionSession.class)))
+						.thenReturn(new PlaybackDetails(videoDetails, streamDetails));
 
-		invokeApplyAudioPreference(streamDetails);
+		player.play(WATCH_URL);
 
-		assertEquals(2, streamDetails.getAudioStreams().size());
-		assertSame(original, streamDetails.getAudioStreams().get(0));
-		streamDetails.getAudioStreams().clear();
-		assertEquals(0, streamDetails.getAudioStreams().size());
+		verify(sponsor).load(VIDEO_ID);
+		verify(engine).clear();
+		verify(playerView).show();
+		verify(playerView).setTitle("Demo title");
+		verify(playerView).updateSkipMarkers(60L, TimeUnit.SECONDS);
+		verify(engine).play(videoDetails, streamDetails);
 	}
 
 	@Test
-	public void isFullscreen_delegatesToControllerState() {
+	public void attachPlaybackService_initializesServiceAndUpdatesProgressOnReady() {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+
+		player.attachPlaybackService(playbackService);
+		listener.onPlaybackStateChanged(Player.STATE_READY);
+
+		verify(playbackService).initialize(engine);
+		verify(playbackService).updateProgress(321L, 1.25f, true);
+	}
+
+	@Test
+	public void onIsPlayingChanged_updatesPlaybackServiceProgress() {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+
+		player.attachPlaybackService(playbackService);
+		listener.onIsPlayingChanged(false);
+
+		verify(playbackService).initialize(engine);
+		verify(playbackService).updateProgress(321L, 1.25f, false);
+	}
+
+	@Test
+	public void pause_delegatesToEngine() {
+		player.pause();
+
+		verify(engine).pause();
+	}
+
+	@Test
+	public void isPlaying_andIsFullscreen_delegateToCollaborators() {
 		when(controller.isFullscreen()).thenReturn(true, false);
 
+		assertTrue(player.isPlaying());
 		assertTrue(player.isFullscreen());
 		assertFalse(player.isFullscreen());
+	}
+
+	@Test
+	public void fullscreenAndPictureInPictureApis_delegateToController() {
+		player.enterFullscreen();
+		player.exitFullscreen();
+		player.onPictureInPictureModeChanged(true);
+
+		verify(controller).enterFullscreen();
+		verify(controller).exitFullscreen();
+		verify(controller).onPictureInPictureModeChanged(true);
 	}
 
 	@Test
@@ -152,10 +241,216 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void onPictureInPictureModeChanged_delegatesToController() {
-		player.onPictureInPictureModeChanged(true);
+	public void setHeight_postsHeightUpdateToPlayerView() {
+		player.setHeight(480);
 
-		verify(controller).onPictureInPictureModeChanged(true);
+		verify(playerView).setHeight(480);
+	}
+
+	@Test
+	public void hide_cancelsExtractionFutureAndHidesNotification() throws Exception {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+		final ExtractionSession session = new ExtractionSession();
+		final CompletableFuture<Void> future = mock(CompletableFuture.class);
+		player.attachPlaybackService(playbackService);
+		setField(player, "extractionSession", session);
+		setField(player, "cf", future);
+
+		player.hide();
+
+		assertTrue(session.isCancelled());
+		verify(future).cancel(true);
+		verify(playerView).hide();
+		verify(engine).clear();
+		verify(playbackService).hideNotification();
+	}
+
+	@Test
+	public void playerSourceError_invalidatesCachedPlaybackEntryForCurrentVideo() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		player.play(WATCH_URL);
+		clearInvocations(extractor);
+
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+
+		verify(extractor).invalidatePlaybackCacheByVideoId(VIDEO_ID);
+	}
+
+	@Test
+	public void nonOpenFailure_doesNotInvalidateCachedPlaybackEntry() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		player.play(WATCH_URL);
+		clearInvocations(extractor);
+
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceReadFailure());
+
+		verify(extractor, never()).invalidatePlaybackCacheByVideoId(VIDEO_ID);
+	}
+
+	@Test
+	public void sourceError_usesLoadedVideoIdInsteadOfNextRequestedVideoId() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		when(extractor.getPlaybackDetails(eq(NEXT_WATCH_URL), any(ExtractionSession.class)))
+						.thenThrow(new IOException("network down"));
+
+		try (MockedStatic<ErrorDialog> dialog = org.mockito.Mockito.mockStatic(ErrorDialog.class)) {
+			player.play(WATCH_URL);
+			player.play(NEXT_WATCH_URL);
+			clearInvocations(extractor);
+
+			player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+
+			verify(extractor).invalidatePlaybackCacheByVideoId(VIDEO_ID);
+			verify(extractor, never()).invalidatePlaybackCacheByVideoId(NEXT_VIDEO_ID);
+			dialog.verify(() -> ErrorDialog.show(eq(activity), eq("Extract failed"), any(ExtractionException.class)));
+		}
+	}
+
+	@Test
+	public void release_clearsLoadedVideoIdAndReleasesEngine() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		player.play(WATCH_URL);
+		clearInvocations(extractor, engine);
+
+		player.release();
+		player.invalidatePlaybackCacheIfSourceOpenFailure(sourceOpenFailure());
+
+		verify(engine).release();
+		verifyNoInteractions(extractor);
+	}
+
+	@Test
+	public void play_prefersOriginalAudioTrackAndKeepsMutableList() throws Exception {
+		final AudioStream dubbed = mock(AudioStream.class);
+		final AudioStream original = mock(AudioStream.class);
+		when(kv.decodeString("last_audio_lang", "und")).thenReturn("fr");
+		when(dubbed.getAudioTrackName()).thenReturn("French");
+		when(original.getAudioTrackName()).thenReturn("English original");
+		when(dubbed.getAudioLocale()).thenReturn(Locale.FRENCH);
+		when(original.getAudioLocale()).thenReturn(Locale.ENGLISH);
+		when(dubbed.getAverageBitrate()).thenReturn(192);
+		when(original.getAverageBitrate()).thenReturn(128);
+
+		final StreamDetails streamDetails = new StreamDetails(
+						new ArrayList<>(),
+						List.of(dubbed, original),
+						null,
+						null,
+						null,
+						StreamType.VIDEO_STREAM);
+		final VideoDetails videoDetails = new VideoDetails();
+		videoDetails.setDuration(1L);
+		when(extractor.getPlaybackDetails(eq(WATCH_URL), any(ExtractionSession.class)))
+						.thenReturn(new PlaybackDetails(videoDetails, streamDetails));
+
+		player.play(WATCH_URL);
+
+		verify(engine).play(any(VideoDetails.class), eq(streamDetails));
+		assertEquals(2, streamDetails.getAudioStreams().size());
+		assertSame(original, streamDetails.getAudioStreams().get(0));
+		streamDetails.getAudioStreams().clear();
+		assertEquals(0, streamDetails.getAudioStreams().size());
+	}
+
+	@Test
+	public void play_prefersOriginalAudioTrackUnderTurkishLocale() throws Exception {
+		final Locale originalLocale = Locale.getDefault();
+		try {
+			Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+			final AudioStream dubbed = mock(AudioStream.class);
+			final AudioStream original = mock(AudioStream.class);
+			when(kv.decodeString("last_audio_lang", "und")).thenReturn("fr");
+			when(dubbed.getAudioTrackName()).thenReturn("French");
+			when(original.getAudioTrackName()).thenReturn("ENGLISH ORIGINAL");
+			when(dubbed.getAudioLocale()).thenReturn(Locale.FRENCH);
+			when(original.getAudioLocale()).thenReturn(Locale.ENGLISH);
+			when(dubbed.getAverageBitrate()).thenReturn(192);
+			when(original.getAverageBitrate()).thenReturn(128);
+
+			final StreamDetails streamDetails = new StreamDetails(
+							new ArrayList<>(),
+							List.of(dubbed, original),
+							null,
+							null,
+							null,
+							StreamType.VIDEO_STREAM);
+			final VideoDetails videoDetails = new VideoDetails();
+			videoDetails.setDuration(1L);
+			when(extractor.getPlaybackDetails(eq(WATCH_URL), any(ExtractionSession.class)))
+							.thenReturn(new PlaybackDetails(videoDetails, streamDetails));
+
+			player.play(WATCH_URL);
+
+			assertSame(original, streamDetails.getAudioStreams().get(0));
+		} finally {
+			Locale.setDefault(originalLocale);
+		}
+	}
+
+	@Test
+	public void play_withAttachedPlaybackServiceShowsNotification() throws Exception {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+		player.attachPlaybackService(playbackService);
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Demo title", 60L);
+
+		player.play(WATCH_URL);
+
+		verify(playbackService).initialize(engine);
+		verify(playbackService).showNotification(
+						"Demo title",
+						"Demo author",
+						"https://example.com/thumb.jpg",
+						60_000L);
+	}
+
+	@Test
+	public void play_extractionFailureShowsDialogWithoutStartingPlayback() throws Exception {
+		when(extractor.getPlaybackDetails(eq(WATCH_URL), any(ExtractionSession.class)))
+						.thenThrow(new IOException("network down"));
+
+		try (MockedStatic<ErrorDialog> dialog = org.mockito.Mockito.mockStatic(ErrorDialog.class)) {
+			player.play(WATCH_URL);
+
+			verify(engine, never()).play(any(VideoDetails.class), any(StreamDetails.class));
+			dialog.verify(() -> ErrorDialog.show(eq(activity), eq("Extract failed"), any(ExtractionException.class)));
+		}
+	}
+
+	@Test
+	public void onPlayerError_invalidatesCacheAndShowsDialog() throws Exception {
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Loaded title", 60L);
+		player.play(WATCH_URL);
+		clearInvocations(extractor);
+		final PlaybackException error = sourceOpenFailure();
+		try (MockedStatic<ErrorDialog> dialog = org.mockito.Mockito.mockStatic(ErrorDialog.class)) {
+			listener.onPlayerError(error);
+
+			verify(extractor).invalidatePlaybackCacheByVideoId(VIDEO_ID);
+			dialog.verify(() -> ErrorDialog.show(activity, error.getMessage(), error));
+		}
+	}
+
+	private void stubSuccessfulPlaybackDetails(final String url,
+	                                          final StreamDetails streamDetails,
+	                                          final String title,
+	                                          final long durationSeconds) throws Exception {
+		final VideoDetails videoDetails = new VideoDetails();
+		videoDetails.setTitle(title);
+		videoDetails.setAuthor("Demo author");
+		videoDetails.setThumbnail("https://example.com/thumb.jpg");
+		videoDetails.setDuration(durationSeconds);
+		when(extractor.getPlaybackDetails(eq(url), any(ExtractionSession.class)))
+						.thenReturn(new PlaybackDetails(videoDetails, streamDetails));
+	}
+
+	private StreamDetails defaultStreamDetails() {
+		return new StreamDetails(
+						new ArrayList<>(List.of(mock(VideoStream.class))),
+						new ArrayList<>(),
+						new ArrayList<>(),
+						"https://example.com/dash.mpd",
+						"https://example.com/hls.m3u8",
+						StreamType.VIDEO_STREAM);
 	}
 
 	private static PlaybackException sourceOpenFailure() {
@@ -184,11 +479,5 @@ public class LitePlayerTest {
 		final Field field = LitePlayer.class.getDeclaredField(fieldName);
 		field.setAccessible(true);
 		field.set(target, value);
-	}
-
-	private void invokeApplyAudioPreference(final StreamDetails streamDetails) throws Exception {
-		final Method method = LitePlayer.class.getDeclaredMethod("applyAudioPreference", StreamDetails.class);
-		method.setAccessible(true);
-		method.invoke(player, streamDetails);
 	}
 }

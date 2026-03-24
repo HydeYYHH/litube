@@ -20,6 +20,8 @@ import com.tencent.mmkv.MMKV;
 import org.junit.Test;
 import org.mockito.Answers;
 import org.schabi.newpipe.extractor.MediaFormat;
+import org.schabi.newpipe.extractor.Image;
+import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
@@ -202,11 +204,11 @@ public class YoutubeExtractorTest {
 	}
 
 	@Test
-	public void getPlaybackDetails_nonCacheableContext_bypassesMemoryCache() throws Exception {
+	public void getPlaybackDetails_nonCacheableSession_bypassesMemoryCacheLookup() throws Exception {
 		final MMKV cache = mock(MMKV.class);
 		final Gson gson = new Gson();
 		final PlaybackDetailsMemoryCache memoryCache = new PlaybackDetailsMemoryCache(16, 300_000L);
-		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(false, false, FINGERPRINT);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, false, FINGERPRINT);
 		final AtomicInteger fetchCount = new AtomicInteger();
 		when(cache.contains(VIDEO_ID)).thenReturn(true);
 		when(cache.decodeString(VIDEO_ID, null)).thenReturn(gson.toJson(cachedVideoDetails("cached-title")));
@@ -393,6 +395,82 @@ public class YoutubeExtractorTest {
 
 		playbackDetails.getStreamDetails().getAudioStreams().clear();
 		assertEquals(0, playbackDetails.getStreamDetails().getAudioStreams().size());
+	}
+
+	@Test
+	public void getStreamInfo_filtersToHighestBitrateM4aStreams() throws Exception {
+		final MMKV cache = mock(MMKV.class);
+		final Gson gson = new Gson();
+		final PlaybackDetailsMemoryCache memoryCache = new PlaybackDetailsMemoryCache(16, 300_000L);
+		final TestPlaybackCacheContextProvider contextProvider = new TestPlaybackCacheContextProvider(true, true, FINGERPRINT);
+		final StreamInfo streamInfo = mockStreamInfo("fresh-title", "https://example.com/dash.mpd", StreamType.VIDEO_STREAM);
+		final AudioStream topAverage = mock(AudioStream.class);
+		final AudioStream topBitrateFallback = mock(AudioStream.class);
+		final AudioStream lowerM4a = mock(AudioStream.class);
+		final AudioStream webm = mock(AudioStream.class);
+		when(topAverage.getFormat()).thenReturn(MediaFormat.M4A);
+		when(topAverage.getAverageBitrate()).thenReturn(192);
+		when(topAverage.getBitrate()).thenReturn(192);
+		when(topBitrateFallback.getFormat()).thenReturn(MediaFormat.M4A);
+		when(topBitrateFallback.getAverageBitrate()).thenReturn(0);
+		when(topBitrateFallback.getBitrate()).thenReturn(192);
+		when(lowerM4a.getFormat()).thenReturn(MediaFormat.M4A);
+		when(lowerM4a.getAverageBitrate()).thenReturn(128);
+		when(lowerM4a.getBitrate()).thenReturn(128);
+		when(webm.getFormat()).thenReturn(MediaFormat.WEBMA);
+		when(webm.getAverageBitrate()).thenReturn(256);
+		when(webm.getBitrate()).thenReturn(256);
+		when(streamInfo.getAudioStreams()).thenReturn(List.of(lowerM4a, webm, topAverage, topBitrateFallback));
+
+		final YoutubeExtractor extractor = newExtractor(
+						cache,
+						gson,
+						memoryCache,
+						contextProvider,
+						() -> 10_000L,
+						(videoId, session) -> streamInfo);
+
+		final StreamDetails streamDetails = extractor.getStreamInfo(WATCH_URL);
+
+		assertEquals(List.of(topAverage, topBitrateFallback), streamDetails.getAudioStreams());
+	}
+
+	@Test
+	public void getStreamInfo_invalidUrlThrowsExtractionException() {
+		final YoutubeExtractor extractor = newExtractor(
+						mock(MMKV.class),
+						new Gson(),
+						new PlaybackDetailsMemoryCache(16, 300_000L),
+						new TestPlaybackCacheContextProvider(true, true, FINGERPRINT),
+						() -> 10_000L,
+						(videoId, session) -> {
+							throw new AssertionError("fetch should not be called");
+						});
+
+		assertThrows(ExtractionException.class, () -> extractor.getStreamInfo("https://example.com/not-youtube"));
+	}
+
+	@Test
+	public void getBestThumbnail_prefersHigherResolutionImages() {
+		final YoutubeExtractor extractor = newExtractor(
+						mock(MMKV.class),
+						new Gson(),
+						new PlaybackDetailsMemoryCache(16, 300_000L),
+						new TestPlaybackCacheContextProvider(true, true, FINGERPRINT),
+						() -> 10_000L,
+						(videoId, session) -> {
+							throw new AssertionError("fetch should not be called");
+						});
+		final StreamInfo streamInfo = mock(StreamInfo.class);
+		final Image low = mock(Image.class);
+		final Image high = mock(Image.class);
+		when(low.getEstimatedResolutionLevel()).thenReturn(Image.ResolutionLevel.LOW);
+		when(low.getUrl()).thenReturn("https://example.com/low.jpg");
+		when(high.getEstimatedResolutionLevel()).thenReturn(Image.ResolutionLevel.HIGH);
+		when(high.getUrl()).thenReturn("https://example.com/high.jpg");
+		when(streamInfo.getThumbnails()).thenReturn(List.of(low, high));
+
+		assertEquals("https://example.com/high.jpg", extractor.getBestThumbnail(streamInfo));
 	}
 
 	private static YoutubeExtractor newExtractor(final MMKV cache,

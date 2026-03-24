@@ -105,9 +105,10 @@ public final class YoutubeExtractor {
 	                                          @Nullable final ExtractionSession session) throws ExtractionException, IOException, InterruptedException {
 		final String videoID = requireVideoId(videoUrl);
 		final VideoDetails cachedDetails = readCachedVideoDetails(videoID);
-		final boolean canUsePlaybackMemoryCache = cachedDetails != null
-						&& playbackCacheContextProvider.canUsePlaybackMemoryCache(videoUrl);
-		final String fingerprint = canUsePlaybackMemoryCache
+		final boolean cacheLookupAllowed = cachedDetails != null
+						&& playbackCacheContextProvider.canUsePlaybackMemoryCache(videoUrl)
+						&& playbackCacheContextProvider.canPopulatePlaybackMemoryCache(session);
+		final String fingerprint = cacheLookupAllowed
 						? playbackCacheContextProvider.buildRequestContextFingerprint(videoUrl)
 						: null;
 		try {

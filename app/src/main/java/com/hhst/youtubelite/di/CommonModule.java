@@ -131,6 +131,7 @@ public class CommonModule {
 		return dispatcher;
 	}
 
+	@UnstableApi
 	LeastRecentlyUsedCacheEvictor createPlayerCacheEvictor() {
 		return new LeastRecentlyUsedCacheEvictor(PLAYER_CACHE_BYTES);
 	}

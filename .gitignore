@@ -1,6 +1,7 @@
 /.gradle/
 /build/
 /release/
+/app/release/
 /*/build/
 /.gradle-user/
 /.gradle-user-home/

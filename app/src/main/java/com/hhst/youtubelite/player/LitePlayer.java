@@ -32,6 +32,7 @@ import org.schabi.newpipe.extractor.stream.AudioStream;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -47,6 +48,7 @@ import dagger.hilt.android.scopes.ActivityScoped;
 public class LitePlayer {
 	private static final String KEY_LAST_AUDIO_LANG = "last_audio_lang";
 	private static final String UNKNOWN_LANGUAGE = "und";
+	private static final Locale NORMALIZATION_LOCALE = Locale.ROOT;
 
 	@NonNull
 	private final Activity activity;
@@ -178,7 +180,7 @@ public class LitePlayer {
 
 	private static boolean isOriginalAudioTrack(@NonNull final AudioStream audioStream) {
 		final String trackName = audioStream.getAudioTrackName();
-		return trackName != null && trackName.toLowerCase().contains("original");
+		return trackName != null && trackName.toLowerCase(NORMALIZATION_LOCALE).contains("original");
 	}
 
 	private static boolean matchesSavedLanguage(@NonNull final AudioStream audioStream,

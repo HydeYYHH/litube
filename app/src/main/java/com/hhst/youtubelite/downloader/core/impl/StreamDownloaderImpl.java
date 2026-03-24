@@ -81,12 +81,14 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		if (ctx.cb == null || totalLen <= 0) return;
 		final long downloaded = Math.min(totalLen, Math.max(0, ctx.downloadedBytes.get()));
 		final int progress = (int) Math.min(99, (downloaded * 100) / totalLen);
-		int prev;
-		do {
-			prev = ctx.lastProgress.get();
-			if (progress <= prev) return;
-		} while (!ctx.lastProgress.compareAndSet(prev, progress));
-		ctx.cb.onProgress(progress);
+		synchronized (ctx.progressLock) {
+			int prev;
+			do {
+				prev = ctx.lastProgress.get();
+				if (progress <= prev) return;
+			} while (!ctx.lastProgress.compareAndSet(prev, progress));
+			ctx.cb.onProgress(progress);
+		}
 	}
 
 	@Override
@@ -133,12 +135,13 @@ public class StreamDownloaderImpl implements StreamDownloader {
 			}
 			raf = new RandomAccessFile(ctx.out, "rw");
 			if (total > 0) raf.setLength(total);
+			else raf.setLength(0);
 
 			// 4. submit task
 			if (ctx.done.get() < chunks) {
 				RandomAccessFile finalRaf = raf;
 				CompletableFuture.allOf(IntStream.range(0, chunks).filter(i -> !bits.get(i)) // skip finished
-								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(ctx, i, chunks, part, total, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
+								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(ctx, i, chunks, part, total, range, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
 			}
 
 			// 5. clean up
@@ -163,11 +166,11 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		}
 	}
 
-	private void downloadChunk(TaskContext ctx, int idx, int totalChunks, long partSize, long totalLen, RandomAccessFile raf, BitSet bits) {
+	private void downloadChunk(TaskContext ctx, int idx, int totalChunks, long partSize, long totalLen, boolean rangeSupported, RandomAccessFile raf, BitSet bits) {
 		if (ctx.isInactive()) return;
 		long start = idx * partSize;
 		long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
-		String range = totalLen > 0 ? "bytes=" + start + "-" + end : null;
+		String range = rangeSupported && totalLen > 0 ? "bytes=" + start + "-" + end : null;
 
 		Request.Builder rb = new Request.Builder().url(ctx.url);
 		if (range != null) rb.header("Range", range);
@@ -256,6 +259,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		final CompletableFuture<File> future;
 		final ProgressCallback cb;
 		final Object lock = new Object();
+		final Object progressLock = new Object();
 		final AtomicBoolean paused = new AtomicBoolean(false);
 		final AtomicBoolean cancelled = new AtomicBoolean(false);
 		final AtomicInteger done = new AtomicInteger(0);

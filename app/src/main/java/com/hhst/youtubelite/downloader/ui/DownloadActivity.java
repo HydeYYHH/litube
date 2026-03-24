@@ -103,7 +103,7 @@ public class DownloadActivity extends AppCompatActivity {
 		toolbar.setNavigationOnClickListener(v -> finish());
 		toolbar.getMenu().add(Menu.NONE, MENU_CLEAR_HISTORY, Menu.NONE, R.string.clear_history)
 						.setIcon(R.drawable.ic_clear)
-						.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS);
+						.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 
 		toolbar.setOnMenuItemClickListener(item -> {
 			if (item.getItemId() == MENU_CLEAR_HISTORY) {
@@ -369,13 +369,15 @@ public class DownloadActivity extends AppCompatActivity {
 				subtitle.setText(ctx.getString(R.string.download_status_with_type, statusText, typeText));
 
 				if (record.getTotalSize() > 0) {
-					String sizeStr = String.format(Locale.US, "%s / %s MB (%d%%)",
+					sizeDownloaded.setText(ctx.getString(
+									R.string.download_progress_with_total,
 									formatMB(record.getDownloadedSize()),
 									formatMB(record.getTotalSize()),
-									record.getProgress());
-					sizeDownloaded.setText(sizeStr);
+									record.getProgress()));
 				} else {
-					sizeDownloaded.setText(formatMB(record.getDownloadedSize()) + " MB");
+					sizeDownloaded.setText(ctx.getString(
+									R.string.download_progress_simple,
+									formatMB(record.getDownloadedSize())));
 				}
 
 				progress.setVisibility(isActive ? View.VISIBLE : View.GONE);

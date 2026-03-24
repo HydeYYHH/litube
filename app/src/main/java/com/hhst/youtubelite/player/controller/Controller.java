@@ -386,7 +386,10 @@ public class Controller {
 			setControlsVisible(true);
 			if (activity.isInPictureInPictureMode()) return;
 			BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(activity);
-			View bottomSheetView = activity.getLayoutInflater().inflate(R.layout.bottom_sheet_more_options, null, false);
+			View bottomSheetView = activity.getLayoutInflater().inflate(
+							R.layout.bottom_sheet_more_options,
+							new FrameLayout(activity),
+							false);
 			bottomSheetDialog.setContentView(bottomSheetView);
 
 			FrameLayout bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);

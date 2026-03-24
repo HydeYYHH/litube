@@ -160,42 +160,37 @@ final class CookieAccessCoordinator {
 	private record CacheEntry(@Nullable String value, long createdAtMillis) {
 	}
 
-	private static final class CookieManagerBackend implements Backend {
-		@NonNull
-		private final CookieManager cookieManager;
+	private record CookieManagerBackend(@NonNull CookieManager cookieManager) implements Backend {
+			private CookieManagerBackend(@NonNull final CookieManager cookieManager) {
+				this.cookieManager = Objects.requireNonNull(cookieManager);
+			}
 
-		private CookieManagerBackend(@NonNull final CookieManager cookieManager) {
-			this.cookieManager = Objects.requireNonNull(cookieManager);
+			@Override
+			@Nullable
+			public String getCookie(@NonNull final String url) {
+				return cookieManager.getCookie(url);
+			}
+
+			@Override
+			public void setCookie(@NonNull final String url, @NonNull final String cookie) {
+				cookieManager.setCookie(url, cookie);
+			}
+
+			@Override
+			public void flush() {
+				cookieManager.flush();
+			}
 		}
 
-		@Override
-		@Nullable
-		public String getCookie(@NonNull final String url) {
-			return cookieManager.getCookie(url);
-		}
+	private record ExecutorScheduler(
+					@NonNull ScheduledExecutorService executor) implements Scheduler {
+			private ExecutorScheduler(@NonNull final ScheduledExecutorService executor) {
+				this.executor = Objects.requireNonNull(executor);
+			}
 
-		@Override
-		public void setCookie(@NonNull final String url, @NonNull final String cookie) {
-			cookieManager.setCookie(url, cookie);
+			@Override
+			public void schedule(final long delayMillis, @NonNull final Runnable task) {
+				executor.schedule(task, Math.max(0L, delayMillis), TimeUnit.MILLISECONDS);
+			}
 		}
-
-		@Override
-		public void flush() {
-			cookieManager.flush();
-		}
-	}
-
-	private static final class ExecutorScheduler implements Scheduler {
-		@NonNull
-		private final ScheduledExecutorService executor;
-
-		private ExecutorScheduler(@NonNull final ScheduledExecutorService executor) {
-			this.executor = Objects.requireNonNull(executor);
-		}
-
-		@Override
-		public void schedule(final long delayMillis, @NonNull final Runnable task) {
-			executor.schedule(task, Math.max(0L, delayMillis), TimeUnit.MILLISECONDS);
-		}
-	}
 }

@@ -28,6 +28,7 @@ public final class UrlUtils {
 
 	private static final Set<String> ALLOWED_DOMAINS = Set.of(
 					Constant.YOUTUBE_DOMAIN,
+					"youtu.be",
 					"youtube.googleapis.com",
 					"googlevideo.com",
 					"ytimg.com",
@@ -100,6 +101,9 @@ public final class UrlUtils {
 	@NonNull
 	static String resolvePageClass(@NonNull final String host, @NonNull final List<String> segments) {
 		final String lowerHost = host.toLowerCase(NORMALIZATION_LOCALE);
+		if (lowerHost.equals("youtu.be")) {
+			return segments.isEmpty() ? PAGE_UNKNOWN : Constant.PAGE_WATCH;
+		}
 		if (!lowerHost.equals(Constant.YOUTUBE_MOBILE_HOST) && !lowerHost.equals(Constant.YOUTUBE_DOMAIN))
 			return PAGE_UNKNOWN;
 
