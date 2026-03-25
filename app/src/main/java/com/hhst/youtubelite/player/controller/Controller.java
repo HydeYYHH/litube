@@ -674,9 +674,13 @@ public class Controller {
 
 	private void hideControlsAutomatically() {
 		handler.removeCallbacks(hideControls);
-		if (engine.isPlaying() && !stateMachine.isInPictureInPicture() && !stateMachine.isInMiniPlayer()) {
+		if (shouldAutoHideControls(engine.isPlaying(), stateMachine.isInPictureInPicture())) {
 			handler.postDelayed(hideControls, CONTROLS_HIDE_DELAY_MS);
 		}
+	}
+
+	static boolean shouldAutoHideControls(final boolean isPlaying, final boolean isInPictureInPicture) {
+		return isPlaying && !isInPictureInPicture;
 	}
 
 	public void showHint(@NonNull String text, long durationMs) {
@@ -884,4 +888,5 @@ public class Controller {
 
 
 }
+
 

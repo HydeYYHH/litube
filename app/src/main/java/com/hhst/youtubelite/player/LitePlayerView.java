@@ -107,6 +107,8 @@ public class LitePlayerView extends PlayerView {
 	private boolean miniPlayerTouchCaptured;
 	private boolean miniPlayerDragging;
 	private boolean miniPlayerResizing;
+	@Nullable
+	private View miniPlayerPendingTapTarget;
 	private float miniPlayerPinchStartDistancePx;
 	private int miniPlayerPinchStartWidthPx;
 	private int miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
@@ -263,17 +265,16 @@ public class LitePlayerView extends PlayerView {
 		final int action = event.getActionMasked();
 		switch (action) {
 			case MotionEvent.ACTION_DOWN -> {
-				if (resolveMiniPlayerTapTarget(event) != null) {
-					resetMiniPlayerTouchTracking();
-					return false;
-				}
+				final View tapTarget = resolveMiniPlayerTapTarget(event);
 				captureMiniPlayerTouchStart(event);
+				miniPlayerPendingTapTarget = tapTarget;
 				return true;
 			}
 			case MotionEvent.ACTION_POINTER_DOWN -> {
-				if (event.getPointerCount() < 2 || isAnyPointerOnMiniPlayerTapTarget(event)) {
+				if (event.getPointerCount() < 2) {
 					return miniPlayerTouchCaptured;
 				}
+				clearMiniPlayerPendingTapTarget();
 				startMiniPlayerResize(event);
 				return true;
 			}
@@ -287,6 +288,7 @@ public class LitePlayerView extends PlayerView {
 				final float deltaY = event.getRawY() - miniPlayerTouchDownRawY;
 				if (!miniPlayerDragging && exceedsTouchSlop(deltaX, deltaY)) {
 					miniPlayerDragging = true;
+					clearMiniPlayerPendingTapTarget();
 				}
 				if (miniPlayerDragging) {
 					updateMiniPlayerTranslation(
@@ -306,9 +308,15 @@ public class LitePlayerView extends PlayerView {
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
+				final View pendingTapTarget = miniPlayerPendingTapTarget;
 				final boolean wasDragging = miniPlayerDragging;
 				resetMiniPlayerTouchTracking();
-				if (!wasDragging && onMiniPlayerBackgroundTap != null) {
+				if (wasDragging) {
+					return true;
+				}
+				if (pendingTapTarget != null) {
+					pendingTapTarget.performClick();
+				} else if (onMiniPlayerBackgroundTap != null) {
 					onMiniPlayerBackgroundTap.run();
 				}
 				return true;
@@ -538,11 +546,16 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	private void resetMiniPlayerTouchTracking() {
+		clearMiniPlayerPendingTapTarget();
 		miniPlayerTouchCaptured = false;
 		miniPlayerDragging = false;
 		miniPlayerResizing = false;
 		miniPlayerPinchStartDistancePx = 0.0f;
 		miniPlayerPinchStartWidthPx = 0;
+	}
+
+	private void clearMiniPlayerPendingTapTarget() {
+		miniPlayerPendingTapTarget = null;
 	}
 
 	private void resetMiniPlayerTranslation() {
