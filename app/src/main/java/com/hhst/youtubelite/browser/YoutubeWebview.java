@@ -140,7 +140,7 @@ public class YoutubeWebview extends WebView {
 		settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
 		final JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager, localQueueRepository);
-		addJavascriptInterface(jsInterface, "android");
+		addJavascriptInterface(jsInterface, "lite");
 		setTag(jsInterface);
 
 		setWebViewClient(new WebViewClient() {
@@ -178,14 +178,14 @@ public class YoutubeWebview extends WebView {
 				super.onPageStarted(view, url, favicon);
 				if (progressBar != null) progressBar.beginLoading();
 				evaluateJavascript("window.dispatchEvent(new Event('onPageStarted'));", null);
-				maybeInjectJavaScript(url);
+				injectJavaScript(url);
 			}
 
 			@Override
 			public void onPageFinished(@NonNull final WebView view, @NonNull final String url) {
 				super.onPageFinished(view, url);
 				evaluateJavascript("window.dispatchEvent(new Event('onPageFinished'));", null);
-				maybeInjectJavaScript(url);
+				injectJavaScript(url);
 				if (onPageFinishedListener != null) onPageFinishedListener.accept(url);
 			}
 
@@ -318,13 +318,9 @@ public class YoutubeWebview extends WebView {
 		});
 	}
 
-	private void doInjectJavaScript() {
-		for (final String js : scripts) evaluateJavascript(js, null);
-	}
-
-	private void maybeInjectJavaScript(@Nullable final String url) {
+	private void injectJavaScript(@Nullable final String url) {
 		if (UrlUtils.isGoogleAccountsUrl(url)) return;
-		doInjectJavaScript();
+		for (final String js : scripts) evaluateJavascript(js, null);
 	}
 
 	public void injectJavaScript(@NonNull final InputStream jsInputStream) {
