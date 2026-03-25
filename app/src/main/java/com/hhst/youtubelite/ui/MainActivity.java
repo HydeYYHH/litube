@@ -15,7 +15,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.webkit.WebView;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -97,6 +96,7 @@ public final class MainActivity extends AppCompatActivity {
 	@Nullable
 	private BottomSheetDialog queueBottomSheetDialog;
 	private long lastBackTime = 0;
+	private boolean suppressNextUserLeaveHintPictureInPicture;
 
 	@Override
 	protected void onCreate(@Nullable final Bundle savedInstanceState) {
@@ -133,7 +133,13 @@ public final class MainActivity extends AppCompatActivity {
 	@Override
 	protected void onUserLeaveHint() {
 		super.onUserLeaveHint();
-		if (shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, DeviceUtils.isInPictureInPictureMode(this))) {
+		final boolean suppressAutoEnterPictureInPicture = suppressNextUserLeaveHintPictureInPicture;
+		suppressNextUserLeaveHintPictureInPicture = false;
+		if (shouldEnterPictureInPictureOnUserLeaveHint(
+						player,
+						extensionManager,
+						DeviceUtils.isInPictureInPictureMode(this),
+						suppressAutoEnterPictureInPicture)) {
 			player.enterPictureInPicture();
 		}
 	}
@@ -181,12 +187,20 @@ public final class MainActivity extends AppCompatActivity {
 
 	static boolean shouldEnterPictureInPictureOnUserLeaveHint(@Nullable final LitePlayer player,
 	                                                          @Nullable final ExtensionManager extensionManager,
-	                                                          final boolean isInPictureInPictureMode) {
+	                                                          final boolean isInPictureInPictureMode,
+	                                                          final boolean suppressAutoEnterPictureInPicture) {
 		return !isInPictureInPictureMode
+						&& !suppressAutoEnterPictureInPicture
 						&& player != null
 						&& extensionManager != null
 						&& extensionManager.isEnabled(Constant.ENABLE_PIP)
 						&& player.shouldAutoEnterPictureInPicture();
+	}
+
+	static boolean shouldSuppressPictureInPictureForStartedActivity(@Nullable final Intent intent,
+	                                                                @NonNull final String appPackageName) {
+		if (intent == null || intent.getComponent() == null) return false;
+		return appPackageName.equals(intent.getComponent().getPackageName());
 	}
 
 	static void dispatchPictureInPictureModeChanged(@Nullable final LitePlayer player, final boolean isInPictureInPictureMode) {
@@ -197,6 +211,21 @@ public final class MainActivity extends AppCompatActivity {
 
 	static boolean shouldShowQueueUi(final boolean isInPictureInPictureMode) {
 		return !isInPictureInPictureMode;
+	}
+
+	static boolean shouldReleasePlayerOnDestroy(final boolean isChangingConfigurations) {
+		return !isChangingConfigurations;
+	}
+
+	static boolean shouldRestoreMiniPlayerOnResume(final boolean isInAppMiniPlayer,
+	                                               final boolean isInPictureInPictureMode) {
+		return isInAppMiniPlayer && !isInPictureInPictureMode;
+	}
+
+	static boolean shouldSuspendMiniPlayerOnStop(final boolean isInAppMiniPlayer,
+	                                             final boolean isChangingConfigurations,
+	                                             final boolean isInPictureInPictureMode) {
+		return isInAppMiniPlayer && !isChangingConfigurations && !isInPictureInPictureMode;
 	}
 
 	private String extractUrlFromText(String text) {
@@ -567,10 +596,45 @@ public final class MainActivity extends AppCompatActivity {
 	}
 
 	@Override
+	protected void onResume() {
+		super.onResume();
+		suppressNextUserLeaveHintPictureInPicture = false;
+		if (player != null && shouldRestoreMiniPlayerOnResume(player.isInAppMiniPlayer(), DeviceUtils.isInPictureInPictureMode(this))) {
+			player.restoreInAppMiniPlayerUiIfNeeded();
+		}
+	}
+
+	@Override
+	public void startActivity(@Nullable final Intent intent) {
+		suppressNextUserLeaveHintPictureInPicture =
+						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+		super.startActivity(intent);
+	}
+
+	@Override
+	public void startActivity(@Nullable final Intent intent, @Nullable final Bundle options) {
+		suppressNextUserLeaveHintPictureInPicture =
+						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+		super.startActivity(intent, options);
+	}
+
+	@Override
+	protected void onStop() {
+		if (player != null
+						&& shouldSuspendMiniPlayerOnStop(
+						player.isInAppMiniPlayer(),
+						isChangingConfigurations(),
+						DeviceUtils.isInPictureInPictureMode(this))) {
+			player.suspendInAppMiniPlayerUiIfNeeded();
+		}
+		super.onStop();
+	}
+
+	@Override
 	protected void onDestroy() {
 		super.onDestroy();
 		if (playbackServiceConnection != null) unbindService(playbackServiceConnection);
-		if (player != null) player.release();
+		if (player != null && shouldReleasePlayerOnDestroy(isChangingConfigurations())) player.release();
 	}
 }
 

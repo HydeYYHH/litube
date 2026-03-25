@@ -19,7 +19,7 @@ public class MainActivityPipTest {
 		when(extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_PIP)).thenReturn(true);
 		when(player.shouldAutoEnterPictureInPicture()).thenReturn(true);
 
-		assertTrue(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false));
+		assertTrue(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false, false));
 	}
 
 	@Test
@@ -28,7 +28,7 @@ public class MainActivityPipTest {
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		when(extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_PIP)).thenReturn(false);
 
-		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false));
+		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false, false));
 	}
 
 	@Test
@@ -38,7 +38,31 @@ public class MainActivityPipTest {
 		when(extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_PIP)).thenReturn(true);
 		when(player.shouldAutoEnterPictureInPicture()).thenReturn(false);
 
-		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false));
+		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false, false));
+	}
+
+	@Test
+	public void shouldEnterPictureInPictureOnUserLeaveHint_returnsFalseWhenSuppressedForInAppNavigation() {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		when(extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_PIP)).thenReturn(true);
+		when(player.shouldAutoEnterPictureInPicture()).thenReturn(true);
+
+		assertFalse(MainActivity.shouldEnterPictureInPictureOnUserLeaveHint(player, extensionManager, false, true));
+	}
+
+	@Test
+	public void shouldSuppressPictureInPictureForStartedActivity_onlyForExplicitInAppActivities() {
+		final android.content.Intent inAppIntent = mock(android.content.Intent.class);
+		final android.content.ComponentName inAppComponent = mock(android.content.ComponentName.class);
+		final android.content.Intent externalIntent = mock(android.content.Intent.class);
+		when(inAppIntent.getComponent()).thenReturn(inAppComponent);
+		when(inAppComponent.getPackageName()).thenReturn("com.hhst.youtubelite");
+		when(externalIntent.getComponent()).thenReturn(null);
+
+		assertTrue(MainActivity.shouldSuppressPictureInPictureForStartedActivity(inAppIntent, "com.hhst.youtubelite"));
+		assertFalse(MainActivity.shouldSuppressPictureInPictureForStartedActivity(externalIntent, "com.hhst.youtubelite"));
+		assertFalse(MainActivity.shouldSuppressPictureInPictureForStartedActivity(null, "com.hhst.youtubelite"));
 	}
 
 	@Test
@@ -54,5 +78,26 @@ public class MainActivityPipTest {
 	public void shouldShowQueueUi_hidesQueueEntryPointsDuringPip() {
 		assertTrue(MainActivity.shouldShowQueueUi(false));
 		assertFalse(MainActivity.shouldShowQueueUi(true));
+	}
+
+	@Test
+	public void shouldReleasePlayerOnDestroy_skipsReleaseDuringConfigurationChange() {
+		assertFalse(MainActivity.shouldReleasePlayerOnDestroy(true));
+		assertTrue(MainActivity.shouldReleasePlayerOnDestroy(false));
+	}
+
+	@Test
+	public void shouldRestoreMiniPlayerOnResume_onlyWhenMiniPlayerSessionExists() {
+		assertTrue(MainActivity.shouldRestoreMiniPlayerOnResume(true, false));
+		assertFalse(MainActivity.shouldRestoreMiniPlayerOnResume(false, false));
+		assertFalse(MainActivity.shouldRestoreMiniPlayerOnResume(true, true));
+	}
+
+	@Test
+	public void shouldSuspendMiniPlayerOnStop_onlyWhenLeavingActivityWithMiniPlayerSession() {
+		assertTrue(MainActivity.shouldSuspendMiniPlayerOnStop(true, false, false));
+		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(false, false, false));
+		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(true, true, false));
+		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(true, false, true));
 	}
 }

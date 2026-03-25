@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 
 import dagger.hilt.android.scopes.ActivityScoped;
+import lombok.Getter;
 
 @UnstableApi
 @ActivityScoped
@@ -80,7 +81,9 @@ public class LitePlayer {
 	private Runnable onMiniPlayerRestore;
 	@Nullable
 	private Runnable onMiniPlayerClose;
+	@Getter
 	private boolean inAppMiniPlayer;
+	private boolean wasInPictureInPicture;
 
 	@Inject
 	public LitePlayer(@NonNull final Activity activity,
@@ -332,8 +335,16 @@ public class LitePlayer {
 		controller.exitMiniPlayer();
 	}
 
-	public boolean isInAppMiniPlayer() {
-		return inAppMiniPlayer;
+	public void restoreInAppMiniPlayerUiIfNeeded() {
+		if (!inAppMiniPlayer) return;
+		playerView.show();
+		playerView.enterInAppMiniPlayer();
+		controller.enterMiniPlayer();
+	}
+
+	public void suspendInAppMiniPlayerUiIfNeeded() {
+		if (!inAppMiniPlayer) return;
+		playerView.hide();
 	}
 
 	public void stopAndCloseFromMiniPlayer() {
@@ -354,9 +365,10 @@ public class LitePlayer {
 
 	public void onPictureInPictureModeChanged(final boolean isInPiP) {
 		controller.onPictureInPictureModeChanged(isInPiP);
-		if (!isInPiP && inAppMiniPlayer && onMiniPlayerRestore != null) {
+		if (wasInPictureInPicture && !isInPiP && inAppMiniPlayer && onMiniPlayerRestore != null) {
 			dispatchMiniPlayerRestore();
 		}
+		wasInPictureInPicture = isInPiP;
 	}
 
 	public void setHeight(int height) {
@@ -381,16 +393,10 @@ public class LitePlayer {
 		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		loadedVideoId = null;
+		wasInPictureInPicture = false;
 		onMiniPlayerRestore = null;
 		onMiniPlayerClose = null;
-		final boolean wasInMiniPlayer = inAppMiniPlayer;
-		activity.runOnUiThread(() -> {
-			playerView.setMiniPlayerCallbacks(null, null);
-			if (wasInMiniPlayer) {
-				playerView.exitInAppMiniPlayer();
-				controller.exitMiniPlayer();
-			}
-		});
+		activity.runOnUiThread(() -> playerView.setMiniPlayerCallbacks(null, null));
 		inAppMiniPlayer = false;
 		engine.release();
 	}
