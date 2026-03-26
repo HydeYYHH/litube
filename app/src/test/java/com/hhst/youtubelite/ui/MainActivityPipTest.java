@@ -1,5 +1,6 @@
 package com.hhst.youtubelite.ui;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -99,5 +100,34 @@ public class MainActivityPipTest {
 		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(false, false, false));
 		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(true, true, false));
 		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(true, false, true));
+	}
+
+	@Test
+	public void resolveQueueBottomSheetMaxHeight_usesSpaceBelowEmbeddedPlayer() {
+		assertEquals(1180, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 740, false));
+	}
+
+	@Test
+	public void resolveQueueBottomSheetMaxHeight_fallsBackToFullHeightWhenPlayerBottomIsUnavailable() {
+		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 0, false));
+		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 1920, false));
+		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 2200, false));
+	}
+
+	@Test
+	public void resolveQueueBottomSheetMaxHeight_reservesTopInsetForMiniPlayerMode() {
+		assertEquals(1880, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 40, 1680, true));
+	}
+
+	@Test
+	public void resolveQueueBottomSheetBottomPadding_includesSystemBarInset() {
+		assertEquals(36, MainActivity.resolveQueueBottomSheetBottomPadding(4, 32));
+		assertEquals(4, MainActivity.resolveQueueBottomSheetBottomPadding(4, 0));
+	}
+
+	@Test
+	public void resolveQueueRecyclerBottomPadding_preservesTrailingScrollSpace() {
+		assertEquals(36, MainActivity.resolveQueueRecyclerBottomPadding(4, 32, 24));
+		assertEquals(28, MainActivity.resolveQueueRecyclerBottomPadding(4, 0, 24));
 	}
 }

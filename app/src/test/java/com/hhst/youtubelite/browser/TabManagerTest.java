@@ -16,12 +16,14 @@ import static org.mockito.Mockito.when;
 import android.webkit.WebBackForwardList;
 import android.webkit.WebHistoryItem;
 
+import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.util.UrlUtils;
 
@@ -279,7 +281,8 @@ public class TabManagerTest {
 	public void playInPlaybackSession_targetsSuspendedWatchAndStartsPlayback() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
-		final TabManager tabManager = createTabManager(player, extensionManager);
+		final QueueWarmer warmer = mock(QueueWarmer.class);
+		final TabManager tabManager = createTabManager(player, extensionManager, warmer);
 		final YoutubeFragment current = createFragment("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
 		final YoutubeFragment suspendedWatch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 		final YoutubeWebview suspendedWatchWebView = mock(YoutubeWebview.class);
@@ -289,6 +292,7 @@ public class TabManagerTest {
 
 		tabManager.playInPlaybackSession("https://m.youtube.com/watch?v=new");
 
+		verify(warmer).prioritizeUrl("https://m.youtube.com/watch?v=new");
 		verify(player).play("https://m.youtube.com/watch?v=new");
 		verify(suspendedWatchWebView).loadUrl("https://m.youtube.com/watch?v=new");
 	}
@@ -438,6 +442,12 @@ public class TabManagerTest {
 
 	private static TabManager createTabManager(final LitePlayer player,
 	                                           final ExtensionManager extensionManager) {
+		return createTabManager(player, extensionManager, mock(QueueWarmer.class));
+	}
+
+	private static TabManager createTabManager(final LitePlayer player,
+	                                           final ExtensionManager extensionManager,
+	                                           final QueueWarmer warmer) {
 		FRAGMENTS.clear();
 		final FragmentActivity activity = mock(FragmentActivity.class);
 		final FragmentManager fragmentManager = mock(FragmentManager.class);
@@ -458,9 +468,10 @@ public class TabManagerTest {
 			}
 			return 0;
 		});
-		return new TabManager(activity, () -> player, extensionManager) {
+		return new TabManager(activity, () -> player, extensionManager, warmer) {
+			@NonNull
 			@Override
-			protected YoutubeFragment createFragment(final String url, final String tag) {
+			protected YoutubeFragment createFragment(@NonNull final String url, @NonNull final String tag) {
 				try {
 					return FRAGMENTS.computeIfAbsent(url + "|" + tag, key -> {
 						try {

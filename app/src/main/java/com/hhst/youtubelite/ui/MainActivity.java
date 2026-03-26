@@ -16,8 +16,6 @@ import android.os.Looper;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,11 +29,15 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
@@ -48,12 +50,14 @@ import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
-import com.hhst.youtubelite.player.queue.LocalQueueRepository;
+import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.ui.queue.QueueAdapter;
+import com.hhst.youtubelite.ui.queue.QueueTouch;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.UrlUtils;
-import com.hhst.youtubelite.util.ViewUtils;
-import com.squareup.picasso.Picasso;
 
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
 import org.schabi.newpipe.extractor.NewPipe;
@@ -65,6 +69,8 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -86,9 +92,13 @@ public final class MainActivity extends AppCompatActivity {
 	@Inject
 	LitePlayer player;
 	@Inject
+	Engine engine;
+	@Inject
 	YoutubeExtractor youtubeExtractor;
 	@Inject
-	LocalQueueRepository localQueueRepository;
+	QueueRepository queueRepository;
+	@Inject
+	QueueWarmer queueWarmer;
 	@Nullable
 	private PlaybackService playbackService;
 	@Nullable
@@ -119,6 +129,7 @@ public final class MainActivity extends AppCompatActivity {
 		requestPermissions();
 		startPlaybackService();
 		setupBackNavigation();
+		queueWarmer.warmItems(queueRepository.getItems());
 
 		mainView.post(() -> handleIntent(getIntent()));
 	}
@@ -226,6 +237,26 @@ public final class MainActivity extends AppCompatActivity {
 	                                             final boolean isChangingConfigurations,
 	                                             final boolean isInPictureInPictureMode) {
 		return isInAppMiniPlayer && !isChangingConfigurations && !isInPictureInPictureMode;
+	}
+
+	static int resolveQueueBottomSheetMaxHeight(final int mainHeight,
+	                                            final int topInset,
+	                                            final int playerBottom,
+	                                            final boolean isInAppMiniPlayer) {
+		if (mainHeight <= 0) return 0;
+		if (isInAppMiniPlayer) return Math.max(0, mainHeight - Math.max(0, topInset));
+		if (playerBottom <= 0 || playerBottom >= mainHeight) return mainHeight;
+		return mainHeight - playerBottom;
+	}
+
+	static int resolveQueueBottomSheetBottomPadding(final int baseBottomPadding, final int bottomInset) {
+		return baseBottomPadding + Math.max(0, bottomInset);
+	}
+
+	static int resolveQueueRecyclerBottomPadding(final int baseBottomPadding,
+	                                             final int bottomInset,
+	                                             final int minimumTrailingSpace) {
+		return baseBottomPadding + Math.max(Math.max(0, bottomInset), Math.max(0, minimumTrailingSpace));
 	}
 
 	private String extractUrlFromText(String text) {
@@ -377,7 +408,7 @@ public final class MainActivity extends AppCompatActivity {
 			triggerPlaylistDownload(playbackUrl);
 			return;
 		}
-		final List<QueueItem> items = localQueueRepository.getItems();
+		final List<QueueItem> items = queueRepository.getItems();
 		if (items.isEmpty()) {
 			Toast.makeText(this, R.string.queue_download_unavailable, Toast.LENGTH_SHORT).show();
 			return;
@@ -396,29 +427,70 @@ public final class MainActivity extends AppCompatActivity {
 		queueBottomSheetDialog = dialog;
 		final View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_queue, new android.widget.FrameLayout(this), false);
 		dialog.setContentView(sheetView);
-
-		final android.widget.FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-		if (bottomSheet != null) {
-			final BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
-			sheetView.measure(View.MeasureSpec.makeMeasureSpec(ViewUtils.getScreenWidth(this), View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-			behavior.setPeekHeight(sheetView.getMeasuredHeight());
-		}
+		final AtomicReference<BottomSheetBehavior<android.widget.FrameLayout>> sheetRef = new AtomicReference<>();
+		final AtomicBoolean dirty = new AtomicBoolean(false);
 
 		final ImageButton closeButton = sheetView.findViewById(R.id.btn_queue_close);
 		final SwitchMaterial enabledSwitch = sheetView.findViewById(R.id.switch_queue_enabled);
 		final ImageButton downloadButton = sheetView.findViewById(R.id.btn_queue_download);
 		final ImageButton orderButton = sheetView.findViewById(R.id.btn_queue_order);
 		final ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
-		final LinearLayout itemsContainer = sheetView.findViewById(R.id.queue_items_container);
 		final TextView emptyView = sheetView.findViewById(R.id.queue_empty);
+		final RecyclerView recyclerView = sheetView.findViewById(R.id.queue_items_recycler);
+		final QueueAdapter adapter = getQueueAdapter(dialog, recyclerView, emptyView);
+		final Player.Listener queuePlaybackListener = new Player.Listener() {
+			@Override
+			public void onPlaybackStateChanged(final int state) {
+				mainHandler.post(() -> {
+					if (queueBottomSheetDialog == dialog) {
+						refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+					}
+				});
+			}
+		};
+		engine.addListener(queuePlaybackListener);
+		recyclerView.setLayoutManager(new LinearLayoutManager(this));
+		recyclerView.setAdapter(adapter);
+		recyclerView.setNestedScrollingEnabled(true);
+		recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+		new ItemTouchHelper(new QueueTouch((from, to) -> {
+			final boolean moved = adapter.moveItem(from, to);
+			if (moved) {
+				dirty.set(true);
+			}
+			return moved;
+		}, new QueueTouch.DragStateCallback() {
+			@Override
+			public void onDragStateChanged(final boolean dragging) {
+				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
+				if (behavior != null) {
+					// Avoid gesture fights.
+					behavior.setDraggable(!dragging);
+				}
+			}
+
+			@Override
+			public void onDragFinished() {
+				if (dirty.getAndSet(false)) {
+					persistQueueOrder(adapter.snapshotItems());
+					player.refreshQueueNavigationAvailability();
+				}
+				refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
+				if (behavior != null) {
+					behavior.setDraggable(true);
+				}
+			}
+		})).attachToRecyclerView(recyclerView);
 
 		if (closeButton != null) {
 			closeButton.setOnClickListener(v -> dialog.dismiss());
 		}
 		if (enabledSwitch != null) {
-			enabledSwitch.setChecked(localQueueRepository.isEnabled());
+			enabledSwitch.setChecked(queueRepository.isEnabled());
 			enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-				localQueueRepository.setEnabled(isChecked);
+				queueRepository.setEnabled(isChecked);
+				player.refreshQueueNavigationAvailability();
 				Toast.makeText(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off, Toast.LENGTH_SHORT).show();
 			});
 		}
@@ -437,60 +509,146 @@ public final class MainActivity extends AppCompatActivity {
 			});
 		}
 		if (clearButton != null) {
-			clearButton.setOnClickListener(v -> confirmClearQueue(dialog, itemsContainer, emptyView));
+			clearButton.setOnClickListener(v -> confirmClearQueue(() -> {
+				queueRepository.clear();
+				player.refreshQueueNavigationAvailability();
+				refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+			}));
 		}
+		dialog.setOnShowListener(ignored -> {
+			final android.widget.FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+			if (bottomSheet == null) return;
+			final BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
+			sheetRef.set(behavior);
+			final int sheetBasePaddingBottom = sheetView.getPaddingBottom();
+			final int recyclerBasePaddingBottom = recyclerView.getPaddingBottom();
+			final int recyclerTrailingSpace = Math.round(getResources().getDisplayMetrics().density * 24);
+			final View mainView = findViewById(R.id.main);
+			final WindowInsetsCompat rootInsets = mainView != null
+					? ViewCompat.getRootWindowInsets(mainView)
+					: ViewCompat.getRootWindowInsets(bottomSheet);
+			final int bottomInset = rootInsets != null
+					? rootInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+					: 0;
+			sheetView.setPadding(
+					sheetView.getPaddingLeft(),
+					sheetView.getPaddingTop(),
+					sheetView.getPaddingRight(),
+					resolveQueueBottomSheetBottomPadding(sheetBasePaddingBottom, bottomInset));
+			// Keep last row visible.
+			recyclerView.setPadding(
+					recyclerView.getPaddingLeft(),
+					recyclerView.getPaddingTop(),
+					recyclerView.getPaddingRight(),
+					resolveQueueRecyclerBottomPadding(recyclerBasePaddingBottom, bottomInset, recyclerTrailingSpace));
+			final View playerRoot = findViewById(R.id.playerView);
+			final int maxSheetHeight = resolveQueueBottomSheetMaxHeight(
+					mainView != null ? mainView.getHeight() : 0,
+					mainView != null ? mainView.getPaddingTop() : 0,
+					playerRoot != null ? playerRoot.getBottom() : 0,
+					player != null && player.isInAppMiniPlayer());
+			final android.view.ViewGroup.LayoutParams bottomSheetLayoutParams = bottomSheet.getLayoutParams();
+			if (bottomSheetLayoutParams != null && maxSheetHeight > 0) {
+				bottomSheetLayoutParams.height = maxSheetHeight;
+				bottomSheet.setLayoutParams(bottomSheetLayoutParams);
+			}
+			final android.view.ViewGroup.LayoutParams sheetLayoutParams = sheetView.getLayoutParams();
+			if (sheetLayoutParams != null && maxSheetHeight > 0) {
+				sheetLayoutParams.height = maxSheetHeight;
+				sheetView.setLayoutParams(sheetLayoutParams);
+			}
+			behavior.setPeekHeight(maxSheetHeight > 0 ? maxSheetHeight : sheetView.getMeasuredHeight());
+			behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+		});
 		dialog.setOnDismissListener(d -> {
+			engine.removeListener(queuePlaybackListener);
 			if (queueBottomSheetDialog == dialog) {
 				queueBottomSheetDialog = null;
 			}
 		});
-		populateQueueItems(dialog, itemsContainer, emptyView);
+		refreshQueueBottomSheet(adapter, recyclerView, emptyView);
 		dialog.show();
 	}
 
-	private void confirmClearQueue(@NonNull final BottomSheetDialog dialog,
-	                               @NonNull final LinearLayout itemsContainer,
-	                               @NonNull final TextView emptyView) {
-		new MaterialAlertDialogBuilder(this)
-						.setMessage(R.string.clear_queue_confirmation)
-						.setPositiveButton(R.string.confirm, (d, which) -> {
-							localQueueRepository.clear();
-							populateQueueItems(dialog, itemsContainer, emptyView);
-						})
-						.setNegativeButton(R.string.cancel, null)
-						.show();
-	}
-
-	private void populateQueueItems(@NonNull final BottomSheetDialog dialog,
-	                                @NonNull final LinearLayout itemsContainer,
-	                                @NonNull final TextView emptyView) {
-		itemsContainer.removeAllViews();
-		final List<QueueItem> items = localQueueRepository.getItems();
-		final String currentVideoId = player.getLoadedVideoId();
-		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
-		for (final QueueItem item : items) {
-			final View itemView = getLayoutInflater().inflate(R.layout.item_queue_entry, itemsContainer, false);
-			final ImageView thumbnailView = itemView.findViewById(R.id.queue_item_thumbnail);
-			final TextView titleView = itemView.findViewById(R.id.queue_item_title);
-			final TextView authorView = itemView.findViewById(R.id.queue_item_author);
-			titleView.setText(item.getTitle() == null || item.getTitle().isBlank() ? item.getUrl() : item.getTitle());
-			authorView.setText(item.getAuthor() == null || item.getAuthor().isBlank()
-							? getString(R.string.queue_unknown_author)
-							: item.getAuthor());
-			if (item.getThumbnailUrl() != null && !item.getThumbnailUrl().isBlank()) {
-				Picasso.get().load(item.getThumbnailUrl()).placeholder(R.drawable.ic_broken_image).error(R.drawable.ic_broken_image).into(thumbnailView);
-			} else {
-				thumbnailView.setImageResource(R.drawable.ic_broken_image);
-			}
-			itemView.setAlpha(item.getVideoId() != null && item.getVideoId().equals(currentVideoId) ? 1.0f : 0.88f);
-			itemView.setOnClickListener(v -> {
+	@NonNull
+	private QueueAdapter getQueueAdapter(BottomSheetDialog dialog, RecyclerView recyclerView, TextView emptyView) {
+		final AtomicReference<QueueAdapter> adapterRef = new AtomicReference<>();
+		final QueueAdapter adapter = new QueueAdapter(new QueueAdapter.Actions() {
+			@Override
+			public void onPlayRequested(@NonNull final QueueItem item) {
 				dialog.dismiss();
 				if (item.getUrl() != null) {
 					tabManager.playInPlaybackSession(item.getUrl());
 				}
-			});
-			itemsContainer.addView(itemView);
+			}
+
+			@Override
+			public void onDeleteRequested(@NonNull final QueueItem item) {
+				confirmRemoveQueueItem(item, () -> {
+					final String videoId = item.getVideoId();
+					if (videoId == null) return;
+					if (queueRepository.remove(videoId)) {
+						player.refreshQueueNavigationAvailability();
+						final QueueAdapter a = adapterRef.get();
+						if (a != null) {
+							refreshQueueBottomSheet(a, recyclerView, emptyView);
+						}
+					}
+				});
+			}
+		});
+		adapterRef.set(adapter);
+		return adapter;
+	}
+
+	private void confirmClearQueue(@NonNull final Runnable onConfirmed) {
+		new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.clear_queue_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+	}
+
+	private void confirmRemoveQueueItem(@NonNull final QueueItem item,
+	                                    @NonNull final Runnable onConfirmed) {
+		new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.remove_queue_item_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+	}
+
+	private void refreshQueueBottomSheet(@NonNull final QueueAdapter adapter,
+	                                     @NonNull final RecyclerView recyclerView,
+	                                     @NonNull final TextView emptyView) {
+		final List<QueueItem> items = queueRepository.getItems();
+		adapter.replaceItems(items, player.getLoadedVideoId());
+		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+		recyclerView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+	}
+
+	private void persistQueueOrder(@NonNull final List<QueueItem> order) {
+		final List<QueueItem> items = queueRepository.getItems();
+		for (int to = 0; to < order.size(); to++) {
+			final String videoId = order.get(to).getVideoId();
+			final int from = indexOfQueueItem(items, videoId);
+			if (from < 0 || from == to) continue;
+			if (queueRepository.move(from, to)) {
+				final QueueItem item = items.remove(from);
+				items.add(to, item);
+			}
 		}
+	}
+
+	private int indexOfQueueItem(@NonNull final List<QueueItem> items,
+	                             @Nullable final String videoId) {
+		if (videoId == null) return -1;
+		for (int i = 0; i < items.size(); i++) {
+			if (videoId.equals(items.get(i).getVideoId())) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	private void renderLoopModeButton(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {

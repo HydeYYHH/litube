@@ -80,11 +80,7 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 
 		@NonNull
 		private List<String> filteredElements() {
-			final List<String> values = new ArrayList<>();
-			for (final String value : this) {
-				values.add(value);
-			}
-			return values;
+			return new ArrayList<>(this);
 		}
 	}
 
@@ -121,11 +117,7 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 
 		@NonNull
 		private List<Entry<String, List<String>>> filteredElements() {
-			final List<Entry<String, List<String>>> entries = new ArrayList<>();
-			for (final Entry<String, List<String>> entry : this) {
-				entries.add(entry);
-			}
-			return entries;
+			return new ArrayList<>(this);
 		}
 	}
 

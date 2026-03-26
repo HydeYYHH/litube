@@ -23,6 +23,7 @@ import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
@@ -158,6 +159,15 @@ public class LitePlayer {
 		this.playbackService = service;
 		if (service != null) {
 			service.initialize(engine);
+			refreshQueueNavigationAvailability();
+		}
+	}
+
+	public void refreshQueueNavigationAvailability() {
+		final QueueNav availability = engine.getQueueNavigationAvailability();
+		activity.runOnUiThread(() -> controller.refreshQueueNavigationAvailability(availability));
+		if (playbackService != null) {
+			playbackService.updateQueueNavigationAvailability(availability);
 		}
 	}
 
@@ -253,6 +263,7 @@ public class LitePlayer {
 			if (playbackService != null) {
 				playbackService.showNotification(er.getVideoDetails().getTitle(), er.getVideoDetails().getAuthor(), er.getVideoDetails().getThumbnail(), er.getVideoDetails().getDuration() * 1000);
 			}
+			refreshQueueNavigationAvailability();
 		})).exceptionally(e -> {
 			if (this.extractionSession == session) this.extractionSession = null;
 			Throwable cause = e instanceof CompletionException ? e.getCause() : e;

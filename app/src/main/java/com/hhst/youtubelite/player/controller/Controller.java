@@ -47,6 +47,7 @@ import com.hhst.youtubelite.player.common.PlayerUtils;
 import com.hhst.youtubelite.player.controller.gesture.PlayerGestureListener;
 import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.ViewUtils;
 import com.squareup.picasso.Picasso;
@@ -64,7 +65,6 @@ import java.util.Map;
 import javax.inject.Inject;
 
 import dagger.hilt.android.scopes.ActivityScoped;
-import lombok.Getter;
 import lombok.Setter;
 
 @ActivityScoped
@@ -73,6 +73,7 @@ public class Controller {
 	private static final int HINT_PADDING_DP = 8;
 	private static final int HINT_TOP_MARGIN_DP = 24;
 	private static final int CONTROLS_HIDE_DELAY_MS = 3000;
+	static final float DISABLED_BUTTON_ALPHA = 0.38f;
 	@NonNull
 	private final Activity activity;
 	@NonNull
@@ -85,7 +86,6 @@ public class Controller {
 	private final PlayerPreferences prefs;
 	@NonNull
 	private final TabManager tabManager;
-	@Getter
 	@NonNull
 	private final ExtensionManager extensionManager;
 	@NonNull
@@ -119,8 +119,37 @@ public class Controller {
 			setupListeners();
 			setupButtonListeners();
 			updatePlayPauseButtons(engine.isPlaying());
+			refreshQueueNavigationAvailability(engine.getQueueNavigationAvailability());
 			playerView.showController();
 		});
+	}
+
+	public static boolean shouldEnablePrevious(@NonNull final QueueNav availability) {
+		return availability.isPreviousActionEnabled();
+	}
+
+	public static boolean shouldEnableNext(@NonNull final QueueNav availability) {
+		return availability.isNextActionEnabled();
+	}
+
+	static float previousButtonAlpha(@NonNull final QueueNav availability) {
+		return shouldEnablePrevious(availability) ? 1.0f : DISABLED_BUTTON_ALPHA;
+	}
+
+	static float nextButtonAlpha(@NonNull final QueueNav availability) {
+		return shouldEnableNext(availability) ? 1.0f : DISABLED_BUTTON_ALPHA;
+	}
+
+	public void refreshQueueNavigationAvailability(@NonNull final QueueNav availability) {
+		playerView.post(() -> {
+			applyPreviousButtonState(availability);
+			applyNextButtonState(availability);
+		});
+	}
+
+	@NonNull
+	public ExtensionManager getExtensionManager() {
+		return extensionManager;
 	}
 
 	private void updatePlayPauseButtons(boolean isPlaying) {
@@ -859,6 +888,32 @@ public class Controller {
 		if (pause != null) pause.setVisibility(isPlaying ? View.VISIBLE : View.GONE);
 	}
 
+	private void applyPreviousButtonState(@NonNull final QueueNav availability) {
+		applyPreviousButtonState(R.id.btn_prev, availability);
+		applyPreviousButtonState(R.id.btn_mini_prev, availability);
+	}
+
+	private void applyPreviousButtonState(final int viewId,
+	                                      @NonNull final QueueNav availability) {
+		final View button = playerView.findViewById(viewId);
+		if (button == null) return;
+		button.setEnabled(shouldEnablePrevious(availability));
+		button.setAlpha(previousButtonAlpha(availability));
+	}
+
+	private void applyNextButtonState(@NonNull final QueueNav availability) {
+		applyNextButtonState(R.id.btn_next, availability);
+		applyNextButtonState(R.id.btn_mini_next, availability);
+	}
+
+	private void applyNextButtonState(final int viewId,
+	                                  @NonNull final QueueNav availability) {
+		final View button = playerView.findViewById(viewId);
+		if (button == null) return;
+		button.setEnabled(shouldEnableNext(availability));
+		button.setAlpha(nextButtonAlpha(availability));
+	}
+
 	private void updateMiniControls(final boolean showControls, final boolean showScrim) {
 		final View scrim = playerView.findViewById(R.id.mini_controller_scrim);
 		if (scrim != null) {
@@ -888,5 +943,4 @@ public class Controller {
 
 
 }
-
 

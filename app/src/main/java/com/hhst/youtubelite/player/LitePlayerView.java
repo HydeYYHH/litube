@@ -84,6 +84,7 @@ public class LitePlayerView extends PlayerView {
 	private int playerHeight = 0;
 	private int normalHeight = 0;
 	// LitePlayer owns session state; the view mirrors only its current UI mode.
+	@Getter
 	private boolean inAppMiniPlayer = false;
 	@Nullable
 	private Runnable onMiniPlayerRestore;
@@ -234,10 +235,6 @@ public class LitePlayerView extends PlayerView {
 		updateMiniPlayerInteractionHandlers();
 	}
 
-	public boolean isInAppMiniPlayer() {
-		return inAppMiniPlayer;
-	}
-
 	public void setMiniPlayerCallbacks(@Nullable final Runnable onRestore, @Nullable final Runnable onClose) {
 		onMiniPlayerRestore = onRestore;
 		onMiniPlayerClose = onClose;
@@ -349,18 +346,18 @@ public class LitePlayerView extends PlayerView {
 						resolveScreenWidthDp(),
 						resolveBottomInsetDp(),
 						miniPlayerWidthOverrideDp);
-		params.width = ViewUtils.dpToPx(activity, spec.widthDp);
-		params.height = ViewUtils.dpToPx(activity, spec.heightDp);
+		params.width = ViewUtils.dpToPx(activity, spec.widthDp());
+		params.height = ViewUtils.dpToPx(activity, spec.heightDp());
 		params.topMargin = 0;
-		params.rightMargin = ViewUtils.dpToPx(activity, spec.rightMarginDp);
-		params.bottomMargin = ViewUtils.dpToPx(activity, spec.bottomMarginDp);
+		params.rightMargin = ViewUtils.dpToPx(activity, spec.rightMarginDp());
+		params.bottomMargin = ViewUtils.dpToPx(activity, spec.bottomMarginDp());
 		params.topToTop = ConstraintLayout.LayoutParams.UNSET;
 		params.startToStart = ConstraintLayout.LayoutParams.UNSET;
 		params.endToEnd = ConstraintLayout.LayoutParams.UNSET;
 		params.rightToRight = ConstraintLayout.LayoutParams.PARENT_ID;
 		params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID;
 		setLayoutParams(params);
-		updateMiniPlayerControlSpacing(spec.widthDp);
+		updateMiniPlayerControlSpacing(spec.widthDp());
 		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
 	}
 
@@ -413,15 +410,6 @@ public class LitePlayerView extends PlayerView {
 		return miniPlayerTouchBounds.contains(pointerRawX, pointerRawY);
 	}
 
-	private boolean isAnyPointerOnMiniPlayerTapTarget(@NonNull final MotionEvent event) {
-		for (int i = 0; i < event.getPointerCount(); i++) {
-			if (resolveMiniPlayerTapTarget(event, i) != null) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	private void startMiniPlayerResize(@NonNull final MotionEvent event) {
 		miniPlayerPinchStartDistancePx = calculatePointerDistancePx(event);
 		if (miniPlayerPinchStartDistancePx <= 0.0f) return;
@@ -467,7 +455,7 @@ public class LitePlayerView extends PlayerView {
 						resolveScreenWidthDp(),
 						resolveBottomInsetDp(),
 						miniPlayerWidthOverrideDp);
-		return ViewUtils.dpToPx(activity, spec.widthDp);
+		return ViewUtils.dpToPx(activity, spec.widthDp());
 	}
 
 	private void applyMiniPlayerSizeOverridePx(final int widthPx) {

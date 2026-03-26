@@ -47,8 +47,9 @@ import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.common.PlayerUtils;
-import com.hhst.youtubelite.player.queue.LocalQueueRepository;
 import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.player.queue.QueueNav;
+import com.hhst.youtubelite.player.queue.QueueRepository;
 import com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.util.StringUtils;
@@ -66,6 +67,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
@@ -90,7 +92,7 @@ public class Engine {
 	@NonNull
 	private final SponsorBlockManager sponsor;
 	@NonNull
-	private final LocalQueueRepository localQueueRepository;
+	private final QueueRepository queueRepository;
 	@NonNull
 	private PlayerLoopMode loopMode = PlayerLoopMode.PLAYLIST_NEXT;
 	private final Handler handler = new Handler(Looper.getMainLooper());
@@ -133,12 +135,12 @@ public class Engine {
 	              @NonNull final PlayerPreferences prefs,
 	              @NonNull final TabManager tabManager,
 	              @NonNull final SponsorBlockManager sponsor,
-	              @NonNull final LocalQueueRepository localQueueRepository) {
+	              @NonNull final QueueRepository queueRepository) {
 		this.simpleCache = simpleCache;
 		this.prefs = prefs;
 		this.tabManager = tabManager;
 		this.sponsor = sponsor;
-		this.localQueueRepository = localQueueRepository;
+		this.queueRepository = queueRepository;
 		final DefaultTrackSelector trackSelector = new DefaultTrackSelector(context, new AdaptiveTrackSelection.Factory());
 		trackSelector.setParameters(trackSelector.buildUponParameters().setTunnelingEnabled(true).build());
 		this.player = new ExoPlayer.Builder(context)
@@ -353,6 +355,10 @@ public class Engine {
 		this.player.addListener(listener);
 	}
 
+	public void removeListener(@NonNull final Player.Listener listener) {
+		this.player.removeListener(listener);
+	}
+
 	public VideoSize getVideoSize() {
 		return this.player.getVideoSize();
 	}
@@ -391,52 +397,104 @@ public class Engine {
 	}
 
 	public void skipToNext() {
-		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
-			navigateWithinLocalQueue(1);
+		final QueueNav availability = getQueueNavigationAvailability();
+		if (shouldUseQueueForNext(availability)) {
+			navigateWithinQueue(1);
 			return;
 		}
-		skipByPlaylistOffset(1);
+		if (shouldUseWebPlaylistForNext(availability)) {
+			skipByPlaylistOffset(1);
+		}
 	}
 
 	public void skipToPrevious() {
-		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
-			navigateWithinLocalQueue(-1);
+		final QueueNav availability = getQueueNavigationAvailability();
+		if (shouldUseQueueForPrevious(availability)) {
+			navigateWithinQueue(-1);
 			return;
 		}
-		skipByPlaylistOffset(-1);
+		if (shouldUseWebPlaylistForPrevious(availability)) {
+			skipByPlaylistOffset(-1);
+		}
 	}
 
 	public void playRandomPlaylistItem() {
-		if (shouldUseLocalQueueNavigation(localQueueRepository.isEnabled(), localQueueRepository.containsVideo(vid))) {
-			navigateRandomLocalQueueItem();
+		final QueueNav availability = getQueueNavigationAvailability();
+		if (shouldUseQueueForShuffle(availability)) {
+			navigateRandomQueueItem();
 			return;
 		}
-		this.tabManager.evaluateJavascriptForPlayback(buildRandomPlaylistNavigationScript(), null);
+		if (shouldUseWebPlaylistForShuffle(availability)) {
+			this.tabManager.evaluateJavascriptForPlayback(buildRandomPlaylistNavigationScript(), null);
+		}
 	}
 
 	private void skipByPlaylistOffset(final int playlistOffset) {
 		this.tabManager.evaluateJavascriptForPlayback(buildPlaylistNavigationScript(playlistOffset), null);
 	}
 
-	private boolean navigateWithinLocalQueue(final int offset) {
-		if (!localQueueRepository.isEnabled()) return false;
-		final QueueItem item = localQueueRepository.findRelative(vid, offset);
-		if (item == null || item.getUrl() == null) return false;
+	private void navigateWithinQueue(final int offset) {
+		if (!queueRepository.isEnabled()) return;
+		final QueueItem item = queueRepository.findRelative(vid, offset);
+		if (item == null || item.getUrl() == null) return;
 		tabManager.playInPlaybackSession(item.getUrl());
-		return true;
 	}
 
-	private boolean navigateRandomLocalQueueItem() {
-		if (!localQueueRepository.isEnabled()) return false;
-		final QueueItem item = localQueueRepository.findRandom(vid);
-		if (item == null || item.getUrl() == null) return false;
+	private void navigateRandomQueueItem() {
+		if (!queueRepository.isEnabled()) return;
+		final QueueItem item = queueRepository.findRandom(vid);
+		if (item == null || item.getUrl() == null) return;
 		tabManager.playInPlaybackSession(item.getUrl());
-		return true;
 	}
 
-	static boolean shouldUseLocalQueueNavigation(final boolean localQueueEnabled,
-	                                             final boolean currentVideoInQueue) {
-		return localQueueEnabled && currentVideoInQueue;
+	@NonNull
+	public QueueNav getQueueNavigationAvailability() {
+		final boolean inQueue = queueRepository.containsVideo(vid);
+		return resolveQueueNavigationAvailability(
+						queueRepository.isEnabled(),
+						queueRepository.hasItems(),
+						inQueue,
+						inQueue && queueRepository.findRelative(vid, -1) == null,
+						inQueue && queueRepository.findRelative(vid, 1) == null);
+	}
+
+	@NonNull
+	static QueueNav resolveQueueNavigationAvailability(final boolean queueEnabled,
+	                                                   final boolean hasQueueItems,
+	                                                   final boolean inQueue,
+	                                                   final boolean atHead,
+	                                                   final boolean atTail) {
+		// Prev dies outside queue.
+		return QueueNav.from(
+				queueEnabled,
+				hasQueueItems,
+				inQueue,
+				atHead,
+				atTail);
+	}
+
+	static boolean shouldUseQueueForNext(@NonNull final QueueNav availability) {
+		return availability.usesQueueForNext();
+	}
+
+	static boolean shouldUseQueueForShuffle(@NonNull final QueueNav availability) {
+		return availability.usesQueueForShuffle();
+	}
+
+	static boolean shouldUseQueueForPrevious(@NonNull final QueueNav availability) {
+		return availability.usesQueueForPrevious();
+	}
+
+	static boolean shouldUseWebPlaylistForNext(@NonNull final QueueNav availability) {
+		return availability == QueueNav.INACTIVE;
+	}
+
+	static boolean shouldUseWebPlaylistForShuffle(@NonNull final QueueNav availability) {
+		return availability == QueueNav.INACTIVE;
+	}
+
+	static boolean shouldUseWebPlaylistForPrevious(@NonNull final QueueNav availability) {
+		return availability == QueueNav.INACTIVE;
 	}
 
 	@Nullable
@@ -617,8 +675,8 @@ public class Engine {
 
 	public void setAudioTrack(@NonNull final AudioStream stream) {
 		if (streamDetails == null) return;
-		final AudioStream current = PlayerUtils.selectAudioStream(streamDetails.getAudioStreams(), null);
-		if (current != null && current.getContent().equals(stream.getContent())) return;
+		final AudioStream audio = PlayerUtils.selectAudioStream(streamDetails.getAudioStreams(), null);
+		if (audio != null && audio.getContent().equals(stream.getContent())) return;
 
 		final VideoStream vs = PlayerUtils.selectVideoStream(streamDetails.getVideoStreams(), prefs.getQuality());
 		final long pos = player.getCurrentPosition();
@@ -652,15 +710,15 @@ public class Engine {
 	}
 
 	static String buildPlaylistNavigationScript(final int playlistOffset) {
-		return String.format("""
+		return String.format(Locale.US, """
 						(function(){
 						const playlistContents=globalThis.ytInitialData?.contents?.singleColumnWatchNextResults?.playlist?.playlist?.contents;
 						if(!Array.isArray(playlistContents) || playlistContents.length===0) return 'missing-playlist';
-						const currentVideoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
-						if(!currentVideoId) return 'missing-current-video-id';
-						const currentIndex=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === currentVideoId);
-						if(currentIndex < 0) return 'missing-current-video';
-						const targetIndex=currentIndex + %1$d;
+						const videoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
+						if(!videoId) return 'missing-current-video-id';
+						const index=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === videoId);
+						if(index < 0) return 'missing-current-video';
+						const targetIndex=index + %1$d;
 						if(targetIndex < 0 || targetIndex >= playlistContents.length) return 'target-out-of-range';
 						const targetVideo=playlistContents[targetIndex]?.playlistPanelVideoRenderer;
 						const targetUrl=targetVideo?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
@@ -677,13 +735,13 @@ public class Engine {
 						(function(){
 						const playlistContents=globalThis.ytInitialData?.contents?.singleColumnWatchNextResults?.playlist?.playlist?.contents;
 						if(!Array.isArray(playlistContents) || playlistContents.length===0) return 'missing-playlist';
-						const currentVideoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
-						if(!currentVideoId) return 'missing-current-video-id';
-						const currentIndex=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === currentVideoId);
-						if(currentIndex < 0) return 'missing-current-video';
+						const videoId=globalThis.ytInitialPlayerResponse?.videoDetails?.videoId ?? new URL(location.href).searchParams.get('v');
+						if(!videoId) return 'missing-current-video-id';
+						const i=playlistContents.findIndex(item => item?.playlistPanelVideoRenderer?.videoId === videoId);
+						if(i < 0) return 'missing-current-video';
 						const candidateIndices=playlistContents
 							.map((item,index)=>item?.playlistPanelVideoRenderer ? index : -1)
-							.filter(index=>index >= 0 && (playlistContents.length === 1 || index !== currentIndex));
+							.filter(index=>index >= 0 && (playlistContents.length === 1 || index !== i));
 						if(candidateIndices.length === 0) return 'missing-random-target';
 						const targetIndex=candidateIndices[Math.floor(Math.random() * candidateIndices.length)];
 						const targetVideo=playlistContents[targetIndex]?.playlistPanelVideoRenderer;

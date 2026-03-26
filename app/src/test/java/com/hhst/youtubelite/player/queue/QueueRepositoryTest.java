@@ -20,10 +20,11 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class LocalQueueRepositoryTest {
+public class QueueRepositoryTest {
 	private MMKV mmkv;
-	private LocalQueueRepository repository;
+	private QueueRepository repository;
 	private Map<String, Object> store;
 
 	@Before
@@ -50,7 +51,7 @@ public class LocalQueueRepositoryTest {
 			store.remove(invocation.getArgument(0));
 			return null;
 		}).when(mmkv).removeValueForKey(anyString());
-		repository = new LocalQueueRepository(mmkv, new Gson());
+		repository = new QueueRepository(mmkv, new Gson());
 	}
 
 	@Test
@@ -80,14 +81,14 @@ public class LocalQueueRepositoryTest {
 	}
 
 	@Test
-	public void findRelative_returnsQueueEdgesWhenCurrentVideoMissing() {
+	public void findRelative_returnsQueueEdgesWhenCurrentVideoMissing_andWrapsNextFromTail() {
 		repository.add(new QueueItem("video-1", "https://m.youtube.com/watch?v=video-1", "First", "Author A", "https://img/1.jpg"));
 		repository.add(new QueueItem("video-2", "https://m.youtube.com/watch?v=video-2", "Second", "Author B", "https://img/2.jpg"));
 
 		assertEquals("video-1", repository.findRelative("missing", 1).getVideoId());
 		assertEquals("video-2", repository.findRelative("missing", -1).getVideoId());
 		assertNull(repository.findRelative("video-1", -1));
-		assertNull(repository.findRelative("video-2", 1));
+		assertEquals("video-1", repository.findRelative("video-2", 1).getVideoId());
 	}
 
 	@Test
@@ -104,5 +105,70 @@ public class LocalQueueRepositoryTest {
 		repository.add(new QueueItem("video-1", "https://m.youtube.com/watch?v=video-1", "First", "Author A", "https://img/1.jpg"));
 
 		assertFalse(repository.getItems().isEmpty());
+	}
+
+	@Test
+	public void remove_deletesSingleMatchingItemWithoutClearingQueue() {
+		final QueueItem first = new QueueItem("video-1", "https://m.youtube.com/watch?v=video-1", "First", "Author A", "https://img/1.jpg");
+		final QueueItem second = new QueueItem("video-2", "https://m.youtube.com/watch?v=video-2", "Second", "Author B", "https://img/2.jpg");
+
+		repository.add(first);
+		repository.add(second);
+
+		assertTrue(repository.remove(second.getVideoId()));
+
+		final List<QueueItem> items = repository.getItems();
+		assertEquals(1, items.size());
+		assertEquals(first.getVideoId(), items.get(0).getVideoId());
+		assertTrue(repository.hasItems());
+		assertFalse(repository.containsVideo(second.getVideoId()));
+	}
+
+	@Test
+	public void move_reordersItemsAndPersistsTheNewOrder() {
+		final QueueItem first = new QueueItem("video-1", "https://m.youtube.com/watch?v=video-1", "First", "Author A", "https://img/1.jpg");
+		final QueueItem second = new QueueItem("video-2", "https://m.youtube.com/watch?v=video-2", "Second", "Author B", "https://img/2.jpg");
+		final QueueItem third = new QueueItem("video-3", "https://m.youtube.com/watch?v=video-3", "Third", "Author C", "https://img/3.jpg");
+
+		repository.add(first);
+		repository.add(second);
+		repository.add(third);
+
+		assertTrue(repository.move(2, 0));
+
+		final List<QueueItem> items = repository.getItems();
+		assertEquals("video-3", items.get(0).getVideoId());
+		assertEquals("video-1", items.get(1).getVideoId());
+		assertEquals("video-2", items.get(2).getVideoId());
+	}
+
+	@Test
+	public void queueListeners_fireAfterAddRemoveMoveClearAndEnabledChanges() {
+		final AtomicInteger invalidationCount = new AtomicInteger();
+		repository.addListener(invalidationCount::incrementAndGet);
+
+		final QueueItem first = new QueueItem("video-1", "https://m.youtube.com/watch?v=video-1", "First", "Author A", "https://img/1.jpg");
+		final QueueItem second = new QueueItem("video-2", "https://m.youtube.com/watch?v=video-2", "Second", "Author B", "https://img/2.jpg");
+
+		repository.add(first);
+		assertEquals(1, invalidationCount.get());
+
+		repository.add(second);
+		assertEquals(2, invalidationCount.get());
+
+		repository.remove(second.getVideoId());
+		assertEquals(3, invalidationCount.get());
+
+		repository.add(second);
+		assertEquals(4, invalidationCount.get());
+
+		repository.move(1, 0);
+		assertEquals(5, invalidationCount.get());
+
+		repository.clear();
+		assertEquals(6, invalidationCount.get());
+
+		repository.setEnabled(true);
+		assertEquals(7, invalidationCount.get());
 	}
 }

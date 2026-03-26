@@ -169,7 +169,7 @@ public final class DownloaderImpl extends Downloader {
 			final String responseMessage = response.message();
 			final Map<String, List<String>> responseHeaders = response.headers().toMultimap();
 			final ResponseBody responseBody = response.body();
-			final String responseBodyString = responseBody != null ? responseBody.string() : "";
+			final String responseBodyString = responseBody.string();
 
 			return new org.schabi.newpipe.extractor.downloader.Response(responseCode, responseMessage, responseHeaders, responseBodyString, url);
 		} catch (IOException e) {

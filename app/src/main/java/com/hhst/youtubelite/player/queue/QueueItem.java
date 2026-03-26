@@ -13,10 +13,7 @@ public final class QueueItem {
 	@Nullable
 	private String author;
 	@Nullable
-	private String thumbnailUrl;
-
-	public QueueItem() {
-	}
+	private final String thumbnailUrl;
 
 	public QueueItem(@Nullable final String videoId,
 	                 @Nullable final String url,
@@ -69,10 +66,6 @@ public final class QueueItem {
 	@Nullable
 	public String getThumbnailUrl() {
 		return thumbnailUrl;
-	}
-
-	public void setThumbnailUrl(@Nullable final String thumbnailUrl) {
-		this.thumbnailUrl = thumbnailUrl;
 	}
 
 	@NonNull

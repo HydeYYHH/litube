@@ -52,7 +52,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	public StreamDownloaderImpl(OkHttpClient client, MMKV mmkv) {
 		this.client = client.newBuilder()
 						.cache(null)
-						.dispatcher(createDispatcher(DOWNLOAD_MAX_REQUESTS, DOWNLOAD_MAX_REQUESTS_PER_HOST))
+						.dispatcher(createDispatcher())
 						.callTimeout(DOWNLOAD_CALL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 						.connectTimeout(DOWNLOAD_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.writeTimeout(DOWNLOAD_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -63,10 +63,10 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		this.executor.allowCoreThreadTimeOut(true);
 	}
 
-	private static Dispatcher createDispatcher(final int maxRequests, final int maxRequestsPerHost) {
+	private static Dispatcher createDispatcher() {
 		final Dispatcher dispatcher = new Dispatcher();
-		dispatcher.setMaxRequests(maxRequests);
-		dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+		dispatcher.setMaxRequests(StreamDownloaderImpl.DOWNLOAD_MAX_REQUESTS);
+		dispatcher.setMaxRequestsPerHost(StreamDownloaderImpl.DOWNLOAD_MAX_REQUESTS_PER_HOST);
 		return dispatcher;
 	}
 

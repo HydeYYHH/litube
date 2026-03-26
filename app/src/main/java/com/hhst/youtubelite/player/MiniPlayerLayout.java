@@ -16,18 +16,7 @@ public final class MiniPlayerLayout {
 	private MiniPlayerLayout() {
 	}
 
-	public static final class Spec {
-		public final int widthDp;
-		public final int heightDp;
-		public final int rightMarginDp;
-		public final int bottomMarginDp;
-
-		public Spec(int widthDp, int heightDp, int rightMarginDp, int bottomMarginDp) {
-			this.widthDp = widthDp;
-			this.heightDp = heightDp;
-			this.rightMarginDp = rightMarginDp;
-			this.bottomMarginDp = bottomMarginDp;
-		}
+	public record Spec(int widthDp, int heightDp, int rightMarginDp, int bottomMarginDp) {
 	}
 
 	static int computeWidthDp(int screenWidthDp) {

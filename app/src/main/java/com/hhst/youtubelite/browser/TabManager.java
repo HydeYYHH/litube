@@ -18,6 +18,7 @@ import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.util.UrlUtils;
 
 import org.apache.commons.io.FilenameUtils;
@@ -52,6 +53,7 @@ public class TabManager {
 	private final Activity activity;
 	private final Lazy<LitePlayer> player;
 	private final ExtensionManager extensionManager;
+	private final QueueWarmer queueWarmer;
 	private final Deque<YoutubeFragment> tabs = new LinkedList<>();
 	@Getter
 	@Nullable
@@ -62,10 +64,12 @@ public class TabManager {
 	@Inject
 	public TabManager(@NonNull final Activity activity,
 	                  @NonNull final Lazy<LitePlayer> player,
-	                  @NonNull final ExtensionManager extensionManager) {
+	                  @NonNull final ExtensionManager extensionManager,
+	                  @NonNull final QueueWarmer queueWarmer) {
 		this.activity = activity;
 		this.player = player;
 		this.extensionManager = extensionManager;
+		this.queueWarmer = queueWarmer;
 	}
 
 
@@ -205,6 +209,7 @@ public class TabManager {
 	}
 
 	public void playInPlaybackSession(@NonNull final String url) {
+		queueWarmer.prioritizeUrl(url);
 		player.get().play(url);
 		final YoutubeWebview webview = resolvePlaybackWebview();
 		if (webview != null) {

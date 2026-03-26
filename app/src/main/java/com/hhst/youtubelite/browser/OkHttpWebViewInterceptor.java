@@ -86,7 +86,7 @@ public final class OkHttpWebViewInterceptor {
 	@NonNull
 	static OkHttpClient createResourceClient(@NonNull final OkHttpClient client) {
 		return client.newBuilder()
-						.dispatcher(createDispatcher(RESOURCE_MAX_REQUESTS, RESOURCE_MAX_REQUESTS_PER_HOST))
+						.dispatcher(createDispatcher())
 						.callTimeout(RESOURCE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.connectTimeout(RESOURCE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 						.writeTimeout(RESOURCE_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -104,10 +104,10 @@ public final class OkHttpWebViewInterceptor {
 	}
 
 	@NonNull
-	static Dispatcher createDispatcher(final int maxRequests, final int maxRequestsPerHost) {
+	static Dispatcher createDispatcher() {
 		final Dispatcher dispatcher = new Dispatcher();
-		dispatcher.setMaxRequests(maxRequests);
-		dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+		dispatcher.setMaxRequests(OkHttpWebViewInterceptor.RESOURCE_MAX_REQUESTS);
+		dispatcher.setMaxRequestsPerHost(OkHttpWebViewInterceptor.RESOURCE_MAX_REQUESTS_PER_HOST);
 		return dispatcher;
 	}
 

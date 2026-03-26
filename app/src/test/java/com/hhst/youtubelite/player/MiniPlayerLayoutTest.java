@@ -28,24 +28,24 @@ public class MiniPlayerLayoutTest {
 	@Test
 	public void computeSpec_returnsCompactAndInsetHeavyLayout() {
 		final MiniPlayerLayout.Spec compact = MiniPlayerLayout.computeSpec(360, 0);
-		assertEquals(223, compact.widthDp);
-		assertEquals(12, compact.rightMarginDp);
-		assertEquals(68, compact.bottomMarginDp);
-		assertEquals(compact.widthDp * 9 / 16, compact.heightDp);
+		assertEquals(223, compact.widthDp());
+		assertEquals(12, compact.rightMarginDp());
+		assertEquals(68, compact.bottomMarginDp());
+		assertEquals(compact.widthDp() * 9 / 16, compact.heightDp());
 
 		final MiniPlayerLayout.Spec insetHeavy = MiniPlayerLayout.computeSpec(360, 80);
-		assertEquals(92, insetHeavy.bottomMarginDp);
+		assertEquals(92, insetHeavy.bottomMarginDp());
 	}
 
 	@Test
 	public void computeSpec_widthOverrideClampsAndKeepsAspectRatio() {
 		final MiniPlayerLayout.Spec minClamped = MiniPlayerLayout.computeSpec(360, 0, 120);
-		assertEquals(190, minClamped.widthDp);
-		assertEquals(190 * 9 / 16, minClamped.heightDp);
+		assertEquals(190, minClamped.widthDp());
+		assertEquals(190 * 9 / 16, minClamped.heightDp());
 
 		final MiniPlayerLayout.Spec maxClamped = MiniPlayerLayout.computeSpec(360, 0, 420);
-		assertEquals(320, maxClamped.widthDp);
-		assertEquals(320 * 9 / 16, maxClamped.heightDp);
+		assertEquals(320, maxClamped.widthDp());
+		assertEquals(320 * 9 / 16, maxClamped.heightDp());
 	}
 
 	@Test

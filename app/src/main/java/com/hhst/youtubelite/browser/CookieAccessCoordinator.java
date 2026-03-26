@@ -17,7 +17,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 
-import okhttp3.Headers;
 import okhttp3.Response;
 
 final class CookieAccessCoordinator {
@@ -78,23 +77,6 @@ final class CookieAccessCoordinator {
 		final String cookie = backend.getCookie(url);
 		cookieCache.put(cacheKey, new CacheEntry(cookie, nowMillis));
 		return cookie;
-	}
-
-	void setCookie(@NonNull final String url, @NonNull final String cookie) {
-		backend.setCookie(url, cookie);
-		invalidateCache();
-		scheduleFlush();
-	}
-
-	void syncFromHeaders(@NonNull final String url, @NonNull final Headers headers) {
-		boolean cookiesUpdated = false;
-		for (final String cookie : headers.values("Set-Cookie")) {
-			backend.setCookie(url, cookie);
-			cookiesUpdated = true;
-		}
-		if (!cookiesUpdated) return;
-		invalidateCache();
-		scheduleFlush();
 	}
 
 	void syncFromResponse(@NonNull final Response response) {

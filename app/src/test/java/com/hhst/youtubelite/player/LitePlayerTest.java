@@ -34,6 +34,7 @@ import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
@@ -174,23 +175,43 @@ public class LitePlayerTest {
 	@Test
 	public void attachPlaybackService_initializesServiceAndUpdatesProgressOnReady() {
 		final PlaybackService playbackService = mock(PlaybackService.class);
+		when(engine.getQueueNavigationAvailability()).thenReturn(QueueNav.ACTIVE_WITH_PREVIOUS);
 
 		player.attachPlaybackService(playbackService);
 		listener.onPlaybackStateChanged(Player.STATE_READY);
 
 		verify(playbackService).initialize(engine);
+		verify(controller).refreshQueueNavigationAvailability(QueueNav.ACTIVE_WITH_PREVIOUS);
+		verify(playbackService).updateQueueNavigationAvailability(QueueNav.ACTIVE_WITH_PREVIOUS);
 		verify(playbackService).updateProgress(321L, 1.25f, true);
 	}
 
 	@Test
 	public void onIsPlayingChanged_updatesPlaybackServiceProgress() {
 		final PlaybackService playbackService = mock(PlaybackService.class);
+		when(engine.getQueueNavigationAvailability()).thenReturn(QueueNav.INACTIVE);
 
 		player.attachPlaybackService(playbackService);
 		listener.onIsPlayingChanged(false);
 
 		verify(playbackService).initialize(engine);
+		verify(controller).refreshQueueNavigationAvailability(QueueNav.INACTIVE);
+		verify(playbackService).updateQueueNavigationAvailability(QueueNav.INACTIVE);
 		verify(playbackService).updateProgress(321L, 1.25f, false);
+	}
+
+	@Test
+	public void play_successRefreshesQueueNavigationStateAfterPlaybackStarts() throws Exception {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+		player.attachPlaybackService(playbackService);
+		clearInvocations(controller, playbackService);
+		when(engine.getQueueNavigationAvailability()).thenReturn(QueueNav.ACTIVE_WITHOUT_PREVIOUS);
+		stubSuccessfulPlaybackDetails(WATCH_URL, defaultStreamDetails(), "Demo title", 60L);
+
+		player.play(WATCH_URL);
+
+		verify(controller).refreshQueueNavigationAvailability(QueueNav.ACTIVE_WITHOUT_PREVIOUS);
+		verify(playbackService).updateQueueNavigationAvailability(QueueNav.ACTIVE_WITHOUT_PREVIOUS);
 	}
 
 	@Test
@@ -271,6 +292,14 @@ public class LitePlayerTest {
 	@Test
 	public void shouldAutoEnterPictureInPicture_returnsTrueWhenPlayerViewIsVisible() {
 		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
+
+		assertTrue(player.shouldAutoEnterPictureInPicture());
+	}
+
+	@Test
+	public void shouldAutoEnterPictureInPicture_returnsTrueWhenInAppMiniPlayerIsActiveAndVisible() {
+		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
+		player.enterInAppMiniPlayer();
 
 		assertTrue(player.shouldAutoEnterPictureInPicture());
 	}
@@ -397,6 +426,54 @@ public class LitePlayerTest {
 
 		verify(engine).release();
 		verifyNoInteractions(extractor);
+	}
+
+	@Test
+	public void release_whileMiniPlayerActive_doesNotRestoreFullscreenUi() {
+		player.enterInAppMiniPlayer();
+		clearInvocations(playerView, controller, engine);
+
+		player.release();
+
+		verify(playerView, never()).exitInAppMiniPlayer();
+		verify(controller, never()).exitMiniPlayer();
+		verify(playerView).setMiniPlayerCallbacks(null, null);
+		verify(engine).release();
+	}
+
+	@Test
+	public void restoreInAppMiniPlayerUiIfNeeded_reappliesMiniPlayerModeWhenSessionActive() {
+		player.enterInAppMiniPlayer();
+		clearInvocations(playerView, controller);
+
+		player.restoreInAppMiniPlayerUiIfNeeded();
+
+		verify(playerView).enterInAppMiniPlayer();
+		verify(controller).enterMiniPlayer();
+	}
+
+	@Test
+	public void restoreInAppMiniPlayerUiIfNeeded_showsViewAgainAfterMiniPlayerWasSuspended() {
+		player.enterInAppMiniPlayer();
+		player.suspendInAppMiniPlayerUiIfNeeded();
+		clearInvocations(playerView, controller);
+
+		player.restoreInAppMiniPlayerUiIfNeeded();
+
+		verify(playerView).show();
+		verify(controller).enterMiniPlayer();
+	}
+
+	@Test
+	public void suspendInAppMiniPlayerUiIfNeeded_hidesViewWithoutExitingMiniPlayerSession() {
+		player.enterInAppMiniPlayer();
+		clearInvocations(playerView, controller);
+
+		player.suspendInAppMiniPlayerUiIfNeeded();
+
+		verify(playerView).hide();
+		verify(playerView, never()).exitInAppMiniPlayer();
+		verify(controller, never()).exitMiniPlayer();
 	}
 
 	@Test
@@ -539,10 +616,24 @@ public class LitePlayerTest {
 		player.setMiniPlayerCallbacks(onRestore, null);
 		player.enterInAppMiniPlayer();
 
+		player.onPictureInPictureModeChanged(true);
+		player.onPictureInPictureModeChanged(false);
+
+		verify(controller).onPictureInPictureModeChanged(true);
+		verify(controller).onPictureInPictureModeChanged(false);
+		verify(onRestore).run();
+	}
+
+	@Test
+	public void onPictureInPictureModeChanged_doesNotExitToWatchWithoutPriorPipSession() {
+		final Runnable onRestore = mock(Runnable.class);
+		player.setMiniPlayerCallbacks(onRestore, null);
+		player.enterInAppMiniPlayer();
+
 		player.onPictureInPictureModeChanged(false);
 
 		verify(controller).onPictureInPictureModeChanged(false);
-		verify(onRestore).run();
+		verify(onRestore, never()).run();
 	}
 
 	private static PlaybackException sourceOpenFailure() {

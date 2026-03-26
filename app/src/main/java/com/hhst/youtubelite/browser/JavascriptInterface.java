@@ -19,8 +19,9 @@ import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
-import com.hhst.youtubelite.player.queue.LocalQueueRepository;
 import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.ui.AboutActivity;
 import com.hhst.youtubelite.R;
 
@@ -48,7 +49,9 @@ public final class JavascriptInterface {
 	@NonNull
 	private final TabManager tabManager;
 	@NonNull
-	private final LocalQueueRepository localQueueRepository;
+	private final QueueRepository queueRepository;
+	@NonNull
+	private final QueueWarmer queueWarmer;
 	@NonNull
 	private final Gson gson = new Gson();
 	@NonNull
@@ -59,14 +62,16 @@ public final class JavascriptInterface {
 	                           @NonNull final LitePlayer player,
 	                           @NonNull final ExtensionManager extensionManager,
 	                           @NonNull final TabManager tabManager,
-	                           @NonNull final LocalQueueRepository localQueueRepository) {
+	                           @NonNull final QueueRepository queueRepository,
+	                           @NonNull final QueueWarmer queueWarmer) {
 		this.context = webview.getContext();
 		this.webview = webview;
 		this.youtubeExtractor = youtubeExtractor;
 		this.player = player;
 		this.extensionManager = extensionManager;
 		this.tabManager = tabManager;
-		this.localQueueRepository = localQueueRepository;
+		this.queueRepository = queueRepository;
+		this.queueWarmer = queueWarmer;
 	}
 
 
@@ -126,19 +131,40 @@ public final class JavascriptInterface {
 			try {
 				final QueueItem item = gson.fromJson(itemJson, QueueItem.class);
 				if (item == null || item.getUrl() == null) return;
-				final String canonicalVideoId = extractVideoId(item.getUrl());
-				if (canonicalVideoId == null) return;
-				item.setVideoId(canonicalVideoId);
-				localQueueRepository.add(item);
+				final String vid = item.getVideoId();
+				if (vid == null || vid.isBlank()
+						|| item.getTitle() == null || item.getTitle().isBlank()
+						|| item.getAuthor() == null || item.getAuthor().isBlank()) {
+					Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				item.setVideoId(vid);
+				queueRepository.add(item);
+				queueWarmer.warmItem(item);
+				player.refreshQueueNavigationAvailability();
 				Toast.makeText(context, R.string.queue_item_added, Toast.LENGTH_SHORT).show();
 			} catch (final Exception ignored) {
 			}
 		});
 	}
 
+	@android.webkit.JavascriptInterface
+	public void showQueueItemUnavailable() {
+		handler.post(() -> Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show());
+	}
+
+	@android.webkit.JavascriptInterface
+	public boolean isQueueEnabled() {
+		return queueRepository.isEnabled();
+	}
+
 	@Nullable
 	private String extractVideoId(@Nullable final String url) {
 		if (url == null) return null;
+		final String extractedByParser = YoutubeExtractor.getVideoId(url);
+		if (extractedByParser != null && !extractedByParser.isBlank()) {
+			return extractedByParser;
+		}
 		final Matcher matcher = Pattern.compile("[?&]v=([\\w-]{6,})", Pattern.CASE_INSENSITIVE).matcher(url);
 		return matcher.find() ? matcher.group(1) : null;
 	}

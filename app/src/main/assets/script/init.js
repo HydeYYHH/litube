@@ -80,7 +80,8 @@ try {
             return segments.join('/');
         };
 
-        const backoff = (() => {
+        // Polling optimization
+        const backoff = (stopOnTruthy = false) => {
             const delays = [16, 32, 64, 128, 256, 512, 1024, 2048];
             let tmr = null;
             let ver = 0;
@@ -90,34 +91,254 @@ try {
                 let k = 0;
                 const run = () => {
                     if (v !== ver) return;
-                    fn();
+                    const done = fn() === true;
+                    if (stopOnTruthy && done) return;
                     tmr = setTimeout(run, delays[k] ?? 2048);
                     k += 1;
                 };
                 run();
             };
-        })();
+        };
 
         const bindListener = (obj, type, fn, options) => { 
             if (!obj?.addEventListener || !obj?.removeEventListener || typeof fn !== 'function') return;
             const capture = typeof options === 'boolean' ? options : !!options?.capture;
             obj.removeEventListener(type, fn, capture);
             obj.addEventListener(type, fn, options);
-        }
+        };
+
+        const resizeIcon = (root, size = 24) => {
+            if (!(root instanceof Element)) return;
+            const px = `${size}px`;
+            const icon = root.querySelector('c3-icon');
+            const host = root.querySelector('.yt-icon-shape');
+            const svg = root.querySelector('svg');
+            if (icon instanceof Element) {
+                icon.style.width = px;
+                icon.style.height = px;
+            }
+            if (host instanceof Element) {
+                host.style.width = px;
+                host.style.height = px;
+            }
+            if (svg instanceof SVGElement) {
+                svg.setAttribute('width', `${size}`);
+                svg.setAttribute('height', `${size}`);
+                svg.style.width = px;
+                svg.style.height = px;
+            }
+        };
 
         // Extract video ID from the URL
         const getVideoId = (url) => {
             try {
-                function youtube_parser(url) {
-                    var regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-                    var match = url.match(regExp);
-                    return (match && match[7].length == 11) ? match[7] : false;
+                const u = new URL(url, location.href);
+                const queryVideoId = u.searchParams.get('v');
+                if (queryVideoId) return queryVideoId;
+
+                const segments = u.pathname.split('/').filter(Boolean);
+                if (u.hostname.includes('youtu.be') && segments.length > 0) {
+                    return segments[0];
                 }
-                return youtube_parser(url);
+                const shortsIndex = segments.indexOf('shorts');
+                if (shortsIndex >= 0 && segments.length > shortsIndex + 1) {
+                    return segments[shortsIndex + 1];
+                }
+                const embedIndex = segments.indexOf('embed');
+                if (embedIndex >= 0 && segments.length > embedIndex + 1) {
+                    return segments[embedIndex + 1];
+                }
+                return null;
             } catch (error) {
                 console.error('Error extracting video ID:', error);
                 return null;
             }
+        };
+
+        // Remove list parms from url
+        const stripWatchList = (url) => {
+            if (!url || !lite.isQueueEnabled?.()) return url;
+            try {
+                const u = new URL(url, location.href);
+                if (getPageClass(u.toString()) !== 'watch' || !u.searchParams.has('list')) {
+                    return url;
+                }
+                // Queue owns watch order.
+                u.searchParams.delete('list');
+                return u.toString();
+            } catch (error) {
+                return url;
+            }
+        };
+
+        const getQueueItem = () => {
+            const videoData = document.querySelector('#movie_player')?.getVideoData?.();
+            if (!videoData?.video_id || !videoData?.title || !videoData?.author) {
+                lite.showQueueItemUnavailable?.();
+                return null;
+            }
+
+            const thumbnailUrl = `https://img.youtube.com/vi/${videoData.video_id}/default.jpg`;
+
+            return {
+                videoId: videoData.video_id,
+                url: location.href,
+                title: videoData.title,
+                author: videoData.author,
+                thumbnailUrl
+            };
+        };
+
+        let menuQueueItem = null;
+
+        const getNormalizedText = (root, selectors) => {
+            if (!(root instanceof Element)) return null;
+            for (const selector of selectors) {
+                const element = root.querySelector(selector);
+                const text = element?.textContent?.replace(/\s+/g, ' ').trim();
+                if (text) return text;
+            }
+            return null;
+        };
+
+        const findNearestMediaItemInfo = (origin) => {
+            if (!(origin instanceof Element)) return null;
+            let node = origin;
+            while (node && node !== document.body) {
+                const parent = node.parentElement;
+                if (!parent) return null;
+                const siblings = Array.from(parent.children);
+                const originIndex = siblings.indexOf(node);
+                let nearest = null;
+                let nearestDistance = Number.POSITIVE_INFINITY;
+                siblings.forEach((sibling, index) => {
+                    const match = sibling.matches?.('.media-item-info')
+                        ? sibling
+                        : sibling.querySelector?.('.media-item-info');
+                    if (!match) return;
+                    const distance = Math.abs(index - originIndex);
+                    if (distance < nearestDistance) {
+                        nearest = match;
+                        nearestDistance = distance;
+                    }
+                });
+                if (nearest) return nearest;
+                node = parent;
+            }
+            return null;
+        };
+
+        const getMediaMenuQueueItem = (info) => {
+            const metadataLink = info?.querySelector('.media-item-metadata a[href]');
+            const href = metadataLink?.getAttribute('href');
+            const videoId = getVideoId(href);
+            if (!href || !videoId) return null;
+
+            let u;
+            try {
+                u = new URL(href, location.origin).toString();
+            } catch (error) {
+                return null;
+            }
+
+            const title = getNormalizedText(info, [
+                '.media-item-headline .yt-core-attributed-string',
+                '.media-item-headline',
+                '.media-item-title .yt-core-attributed-string',
+                '.media-item-title',
+                'h3 .yt-core-attributed-string',
+                'h3',
+                'a[title]',
+                '.yt-core-attributed-string',
+            ]) || videoId;
+            const author = getNormalizedText(info, [
+                '.media-item-byline .yt-core-attributed-string',
+                '.media-item-byline',
+                '.secondary-text .yt-core-attributed-string',
+                '.secondary-text',
+                '.ytm-badge-and-byline-item-byline',
+                '.media-item-metadata',
+            ]) || 'Unknown author';
+
+            return {
+                videoId,
+                url: u,
+                title,
+                author,
+                thumbnailUrl: `https://img.youtube.com/vi/${videoId}/default.jpg`
+            };
+        };
+
+        const captureMenuQueueItem = (event) => {
+            const trigger = event.target.closest('.media-item-menu');
+            if (!trigger) return;
+            const info = findNearestMediaItemInfo(trigger);
+            menuQueueItem = getMediaMenuQueueItem(info);
+            // Wait for menu mount.
+            backoff(true)(() => { 
+                const bottomSheetItem = document.querySelector('.bottom-sheet-media-menu-item');
+                if (!(bottomSheetItem instanceof Element)) return false;
+                const menuContainer = resolveBottomSheetMenuContainer(bottomSheetItem);
+                if (!(menuContainer instanceof Element)) return false;
+                const items = Array.from(menuContainer.children)
+                    .filter(child => child instanceof Element && child.matches?.('[data-lite-queue-menu-item="true"]'));
+                items.forEach((node, index) => {
+                    if (index > 0) {
+                        node.remove();
+                    }
+                });
+                if (!menuQueueItem?.videoId) return true;
+                let queueMenuItem = items[0];
+                if (!(queueMenuItem instanceof Element)) {
+                    queueMenuItem = menuContainer.firstElementChild?.cloneNode(true);
+                    if (!(queueMenuItem instanceof Element)) return false;
+                    queueMenuItem.dataset.liteQueueMenuItem = 'true';
+                }
+
+                const menuButton = queueMenuItem.querySelector('button.menu-item-button') || queueMenuItem.querySelector('button');
+                const menuText = queueMenuItem.querySelector('.yt-core-attributed-string');
+                const menuSvg = queueMenuItem.querySelector('svg');
+                const menuPath = menuSvg?.querySelector('path');
+                if (!(menuButton instanceof Element) || !(menuText instanceof Element) || !(menuSvg instanceof SVGElement) || !(menuPath instanceof SVGElement)) return false;
+                menuSvg.setAttribute("viewBox", "0 -960 960 960");
+                resizeIcon(queueMenuItem);
+
+                menuText.innerText = getLocalizedText('add_to_queue');
+                menuButton.setAttribute('aria-label', getLocalizedText('add_to_queue'));
+                menuPath.setAttribute("d", "M120-320v-80h280v80H120Zm0-160v-80h440v80H120Zm0-160v-80h440v80H120Zm520 480v-160H480v-80h160v-160h80v160h160v80H720v160h-80Z");
+                bindListener(menuButton, 'click', () => {
+                    if (menuQueueItem) {
+                        lite.addToQueue(JSON.stringify(menuQueueItem));
+                    }
+                }, true);
+                if (queueMenuItem.parentElement !== menuContainer || queueMenuItem !== menuContainer.firstElementChild) {
+                    menuContainer.insertBefore(queueMenuItem, menuContainer.firstElementChild);
+                }
+                return true;
+            });
+        };
+
+        const resolveBottomSheetMenuContainer = (origin) => {
+            if (!(origin instanceof Element)) return null;
+            let node = origin;
+            while (node && node !== document.body) {
+                const directMenuItems = Array.from(node.children).filter(child =>
+                    child instanceof Element && child.tagName?.toLowerCase() === 'ytm-menu-service-item-renderer'
+                );
+                if (directMenuItems.length > 0) return node;
+                node = node.parentElement;
+            }
+            return null;
+        };
+
+        const neutralizeActionButtonBehavior = (button) => {
+            if (!(button instanceof Element)) return;
+            button.removeAttribute('href');
+            button.removeAttribute('target');
+            button.querySelectorAll('a[href]').forEach(anchor => {
+                anchor.removeAttribute('href');
+                anchor.removeAttribute('target');
+            });
         };
 
         // Extract shorts ID from the URL
@@ -139,11 +360,13 @@ try {
         // Notify Android when page loading is finished
         bindListener(window, 'onProgressChangeFinish', () => {
             lite.finishRefresh();
-            backoff(run);
+            backoff()(run);
         });
 
+        bindListener(document, 'click', captureMenuQueueItem, true);
+
         bindListener(window, 'doUpdateVisitedHistory', () => {
-            backoff(run);
+            backoff()(run);
         });
 
         // Handle player visibility based on page type
@@ -159,23 +382,23 @@ try {
         // Listen for popstate events
         bindListener(window, 'popstate', () => {
             handlePlayerVisibility();
-            backoff(run);
+            backoff()(run);
         });
 
         // Override pushState to trigger player visibility changes
         const originalPushState = history.pushState;
         history.pushState = function (data, title, url) {
-            originalPushState.call(this, data, title, url);
+            originalPushState.call(this, data, title, typeof url === 'string' ? stripWatchList(url) : url);
             handlePlayerVisibility();
-            backoff(run);
+            backoff()(run);
         };
 
         // Override replaceState to trigger player visibility changes
         const originalReplaceState = history.replaceState;
         history.replaceState = function (data, title, url) {
-            originalReplaceState.call(this, data, title, url);
+            originalReplaceState.call(this, data, title, typeof url === 'string' ? stripWatchList(url) : url);
             handlePlayerVisibility();
-            backoff(run);
+            backoff()(run);
         };
 
         const WATCH_CONTENT_WRAPPER_OFFSET = 200;
@@ -245,9 +468,9 @@ try {
             }
             if (getPageClass(targetUrl.toString()) !== 'watch') return;
 
-            const currentVideoId = getVideoId(location.href);
+            const videoId = getVideoId(location.href);
             const targetVideoId = getVideoId(targetUrl.toString());
-            if (!currentVideoId || currentVideoId !== targetVideoId) return;
+            if (!videoId || videoId !== targetVideoId) return;
 
             const timestampSeconds = parseTimestampSeconds(targetUrl.searchParams.get('t') ?? targetUrl.searchParams.get('start'));
             if (timestampSeconds == null) return;
@@ -259,11 +482,9 @@ try {
 
         bindListener(document, 'animationstart', (event) => {
             const target = event.target;
-            if (
-                event.animationName !== 'nodeInserted' ||
-                !(target instanceof Element) ||
-                !target.matches?.('ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player')
-            ) return;
+            if (event.animationName !== 'nodeInserted' || !(target instanceof Element)) return;
+
+            if (!target.matches?.('ytm-watch, #content-wrapper, #movie_player, #player-container-id, .watch-below-the-player')) return;
 
             const pageClass = getPageClass(location.href);
             const isWatch = pageClass === 'watch';
@@ -488,6 +709,7 @@ try {
                     if (!actionBar.querySelector('#downloadButton')) {
                         const downloadButton = saveButton.cloneNode(true);
                         downloadButton.id = 'downloadButton';
+                        neutralizeActionButtonBehavior(downloadButton);
                         const textContent = downloadButton.querySelector('.yt-spec-button-shape-next__button-text-content');
                         if (textContent) {
                             textContent.innerText = getLocalizedText('download');
@@ -497,17 +719,21 @@ try {
                             svg.setAttribute("viewBox", "0 -960 960 960");
                             const path = svg.querySelector('path');
                             if (path) {
-                                path.setAttribute("d", "M480-328.46 309.23-499.23l42.16-43.38L450-444v-336h60v336l98.61-98.61 42.16 43.38L480-328.46ZM252.31-180Q222-180 201-201q-21-21-21-51.31v-108.46h60v108.46q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85h455.38q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46v-108.46h60v108.46Q780-222 759-201q-21 21-51.31 21H252.31Z");
+                                path.setAttribute("d", "M480-336 288-528l51-51 105 105v-246h72v246l105-105 51 51-192 192ZM264-192q-30 0-51-21t-21-51v-72h72v72h432v-72h72v72q0 30-21 51t-51 21H264Z");
                             }
-                            bindListener(downloadButton, 'click', () => {
+                            resizeIcon(downloadButton);
+                            bindListener(downloadButton, 'click', (event) => {
+                                event.preventDefault();
+                                event.stopImmediatePropagation();
                                 lite.download(location.href)
-                            });
+                            }, true);
                             actionBar.insertBefore(downloadButton, saveButton);
                         }
                     }
                     if (!actionBar.querySelector('#queueButton')) {
                         const queueButton = saveButton.cloneNode(true);
                         queueButton.id = 'queueButton';
+                        neutralizeActionButtonBehavior(queueButton);
                         const queueText = queueButton.querySelector('.yt-spec-button-shape-next__button-text-content');
                         if (queueText) {
                             queueText.innerText = getLocalizedText('add_to_queue');
@@ -519,23 +745,15 @@ try {
                             if (queuePath) {
                                 queuePath.setAttribute("d", "M120-320v-80h280v80H120Zm0-160v-80h440v80H120Zm0-160v-80h440v80H120Zm520 480v-160H480v-80h160v-160h80v160h160v80H720v160h-80Z");
                             }
-                            bindListener(queueButton, 'click', () => {
-                                const playerDetails = globalThis.ytInitialPlayerResponse?.videoDetails ?? {};
-                                const videoId = getVideoId(location.href);
-                                const thumbnails = playerDetails.thumbnail?.thumbnails;
-                                const thumbnailUrl = Array.isArray(thumbnails) && thumbnails.length > 0
-                                    ? thumbnails[thumbnails.length - 1]?.url
-                                    : document.querySelector('meta[property=\"og:image\"]')?.content ?? null;
-                                if (videoId) {
-                                    lite.addToQueue(JSON.stringify({
-                                        videoId,
-                                        url: location.href,
-                                        title: playerDetails.title ?? document.title,
-                                        author: playerDetails.author ?? '',
-                                        thumbnailUrl
-                                    }));
+                            resizeIcon(queueButton);
+                            bindListener(queueButton, 'click', (event) => {
+                                event.preventDefault();
+                                event.stopImmediatePropagation();
+                                const queueItem = getQueueItem();
+                                if (queueItem) {
+                                    lite.addToQueue(JSON.stringify(queueItem));
                                 }
-                            });
+                            }, true);
                             actionBar.insertBefore(queueButton, saveButton);
                         }
                     }
@@ -585,8 +803,9 @@ try {
                     svg.setAttribute("viewBox", "0 -960 960 960");
                     const path = svg.querySelector('path');
                     if (path) {
-                        path.setAttribute("d", "M480-336 288-528l51-51 105 105v-342h72v342l105-105 51 51-192 192ZM263.72-192Q234-192 213-213.15T192-264v-72h72v72h432v-72h72v72q0 29.7-21.16 50.85Q725.68-192 695.96-192H263.72Z");
+                        path.setAttribute("d", "M480-336 288-528l51-51 105 105v-246h72v246l105-105 51 51-192 192ZM264-192q-30 0-51-21t-21-51v-72h72v72h432v-72h72v72q0 30-21 51t-51 21H264Z");
                     }
+                    resizeIcon(downloadButton);
                 }
                 bindListener(downloadButton, 'click', () => {
                     lite.download();
@@ -666,11 +885,19 @@ try {
                 const url = href.startsWith('http')
                     ? href
                     : 'https://m.youtube.com' + href;
-                const c = getPageClass(url);
-                if (c !== getPageClass(location.href)) {
+                const nextUrl = stripWatchList(url);
+                const c = getPageClass(nextUrl);
+                const pageClass = getPageClass(location.href);
+                if (nextUrl !== url && c === pageClass && c === 'watch') {
                     e.preventDefault();
                     e.stopImmediatePropagation();
-                    lite.openTab(url, c);
+                    location.href = nextUrl;
+                    return;
+                }
+                if (c !== pageClass) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    lite.openTab(nextUrl, c);
                 }
             },
             true

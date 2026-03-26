@@ -97,10 +97,6 @@ public final class ControllerMachine {
 		return toRenderState(state, isBuffering, isZoomed);
 	}
 
-	public ControllerState currentState() {
-		return state;
-	}
-
 	private static RenderState toRenderState(final ControllerState state,
 	                                         final boolean isBuffering,
 	                                         final boolean isZoomed) {

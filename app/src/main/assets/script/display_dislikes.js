@@ -1,5 +1,5 @@
 (function () {
-  const preferences = JSON.parse(android.getPreferences() || "{}");
+  const preferences = JSON.parse(lite.getPreferences() || "{}");
   if (!preferences.enable_display_dislikes || window.returnDislikeInjected) return;
 
   const STATE_LIKED = "LIKED_STATE";
