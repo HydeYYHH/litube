@@ -85,6 +85,18 @@ public final class MiniPlayerLayout {
 		return Math.min(Math.max(translationPx, minTranslation), maxTranslation);
 	}
 
+	static float snapX(final float translationPx,
+	                   final int layoutStartPx,
+	                   final int viewSizePx,
+	                   final int parentSizePx) {
+		final float minTranslation = -layoutStartPx;
+		final float maxTranslation = Math.max(minTranslation, parentSizePx - viewSizePx - layoutStartPx);
+		final float clampedTranslation = clampTranslation(translationPx, layoutStartPx, viewSizePx, parentSizePx);
+		return Math.abs(clampedTranslation - minTranslation) <= Math.abs(maxTranslation - clampedTranslation)
+						? minTranslation
+						: maxTranslation;
+	}
+
 	private static int clamp(int value, int min, int max) {
 		return Math.min(Math.max(value, min), max);
 	}

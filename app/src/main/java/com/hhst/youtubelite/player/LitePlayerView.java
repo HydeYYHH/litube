@@ -14,7 +14,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver;
-import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -63,7 +63,7 @@ public class LitePlayerView extends PlayerView {
 	private static final int MINI_CONTROL_DEFAULT_SPACE_DP = 18;
 	private static final int MINI_SIDE_CONTROL_SIZE_DP = 30;
 	private static final int MINI_CENTER_CONTROL_SIZE_DP = 34;
-	private static final long MINI_TRANSITION_MS = 220L;
+	private static final long MINI_TRANSITION_MS = 260L;
 	private static final int[] MINI_PLAYER_TAP_TARGET_IDS = {
 					R.id.btn_mini_queue,
 					R.id.btn_mini_close,
@@ -171,7 +171,7 @@ public class LitePlayerView extends PlayerView {
 		if (layoutParams instanceof ConstraintLayout.LayoutParams params) {
 			if (inAppMiniPlayer && !fullscreen) {
 				applyMiniPlayerLayout(params);
-				applySavedMiniPlayerTranslation();
+				restoreMini();
 				miniPlayerTranslationStashedForFullscreen = false;
 				return;
 			}
@@ -305,7 +305,7 @@ public class LitePlayerView extends PlayerView {
 					clearMiniPlayerPendingTapTarget();
 				}
 				if (miniPlayerDragging) {
-					updateMiniPlayerTranslation(
+					moveMini(
 									miniPlayerStartTranslationX + deltaX,
 									miniPlayerStartTranslationY + deltaY);
 				}
@@ -313,23 +313,24 @@ public class LitePlayerView extends PlayerView {
 			}
 			case MotionEvent.ACTION_POINTER_UP -> {
 				if (!miniPlayerResizing) return miniPlayerTouchCaptured;
-				finishMiniPlayerResize();
+				finishMiniResize();
 				return true;
 			}
 			case MotionEvent.ACTION_UP -> {
 				if (miniPlayerResizing) {
-					finishMiniPlayerResize();
+					finishMiniResize();
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
-				final View pendingTapTarget = miniPlayerPendingTapTarget;
+				final View tap = miniPlayerPendingTapTarget;
 				final boolean wasDragging = miniPlayerDragging;
 				resetMiniPlayerTouchTracking();
 				if (wasDragging) {
+					snapMini();
 					return true;
 				}
-				if (pendingTapTarget != null) {
-					pendingTapTarget.performClick();
+				if (tap != null) {
+					tap.performClick();
 				} else if (onMiniPlayerBackgroundTap != null) {
 					onMiniPlayerBackgroundTap.run();
 				}
@@ -337,11 +338,15 @@ public class LitePlayerView extends PlayerView {
 			}
 			case MotionEvent.ACTION_CANCEL -> {
 				if (miniPlayerResizing) {
-					finishMiniPlayerResize();
+					finishMiniResize();
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
+				final boolean wasDragging = miniPlayerDragging;
 				resetMiniPlayerTouchTracking();
+				if (wasDragging) {
+					snapMini();
+				}
 				return true;
 			}
 			default -> {
@@ -396,7 +401,7 @@ public class LitePlayerView extends PlayerView {
 								.scaleX(1.0f)
 								.scaleY(1.0f)
 								.setDuration(MINI_TRANSITION_MS)
-								.setInterpolator(new DecelerateInterpolator(1.4f))
+								.setInterpolator(new OvershootInterpolator(0.7f))
 								.withLayer()
 								.withEndAction(() -> finishMiniTransition(token))
 								.start();
@@ -499,6 +504,7 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	private void captureMiniPlayerTouchStart(@NonNull final MotionEvent event) {
+		animate().cancel();
 		miniPlayerTouchCaptured = true;
 		miniPlayerDragging = false;
 		miniPlayerResizing = false;
@@ -548,11 +554,12 @@ public class LitePlayerView extends PlayerView {
 		params.width = nextWidthPx;
 		params.height = nextHeightPx;
 		setLayoutParams(params);
-		applySavedMiniPlayerTranslation();
+		restoreMini();
 	}
 
-	private void finishMiniPlayerResize() {
+	private void finishMiniResize() {
 		resetMiniPlayerTouchTracking();
+		snapMini();
 	}
 
 	private void updateMiniPlayerControlSpacing(final int currentWidthDp) {
@@ -582,13 +589,47 @@ public class LitePlayerView extends PlayerView {
 		space.setLayoutParams(params);
 	}
 
-	private void updateMiniPlayerTranslation(final float translationX, final float translationY) {
-		if (!(getParent() instanceof View parent)) return;
-		miniPlayerSavedTranslationX = MiniPlayerLayout.clampTranslation(translationX, getLeft(), getWidth(), parent.getWidth());
-		miniPlayerSavedTranslationY = MiniPlayerLayout.clampTranslation(translationY, getTop(), getHeight(), parent.getHeight());
+	private boolean moveMini(final float x, final float y) {
+		if (!(getParent() instanceof View parent)) return false;
+		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return false;
+		final int width = params.width > 0 ? params.width : getWidth();
+		final int height = params.height > 0 ? params.height : getHeight();
+		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) return false;
+		final int left = parent.getWidth() - params.rightMargin - width;
+		final int top = parent.getHeight() - params.bottomMargin - height;
+		miniPlayerSavedTranslationX = MiniPlayerLayout.clampTranslation(x, left, width, parent.getWidth());
+		miniPlayerSavedTranslationY = MiniPlayerLayout.clampTranslation(y, top, height, parent.getHeight());
 		setTranslationX(miniPlayerSavedTranslationX);
 		setTranslationY(miniPlayerSavedTranslationY);
-		persistMiniPlayerLayoutState();
+		return true;
+	}
+
+	private void snapMini() {
+		if (!(getParent() instanceof View parent)) return;
+		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return;
+		final int width = params.width > 0 ? params.width : getWidth();
+		final int height = params.height > 0 ? params.height : getHeight();
+		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) return;
+		final int left = parent.getWidth() - params.rightMargin - width;
+		final int top = parent.getHeight() - params.bottomMargin - height;
+		final float x = MiniPlayerLayout.snapX(getTranslationX(), left, width, parent.getWidth());
+		final float y = MiniPlayerLayout.clampTranslation(getTranslationY(), top, height, parent.getHeight());
+		miniPlayerSavedTranslationX = x;
+		miniPlayerSavedTranslationY = y;
+		animate().cancel();
+		setTranslationY(y);
+		if (Math.abs(getTranslationX() - x) < 0.5f && Math.abs(getTranslationY() - y) < 0.5f) {
+			setTranslationX(x);
+			persistMiniPlayerLayoutState();
+			return;
+		}
+		animate()
+						.translationX(x)
+						.setDuration(MINI_TRANSITION_MS)
+						.setInterpolator(new OvershootInterpolator(0.7f))
+						.withLayer()
+						.withEndAction(this::persistMiniPlayerLayoutState)
+						.start();
 	}
 
 	private void loadPersistedMiniPlayerLayoutState() {
@@ -642,16 +683,26 @@ public class LitePlayerView extends PlayerView {
 		miniPlayerSavedTranslationY = getTranslationY();
 	}
 
-	private void applySavedMiniPlayerTranslation() {
-		post(() -> {
-			if (!inAppMiniPlayer || !isAttachedToWindow()) return;
-			if (!(getParent() instanceof View parent)) return;
-			if (getWidth() <= 0 || getHeight() <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) {
-				post(this::applySavedMiniPlayerTranslation);
-				return;
-			}
-			updateMiniPlayerTranslation(miniPlayerSavedTranslationX, miniPlayerSavedTranslationY);
-		});
+	private void restoreMini() {
+		if (!inAppMiniPlayer || !isAttachedToWindow()) return;
+		if (!(getParent() instanceof View parent)) {
+			post(this::restoreMini);
+			return;
+		}
+		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return;
+		final int width = params.width > 0 ? params.width : getWidth();
+		final int height = params.height > 0 ? params.height : getHeight();
+		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) {
+			post(this::restoreMini);
+			return;
+		}
+		final int left = parent.getWidth() - params.rightMargin - width;
+		miniPlayerSavedTranslationX = MiniPlayerLayout.snapX(miniPlayerSavedTranslationX, left, width, parent.getWidth());
+		if (!moveMini(miniPlayerSavedTranslationX, miniPlayerSavedTranslationY)) {
+			post(this::restoreMini);
+			return;
+		}
+		persistMiniPlayerLayoutState();
 	}
 
 	private int resolveScreenWidthDp() {
