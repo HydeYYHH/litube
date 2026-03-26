@@ -65,4 +65,17 @@ public class EngineQueueRoutingTest {
 		assertTrue(Engine.shouldUseWebPlaylistForShuffle(availability));
 		assertTrue(Engine.shouldUseWebPlaylistForPrevious(availability));
 	}
+
+	@Test
+	public void previous_keepsQueueRoutingBlockedWhenWatchPrevExists() {
+		final QueueNav availability = watch();
+
+		assertTrue(availability.isPreviousActionEnabled());
+		assertFalse(Engine.shouldUseQueueForPrevious(availability));
+		assertFalse(Engine.shouldUseWebPlaylistForPrevious(availability));
+	}
+
+	private static QueueNav watch() {
+		return QueueNav.from(true, true, true, true, false, true);
+	}
 }

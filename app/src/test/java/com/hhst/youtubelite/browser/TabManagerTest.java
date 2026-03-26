@@ -1,12 +1,12 @@
 package com.hhst.youtubelite.browser;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -79,23 +79,19 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void shouldSuspendCurrentWatchOnBack_returnsTrueWhenBackWouldLeaveWatch() {
+	public void shouldSuspendCurrentWatchOnBack_returnsTrueForWatchSession() {
 		assertTrue(TabManager.shouldSuspendCurrentWatchOnBack(
 						Constant.PAGE_WATCH,
-						UrlUtils.PAGE_CHANNEL,
-						true,
 						true,
 						true));
 	}
 
 	@Test
-	public void shouldSuspendCurrentWatchOnBack_returnsFalseWhenBackStaysWithinWatch() {
+	public void shouldSuspendCurrentWatchOnBack_returnsFalseWhenSessionIsNotSuspendable() {
 		assertFalse(TabManager.shouldSuspendCurrentWatchOnBack(
 						Constant.PAGE_WATCH,
-						Constant.PAGE_WATCH,
 						true,
-						true,
-						true));
+						false));
 	}
 
 	@Test
@@ -298,6 +294,33 @@ public class TabManagerTest {
 	}
 
 	@Test
+	public void playPrevWatch_skipsNonWatchHistoryAndReusesPlaybackSession() throws Exception {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		final QueueWarmer warmer = mock(QueueWarmer.class);
+		final TabManager tabManager = createTabManager(player, extensionManager, warmer);
+		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=now", Constant.PAGE_WATCH);
+		final YoutubeWebview webview = mock(YoutubeWebview.class);
+		final WebBackForwardList hist = mock(WebBackForwardList.class);
+		final WebHistoryItem results = mock(WebHistoryItem.class);
+		final WebHistoryItem old = mock(WebHistoryItem.class);
+		setField(watch, "webview", webview);
+		seedTabs(tabManager, watch);
+		when(hist.getCurrentIndex()).thenReturn(2);
+		when(hist.getItemAtIndex(1)).thenReturn(results);
+		when(hist.getItemAtIndex(0)).thenReturn(old);
+		when(results.getUrl()).thenReturn("https://m.youtube.com/results?search_query=test");
+		when(old.getUrl()).thenReturn("https://m.youtube.com/watch?v=old");
+		when(webview.copyBackForwardList()).thenReturn(hist);
+
+		assertTrue(tabManager.playPrevWatch());
+
+		verify(warmer).prioritizeUrl("https://m.youtube.com/watch?v=old");
+		verify(player).play("https://m.youtube.com/watch?v=old");
+		verify(webview).loadUrl("https://m.youtube.com/watch?v=old");
+	}
+
+	@Test
 	public void evaluateJavascriptForPlayback_skipsExecutionWhenNoWatchSessionExists() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
@@ -379,7 +402,7 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void goBack_prefersLiveWebViewWatchHistoryOverStaleSnapshot() throws Exception {
+	public void goBack_withWatchHistoryStillSuspendsIntoMiniPlayer() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -406,9 +429,10 @@ public class TabManagerTest {
 
 		assertTrue(tabManager.goBack());
 
-		verify(player, never()).enterInAppMiniPlayer();
-		verify(webview).goBack();
-		assertNull(getSuspendedWatch(tabManager));
+		verify(player).enterInAppMiniPlayer();
+		verify(webview, never()).goBack();
+		assertEquals(Constant.HOME_URL, getCurrentTab(tabManager).getUrl());
+		assertSame(watch, getSuspendedWatch(tabManager));
 	}
 
 	@Test

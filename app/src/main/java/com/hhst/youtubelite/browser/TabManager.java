@@ -219,6 +219,17 @@ public class TabManager {
 		openTab(url, UrlUtils.getPageClass(url));
 	}
 
+	public boolean hasPrevWatch() {
+		return prevWatch() != null;
+	}
+
+	public boolean playPrevWatch() {
+		final Page prev = prevWatch();
+		if (prev == null) return false;
+		playInPlaybackSession(prev.url());
+		return true;
+	}
+
 	@Nullable
 	public String getPlaybackSessionUrl() {
 		if (isWatchSession(suspendedWatchFragment)) {
@@ -263,27 +274,24 @@ public class TabManager {
 	public boolean goBack() {
 		if (tab == null) return false;
 		final YoutubeWebview webview = getWebview();
-		final String previousHistoryUrl = getPreviousHistoryUrl(webview);
-		final String previousHistoryTag = previousHistoryUrl != null
-						? UrlUtils.getPageClass(previousHistoryUrl)
-						: null;
+		final Page prev = prev(tab);
 		final boolean hasBackStack = tabs.size() > 1;
 		if (shouldSuspendCurrentWatchOnBack(
 						tab.getMTag(),
-						previousHistoryTag,
-						hasBackStack,
 						extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER),
 						player.get().isSuspendableWatchSession())) {
-			final YoutubeFragment previousTab = getPreviousTab();
-			if (previousHistoryUrl != null
-							&& (previousTab == null || !previousHistoryUrl.equals(previousTab.getUrl()))) {
-				openTab(previousHistoryUrl, previousHistoryTag);
+			// Watch back folds first.
+			final YoutubeFragment prevTab = getPreviousTab();
+			if (prev != null
+							&& !Constant.PAGE_WATCH.equals(prev.tag())
+							&& (prevTab == null || !prev.url().equals(prevTab.getUrl()))) {
+				openTab(prev.url(), prev.tag());
 				return true;
 			}
 			final FragmentTransaction ft = getFm().beginTransaction();
 			suspendCurrentWatch(ft);
-			tab = previousTab;
-			if (tab != null) ft.show(tab);
+			tab = prevTab != null ? prevTab : home(ft);
+			ft.show(tab);
 			commitAndRun(ft, () -> {
 				enterMiniPlayer();
 				onTabChanged();
@@ -366,15 +374,62 @@ public class TabManager {
 	}
 
 	@Nullable
-	private String getPreviousHistoryUrl(@Nullable final YoutubeWebview webview) {
-		final WebBackForwardList history = webview != null
-						? webview.copyBackForwardList()
-						: tab != null ? tab.getHistorySnapshot() : null;
-		if (history == null) return null;
-		final int currentIndex = history.getCurrentIndex();
-		if (currentIndex <= 0) return null;
-		final WebHistoryItem previousItem = history.getItemAtIndex(currentIndex - 1);
-		return previousItem != null ? previousItem.getUrl() : null;
+	private YoutubeFragment playback() {
+		if (isWatchSession(suspendedWatchFragment)) {
+			return suspendedWatchFragment;
+		}
+		return isWatchSession(tab) ? tab : null;
+	}
+
+	@NonNull
+	private YoutubeFragment home(@NonNull final FragmentTransaction ft) {
+		for (final YoutubeFragment frag : tabs) {
+			if (Constant.PAGE_HOME.equals(frag.getMTag())) {
+				return frag;
+			}
+		}
+		final YoutubeFragment home = createFragment(Constant.HOME_URL, Constant.PAGE_HOME);
+		tabs.offerFirst(home);
+		ft.add(R.id.fragment_container, home, Constant.PAGE_HOME);
+		return home;
+	}
+
+	@Nullable
+	private Page prev(@Nullable final YoutubeFragment frag) {
+		final WebBackForwardList hist = history(frag);
+		if (hist == null) return null;
+		final int i = hist.getCurrentIndex() - 1;
+		if (i < 0) return null;
+		final WebHistoryItem item = hist.getItemAtIndex(i);
+		return item != null ? page(item.getUrl()) : null;
+	}
+
+	@Nullable
+	private Page prevWatch() {
+		final WebBackForwardList hist = history(playback());
+		if (hist == null) return null;
+		for (int i = hist.getCurrentIndex() - 1; i >= 0; i--) {
+			// Skip non-watch items.
+			final WebHistoryItem item = hist.getItemAtIndex(i);
+			final Page page = item != null ? page(item.getUrl()) : null;
+			if (page != null && Constant.PAGE_WATCH.equals(page.tag())) {
+				return page;
+			}
+		}
+		return null;
+	}
+
+	@Nullable
+	private WebBackForwardList history(@Nullable final YoutubeFragment frag) {
+		if (frag == null) return null;
+		final YoutubeWebview webview = frag.getWebview();
+		return webview != null ? webview.copyBackForwardList() : frag.getHistorySnapshot();
+	}
+
+	@Nullable
+	private Page page(@Nullable final String url) {
+		if (url == null) return null;
+		return new Page(url, UrlUtils.getPageClass(url));
 	}
 
 	static boolean shouldSuspendCurrentWatch(@Nullable final String currentTag,
@@ -393,19 +448,13 @@ public class TabManager {
 	}
 
 	static boolean shouldSuspendCurrentWatchOnBack(@Nullable final String currentTag,
-	                                               @Nullable final String previousHistoryTag,
-	                                               final boolean hasTabBackStack,
 	                                               final boolean inAppMiniPlayerEnabled,
 	                                               final boolean suspendableWatchSession) {
-		if (!Constant.PAGE_WATCH.equals(currentTag)
-						|| !inAppMiniPlayerEnabled
-						|| !suspendableWatchSession) {
-			return false;
-		}
-		if (previousHistoryTag != null) {
-			return !Constant.PAGE_WATCH.equals(previousHistoryTag);
-		}
-		return hasTabBackStack;
+		return Constant.PAGE_WATCH.equals(currentTag)
+						&& inAppMiniPlayerEnabled
+						&& suspendableWatchSession;
 	}
 
+	private record Page(String url, String tag) {
+	}
 }

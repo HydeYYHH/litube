@@ -63,4 +63,17 @@ public class QueueNavTest {
 		assertFalse(availability.isNextActionEnabled());
 		assertFalse(availability.isPreviousActionEnabled());
 	}
+
+	@Test
+	public void availability_keepsPreviousEnabledWhenWatchPrevExists() {
+		final QueueNav availability = watch();
+
+		assertFalse(availability.usesQueueForPrevious());
+		assertTrue(availability.hasPrevWatch());
+		assertTrue(availability.isPreviousActionEnabled());
+	}
+
+	private static QueueNav watch() {
+		return QueueNav.from(true, true, true, true, false, true);
+	}
 }

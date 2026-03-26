@@ -1,25 +1,14 @@
 package com.hhst.youtubelite.player.queue;
 
-public enum QueueNav {
-	INACTIVE(false, false, false, false),
-	ACTIVE_WITH_PREVIOUS(true, true, true, true),
-	ACTIVE_WITHOUT_PREVIOUS(true, true, true, false),
-	ACTIVE_WITHOUT_PREVIOUS_OR_NEXT(true, false, true, false);
-
-	private final boolean queueActive;
-	private final boolean nextAndShuffleAvailable;
-	private final boolean shuffleAvailable;
-	private final boolean previousAvailable;
-
-	QueueNav(final boolean queueActive,
-	         final boolean nextAndShuffleAvailable,
-	         final boolean shuffleAvailable,
-	         final boolean previousAvailable) {
-		this.queueActive = queueActive;
-		this.nextAndShuffleAvailable = nextAndShuffleAvailable;
-		this.shuffleAvailable = shuffleAvailable;
-		this.previousAvailable = previousAvailable;
-	}
+public record QueueNav(boolean queue,
+                       boolean next,
+                       boolean shuffle,
+                       boolean qPrev,
+                       boolean prev) {
+	public static final QueueNav INACTIVE = new QueueNav(false, false, false, false, false);
+	public static final QueueNav ACTIVE_WITH_PREVIOUS = new QueueNav(true, true, true, true, false);
+	public static final QueueNav ACTIVE_WITHOUT_PREVIOUS = new QueueNav(true, true, true, false, false);
+	public static final QueueNav ACTIVE_WITHOUT_PREVIOUS_OR_NEXT = new QueueNav(true, false, true, false, false);
 
 	public static QueueNav from(final boolean enabled,
 	                            final boolean hasItems,
@@ -41,23 +30,40 @@ public enum QueueNav {
 		return ACTIVE_WITH_PREVIOUS;
 	}
 
+	public static QueueNav from(final boolean enabled,
+	                            final boolean hasItems,
+	                            final boolean inQueue,
+	                            final boolean atHead,
+	                            final boolean atTail,
+	                            final boolean prev) {
+		return from(enabled, hasItems, inQueue, atHead, atTail).withPrev(prev);
+	}
+
+	public QueueNav withPrev(final boolean prev) {
+		return this.prev == prev ? this : new QueueNav(queue, next, shuffle, qPrev, prev);
+	}
+
 	public boolean usesQueueForNext() {
-		return queueActive && nextAndShuffleAvailable;
+		return queue && next;
 	}
 
 	public boolean usesQueueForShuffle() {
-		return queueActive && shuffleAvailable;
+		return queue && shuffle;
 	}
 
 	public boolean usesQueueForPrevious() {
-		return queueActive && previousAvailable;
+		return queue && qPrev;
+	}
+
+	public boolean hasPrevWatch() {
+		return prev;
 	}
 
 	public boolean isNextActionEnabled() {
-		return !queueActive || nextAndShuffleAvailable;
+		return !queue || next;
 	}
 
 	public boolean isPreviousActionEnabled() {
-		return !queueActive || previousAvailable;
+		return !queue || qPrev || prev;
 	}
 }

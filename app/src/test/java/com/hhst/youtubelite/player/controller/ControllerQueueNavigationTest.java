@@ -40,4 +40,16 @@ public class ControllerQueueNavigationTest {
 		assertEquals(1.0f, Controller.nextButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS), 0.0f);
 		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.nextButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS_OR_NEXT), 0.0f);
 	}
+
+	@Test
+	public void shouldEnablePrevious_keepsWatchPrevEnabled() {
+		final QueueNav availability = watch();
+
+		assertTrue(Controller.shouldEnablePrevious(availability));
+		assertEquals(1.0f, Controller.previousButtonAlpha(availability), 0.0f);
+	}
+
+	private static QueueNav watch() {
+		return QueueNav.from(true, true, true, true, false, true);
+	}
 }

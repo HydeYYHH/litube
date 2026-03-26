@@ -215,6 +215,18 @@ public class LitePlayerTest {
 	}
 
 	@Test
+	public void attachPlaybackService_refreshesWatchPrevAvailability() {
+		final PlaybackService playbackService = mock(PlaybackService.class);
+		final QueueNav availability = watch();
+		when(engine.getQueueNavigationAvailability()).thenReturn(availability);
+
+		player.attachPlaybackService(playbackService);
+
+		verify(controller).refreshQueueNavigationAvailability(availability);
+		verify(playbackService).updateQueueNavigationAvailability(availability);
+	}
+
+	@Test
 	public void pause_delegatesToEngine() {
 		player.pause();
 
@@ -656,6 +668,10 @@ public class LitePlayerTest {
 		final PlaybackException error = mock(PlaybackException.class);
 		when(error.getCause()).thenReturn(cause);
 		return error;
+	}
+
+	private static QueueNav watch() {
+		return QueueNav.from(true, true, true, true, false, true);
 	}
 
 	private static void setField(final Object target, final String fieldName, final Object value) throws Exception {

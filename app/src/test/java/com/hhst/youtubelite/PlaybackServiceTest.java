@@ -52,7 +52,18 @@ public class PlaybackServiceTest {
 				PlaybackStateCompat.ACTION_SKIP_TO_NEXT));
 	}
 
+	@Test
+	public void playbackActions_includeSkipToPreviousWhenWatchPrevExists() {
+		final long actions = PlaybackService.playbackActionsFor(watch());
+
+		assertTrue(hasAction(actions, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS));
+	}
+
 	private static boolean hasAction(final long actions, final long action) {
 		return (actions & action) != 0L;
+	}
+
+	private static QueueNav watch() {
+		return QueueNav.from(true, true, true, true, false, true);
 	}
 }

@@ -403,7 +403,7 @@ public class Engine {
 			return;
 		}
 		if (shouldUseWebPlaylistForNext(availability)) {
-			skipByPlaylistOffset(1);
+			skipByPlaylistOffset(1, null);
 		}
 	}
 
@@ -414,8 +414,10 @@ public class Engine {
 			return;
 		}
 		if (shouldUseWebPlaylistForPrevious(availability)) {
-			skipByPlaylistOffset(-1);
+			skipByPlaylistOffset(-1, this::navigatePrevWatch);
+			return;
 		}
+		navigatePrevWatch();
 	}
 
 	public void playRandomPlaylistItem() {
@@ -429,8 +431,13 @@ public class Engine {
 		}
 	}
 
-	private void skipByPlaylistOffset(final int playlistOffset) {
-		this.tabManager.evaluateJavascriptForPlayback(buildPlaylistNavigationScript(playlistOffset), null);
+	private void skipByPlaylistOffset(final int playlistOffset, @Nullable final Runnable miss) {
+		this.tabManager.evaluateJavascriptForPlayback(
+						buildPlaylistNavigationScript(playlistOffset),
+						miss == null ? null : value -> {
+							// JS returns a quoted token.
+							if (!didNavigate(value)) miss.run();
+						});
 	}
 
 	private void navigateWithinQueue(final int offset) {
@@ -447,6 +454,10 @@ public class Engine {
 		tabManager.playInPlaybackSession(item.getUrl());
 	}
 
+	private void navigatePrevWatch() {
+		tabManager.playPrevWatch();
+	}
+
 	@NonNull
 	public QueueNav getQueueNavigationAvailability() {
 		final boolean inQueue = queueRepository.containsVideo(vid);
@@ -455,7 +466,8 @@ public class Engine {
 						queueRepository.hasItems(),
 						inQueue,
 						inQueue && queueRepository.findRelative(vid, -1) == null,
-						inQueue && queueRepository.findRelative(vid, 1) == null);
+						inQueue && queueRepository.findRelative(vid, 1) == null)
+						.withPrev(tabManager.hasPrevWatch());
 	}
 
 	@NonNull
@@ -464,7 +476,6 @@ public class Engine {
 	                                                   final boolean inQueue,
 	                                                   final boolean atHead,
 	                                                   final boolean atTail) {
-		// Prev dies outside queue.
 		return QueueNav.from(
 				queueEnabled,
 				hasQueueItems,
@@ -486,15 +497,19 @@ public class Engine {
 	}
 
 	static boolean shouldUseWebPlaylistForNext(@NonNull final QueueNav availability) {
-		return availability == QueueNav.INACTIVE;
+		return !availability.queue();
 	}
 
 	static boolean shouldUseWebPlaylistForShuffle(@NonNull final QueueNav availability) {
-		return availability == QueueNav.INACTIVE;
+		return !availability.queue();
 	}
 
 	static boolean shouldUseWebPlaylistForPrevious(@NonNull final QueueNav availability) {
-		return availability == QueueNav.INACTIVE;
+		return !availability.queue();
+	}
+
+	static boolean didNavigate(@Nullable final String value) {
+		return "\"navigating\"".equals(value);
 	}
 
 	@Nullable
