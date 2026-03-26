@@ -5,11 +5,12 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.apache.commons.io.IOUtils;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+
+import okio.Okio;
+import okio.BufferedSource;
 
 public final class StreamIOUtils {
 
@@ -21,8 +22,8 @@ public final class StreamIOUtils {
 	 */
 	@Nullable
 	public static String readInputStream(@NonNull final InputStream inputStream) {
-		try (inputStream) {
-			return IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+		try (BufferedSource source = Okio.buffer(Okio.source(inputStream))) {
+			return source.readString(StandardCharsets.UTF_8);
 		} catch (final IOException e) {
 			Log.e("StreamIOUtils", "Error reading input stream", e);
 			return null;
@@ -37,8 +38,8 @@ public final class StreamIOUtils {
 	 */
 	@NonNull
 	public static byte[] readInputStreamToBytes(@NonNull final InputStream inputStream) {
-		try (inputStream) {
-			return IOUtils.toByteArray(inputStream);
+		try (BufferedSource source = Okio.buffer(Okio.source(inputStream))) {
+			return source.readByteArray();
 		} catch (final IOException e) {
 			Log.e("StreamIOUtils", "Error reading input stream to bytes", e);
 			return new byte[0];

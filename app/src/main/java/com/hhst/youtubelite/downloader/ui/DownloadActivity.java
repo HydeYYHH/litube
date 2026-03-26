@@ -36,6 +36,8 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -49,9 +51,6 @@ import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
 import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
-import com.squareup.picasso.Picasso;
-
-import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -268,7 +267,10 @@ public class DownloadActivity extends AppCompatActivity {
                     if (isBound) {
                         for (DownloadRecord r : targets) {
                             downloadService.cancel(r.getTaskId());
-                            if (cb.isChecked()) FileUtils.deleteQuietly(new File(r.getOutputPath()));
+                            if (cb.isChecked()) {
+                                File file = new File(r.getOutputPath());
+                                if (file.exists()) file.delete();
+                            }
                             historyRepository.remove(r.getTaskId());
                         }
                     }
@@ -304,7 +306,8 @@ public class DownloadActivity extends AppCompatActivity {
                     .setPositiveButton("Delete", (d, w) -> {
                         if (isBound) downloadService.cancelByPrefix(prefix);
                         for (DownloadRecord r : c) {
-                            FileUtils.deleteQuietly(new File(r.getOutputPath()));
+                            File file = new File(r.getOutputPath());
+                            if (file.exists()) file.delete();
                             historyRepository.remove(r.getTaskId());
                         }
                         loadRecords();
@@ -432,7 +435,12 @@ public class DownloadActivity extends AppCompatActivity {
             void bind(FolderHeader f, Actions a) {
                 title.setText(f.name);
                 subtitle.setText(itemView.getContext().getString(R.string.videos_count, f.children.size()));
-                if (!f.children.isEmpty()) Picasso.get().load("https://i.ytimg.com/vi/" + f.children.get(0).getVid().split(":")[0] + "/mqdefault.jpg").into(icon);
+                if (!f.children.isEmpty()) {
+                    Glide.with(itemView.getContext())
+                            .load("https://i.ytimg.com/vi/" + f.children.get(0).getVid().split(":")[0] + "/mqdefault.jpg")
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .into(icon);
+                }
                 itemView.setOnClickListener(v -> a.onOpenFolder(f.name));
                 more.setOnClickListener(v -> {
                     PopupMenu p = new PopupMenu(v.getContext(), v); p.getMenu().add("Delete");
@@ -455,7 +463,10 @@ public class DownloadActivity extends AppCompatActivity {
                 if (fn.startsWith("Playlist_") && fn.contains(" - ")) fn = fn.substring(fn.indexOf(" - ") + 3);
                 title.setText(fn);
                 updateProgressUI(r);
-                Picasso.get().load("https://i.ytimg.com/vi/" + r.getVid().split(":")[0] + "/mqdefault.jpg").into(thumb);
+                Glide.with(itemView.getContext())
+                        .load("https://i.ytimg.com/vi/" + r.getVid().split(":")[0] + "/mqdefault.jpg")
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(thumb);
 
                 boolean selecting = a.isInSelectionMode();
                 checkBox.setVisibility(selecting ? View.VISIBLE : View.GONE);

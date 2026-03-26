@@ -54,7 +54,6 @@ import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.ViewUtils;
-import com.squareup.picasso.Picasso;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;

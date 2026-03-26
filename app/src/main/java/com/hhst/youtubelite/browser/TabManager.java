@@ -17,8 +17,6 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.util.UrlUtils;
 
-import org.apache.commons.io.FilenameUtils;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -147,7 +145,7 @@ public class TabManager {
 				}
 				for (final String resourceName : resources) {
 					try (final InputStream stream = assetManager.open(dir + "/" + resourceName)) {
-						final String extension = FilenameUtils.getExtension(resourceName);
+						final String extension = getExtension(resourceName);
 						if ("js".equals(extension)) webview.injectJavaScript(stream);
 						else if ("css".equals(extension)) webview.injectCss(stream);
 					}
@@ -156,6 +154,12 @@ public class TabManager {
 		} catch (IOException e) {
 			Log.e(TAG, "Failed to load assets", e);
 		}
+	}
+
+	private String getExtension(String filename) {
+		if (filename == null) return null;
+		int index = filename.lastIndexOf('.');
+		return (index == -1) ? "" : filename.substring(index + 1);
 	}
 
 	@Nullable

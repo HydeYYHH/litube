@@ -23,17 +23,19 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 
-import org.apache.commons.io.FileUtils;
-
 import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import dagger.hilt.android.AndroidEntryPoint;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
 
 /**
  * Show image in full screen mode.
@@ -116,7 +118,16 @@ public class GalleryActivity extends AppCompatActivity {
 					executorService.execute(() -> {
 						try {
 							// download thumbnail
-							if (!file.exists()) FileUtils.copyURLToFile(new URL(url), file);
+							if (!file.exists()) {
+								OkHttpClient client = new OkHttpClient();
+								Request request = new Request.Builder().url(url).build();
+								try (Response response = client.newCall(request).execute()) {
+									if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+									try (BufferedSink sink = Okio.buffer(Okio.sink(file))) {
+										sink.writeAll(response.body().source());
+									}
+								}
+							}
 							files.set(position, file);
 							// build uri
 							Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
@@ -140,7 +151,11 @@ public class GalleryActivity extends AppCompatActivity {
 		// clean cached images
 		try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
 			executorService.execute(() -> {
-				for (File file : files) if (file != null) FileUtils.deleteQuietly(file);
+				for (File file : files) {
+					if (file != null && file.exists()) {
+						file.delete();
+					}
+				}
 			});
 		}
 	}

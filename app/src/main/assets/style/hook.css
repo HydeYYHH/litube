@@ -3,16 +3,29 @@
     to { opacity: 1; }
 }
 
+/* Elements that trigger JS logic in init.js */
 #player-container-id,
 #player,
 #movie_player,
-.watch-below-the-player,
-.video-ads.ytp-ad-module .ytp-ad-player-overlay,
-ytm-settings,
-grid-shelf-view-model,
-ytm-shorts-lockup-view-model,
-.pivot-bar-item-tab.pivot-shorts,
-a[href^="/shorts/"] {
+.watch-below-the-player {
     animation-duration: 0.001s;
     animation-name: nodeInserted;
+}
+
+#player-container-id, #player, #movie_player {
+    background-color: #000 !important;
+}
+
+/* Basic clutter removal */
+ytm-promoted-sparkles-web-renderer,
+ytm-display-ad-renderer,
+ytm-ad-slot,
+.ytm-banners-container,
+ytm-companion-ad-renderer,
+ytm-mealbar-promo-renderer,
+ytm-upsell-dialog-renderer,
+ytm-statement-banner-renderer,
+.ytm-premium-upsell-renderer,
+ytm-pinterstitial-renderer {
+    display: none !important;
 }

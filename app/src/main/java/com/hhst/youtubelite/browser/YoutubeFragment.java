@@ -1,6 +1,8 @@
 package com.hhst.youtubelite.browser;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -58,6 +60,13 @@ public final class YoutubeFragment extends Fragment {
 	@Nullable
 	private WebBackForwardList historySnapshot;
 
+	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable refreshTimeoutRunnable = () -> {
+		if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
+			swipeRefreshLayout.setRefreshing(false);
+		}
+	};
+
 	@NonNull
 	public static YoutubeFragment newInstance(@NonNull final String url, @NonNull final String tag) {
 		final YoutubeFragment fragment = new YoutubeFragment();
@@ -95,8 +104,14 @@ public final class YoutubeFragment extends Fragment {
 		swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
 		swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
-		swipeRefreshLayout.setOnRefreshListener(() -> webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", value -> {
-		}));
+		swipeRefreshLayout.setOnRefreshListener(() -> {
+			if (webview != null) {
+				webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", null);
+				// Fail-safe: stop refreshing after 8 seconds regardless of outcome
+				handler.removeCallbacks(refreshTimeoutRunnable);
+				handler.postDelayed(refreshTimeoutRunnable, 8000);
+			}
+		});
 		swipeRefreshLayout.setProgressViewOffset(true, 86, 196);
 
 		webview.setYoutubeExtractor(youtubeExtractor);
@@ -108,7 +123,11 @@ public final class YoutubeFragment extends Fragment {
 			YoutubeFragment.this.url = url;
 			tabManager.onUrlChanged(this, url);
 		});
-		webview.setOnPageFinishedListener(url -> takeHistorySnapshot());
+		webview.setOnPageFinishedListener(url -> {
+			takeHistorySnapshot();
+			handler.removeCallbacks(refreshTimeoutRunnable);
+			if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+		});
 		webview.init();
 		if (savedInstanceState != null) webview.restoreState(savedInstanceState);
 		else if (url != null) loadUrl(url);
@@ -159,6 +178,7 @@ public final class YoutubeFragment extends Fragment {
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		handler.removeCallbacks(refreshTimeoutRunnable);
 		if (webview != null) {
 			webview.stopLoading();
 			webview.clearHistory();

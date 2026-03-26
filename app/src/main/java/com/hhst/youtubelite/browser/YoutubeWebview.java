@@ -3,9 +3,6 @@ package com.hhst.youtubelite.browser;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
-import android.content.Intent;
-import android.graphics.Bitmap;
-import android.net.Uri;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -18,12 +15,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.util.Consumer;
 import androidx.media3.common.util.UnstableApi;
-import com.hhst.youtubelite.R;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
@@ -37,6 +33,9 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Objects;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import lombok.Setter;
 
 @UnstableApi
@@ -151,17 +150,25 @@ public class YoutubeWebview extends WebView {
             public void onPageStarted(@NonNull final WebView view, @NonNull final String url, @Nullable final Bitmap favicon) {
                 if (isDestroyed) return;
                 super.onPageStarted(view, url, favicon);
-                evaluateJavascript("window.dispatchEvent(new Event('onPageStarted'));", null);
                 doInjectJavaScript();
+                evaluateJavascript("window.dispatchEvent(new Event('onPageStarted'));", null);
             }
 
             @Override
             public void onPageFinished(@NonNull final WebView view, @NonNull final String url) {
                 if (isDestroyed) return;
                 super.onPageFinished(view, url);
-                evaluateJavascript("window.dispatchEvent(new Event('onPageFinished'));", null);
                 doInjectJavaScript();
+                evaluateJavascript("window.dispatchEvent(new Event('onPageFinished'));", null);
+                evaluateJavascript("window.dispatchEvent(new Event('onProgressChangeFinish'));", null);
                 if (onPageFinishedListener != null) onPageFinishedListener.accept(url);
+                
+                // Native fail-safe to stop refreshing
+                postDelayed(() -> {
+                    if (getParent() instanceof SwipeRefreshLayout) {
+                        ((SwipeRefreshLayout) getParent()).setRefreshing(false);
+                    }
+                }, 500);
             }
         });
 
@@ -169,16 +176,10 @@ public class YoutubeWebview extends WebView {
             @Override
             public void onProgressChanged(@NonNull final WebView view, final int progress) {
                 if (isDestroyed) return;
-                final ProgressBar progressBar = findViewById(R.id.progressBar);
-                if (progressBar != null) {
-                    if (progress >= 100) {
-                        progressBar.setVisibility(GONE);
-                    } else {
-                        progressBar.setVisibility(VISIBLE);
-                        progressBar.setProgress(progress, true);
-                    }
-                }
                 super.onProgressChanged(view, progress);
+                if (progress >= 90) {
+                    evaluateJavascript("window.dispatchEvent(new Event('onProgressChangeFinish'));", null);
+                }
             }
 
             @Override

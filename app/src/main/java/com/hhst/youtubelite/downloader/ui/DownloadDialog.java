@@ -26,6 +26,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.media3.common.util.UnstableApi;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.Task;
@@ -34,7 +36,6 @@ import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
-import com.squareup.picasso.Picasso;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.MediaFormat;
@@ -56,6 +57,9 @@ public class DownloadDialog {
     private static final String KEY_LAST_VIDEO_RES = "last_download_res";
     private static final String KEY_LAST_AUDIO_BITRATE = "last_download_audio_bitrate";
     private static final String KEY_LAST_VIDEO_AUDIO_BITRATE = "last_download_video_audio_bitrate";
+    private static final String KEY_LAST_THUMB_SEL = "last_download_thumb_sel";
+    private static final String KEY_LAST_SUB_SEL = "last_download_sub_sel";
+    private static final String KEY_LAST_SUB_LANG = "last_download_sub_lang";
 
     private final Context context;
     private static final ExecutorService dialogExecutor = Executors.newFixedThreadPool(2);
@@ -67,7 +71,7 @@ public class DownloadDialog {
     private VideoDetails videoDetails;
     private StreamDetails streamDetails;
     private boolean thumbSel, subtitleSel;
-    private String mode = "video";
+    private String mode = "video"; 
     private VideoStream videoSelStream;
     private AudioStream audioSelStream;
     private AudioStream videoAudioStream;
@@ -123,7 +127,10 @@ public class DownloadDialog {
                 ImageView imageView = dialogView.findViewById(R.id.download_image);
                 EditText editText = dialogView.findViewById(R.id.download_edit_text);
 
-                Picasso.get().load(videoDetails.getThumbnail()).into(imageView);
+                Glide.with(context)
+                        .load(videoDetails.getThumbnail())
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(imageView);
                 if (editText.getText().toString().isEmpty()) {
                     editText.setText(String.format("%s-%s", videoDetails.getTitle(), videoDetails.getAuthor()));
                 }
@@ -169,23 +176,38 @@ public class DownloadDialog {
 
         videoButton.setOnClickListener(v -> {
             if (streamDetails != null) {
-                mode = "video";
+                if ("video".equals(mode)) {
+                    mode = "none"; // Toggle off
+                } else {
+                    mode = "video";
+                }
                 updateButtonStates(videoButton, audioButton);
-                showVideoQualityDialog(videoButton);
+                if ("video".equals(mode)) showVideoQualityDialog(videoButton);
             } else Toast.makeText(context, "Loading streams...", Toast.LENGTH_SHORT).show();
         });
 
         audioButton.setOnClickListener(v -> {
             if (streamDetails != null) {
-                mode = "audio";
+                if ("audio".equals(mode)) {
+                    mode = "none"; // Toggle off
+                } else {
+                    mode = "audio";
+                }
                 updateButtonStates(videoButton, audioButton);
-                showAudioSelectionDialog(audioButton);
+                if ("audio".equals(mode)) showAudioSelectionDialog(audioButton);
             } else Toast.makeText(context, "Loading streams...", Toast.LENGTH_SHORT).show();
         });
 
         subtitleButton.setOnClickListener(v -> {
-            if (streamDetails != null) showSubtitleSelectionDialog(subtitleButton);
-            else Toast.makeText(context, "Loading streams...", Toast.LENGTH_SHORT).show();
+            if (streamDetails != null) {
+                if (subtitleSel) {
+                    subtitleSel = false;
+                    subtitleSelStream = null;
+                    updateAuxButtonState(subtitleButton, false);
+                } else {
+                    showSubtitleSelectionDialog(subtitleButton);
+                }
+            } else Toast.makeText(context, "Loading streams...", Toast.LENGTH_SHORT).show();
         });
 
         thumbnailButton.setOnClickListener(v -> {
@@ -207,12 +229,20 @@ public class DownloadDialog {
         downloadButton.setOnClickListener(v -> {
             if (videoDetails == null) return;
             kv.encode(KEY_LAST_MODE, mode);
+            kv.encode(KEY_LAST_THUMB_SEL, thumbSel);
+            kv.encode(KEY_LAST_SUB_SEL, subtitleSel);
             if (videoSelStream != null) kv.encode(KEY_LAST_VIDEO_RES, videoSelStream.getResolution());
             if (audioSelStream != null) kv.encode(KEY_LAST_AUDIO_BITRATE, audioSelStream.getAverageBitrate());
             if (videoAudioStream != null) kv.encode(KEY_LAST_VIDEO_AUDIO_BITRATE, videoAudioStream.getAverageBitrate());
+            if (subtitleSelStream != null) kv.encode(KEY_LAST_SUB_LANG, subtitleSelStream.getLanguageTag());
 
             String fileName = sanitizeFileName(editText.getText().toString().isEmpty() ? videoDetails.getTitle() : editText.getText().toString());
-            if (isBound && downloadService != null) downloadService.download(getTasks(fileName));
+            List<Task> tasks = getTasks(fileName);
+            if (tasks.isEmpty()) {
+                Toast.makeText(context, "Please select at least one item to download", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (isBound && downloadService != null) downloadService.download(tasks);
             dialog.dismiss();
         });
 
@@ -234,9 +264,12 @@ public class DownloadDialog {
         if ("video".equals(mode)) {
             vBtn.setBackgroundColor(white); vBtn.setTextColor(black);
             aBtn.setBackgroundColor(gray); aBtn.setTextColor(black);
-        } else {
+        } else if ("audio".equals(mode)) {
             aBtn.setBackgroundColor(white); aBtn.setTextColor(black);
             vBtn.setBackgroundColor(gray); vBtn.setTextColor(black);
+        } else {
+            vBtn.setBackgroundColor(gray); vBtn.setTextColor(black);
+            aBtn.setBackgroundColor(gray); aBtn.setTextColor(black);
         }
     }
 
@@ -250,9 +283,13 @@ public class DownloadDialog {
         if (streamDetails == null) return;
 
         mode = kv.decodeString(KEY_LAST_MODE, "video");
+        thumbSel = kv.decodeBool(KEY_LAST_THUMB_SEL, false);
+        subtitleSel = kv.decodeBool(KEY_LAST_SUB_SEL, false);
+        
         String lastRes = kv.decodeString(KEY_LAST_VIDEO_RES, "");
         int lastBitrate = kv.decodeInt(KEY_LAST_AUDIO_BITRATE, -1);
         int lastVideoAudioBitrate = kv.decodeInt(KEY_LAST_VIDEO_AUDIO_BITRATE, -1);
+        String lastSubLang = kv.decodeString(KEY_LAST_SUB_LANG, "");
 
         for (VideoStream vs : streamDetails.getVideoStreams()) {
             if (vs.getFormat() == MediaFormat.MPEG_4 && vs.getResolution().equals(lastRes)) {
@@ -284,6 +321,16 @@ public class DownloadDialog {
             videoAudioStream = streamDetails.getAudioStreams().get(0);
         }
 
+        if (subtitleSel && !streamDetails.getSubtitles().isEmpty()) {
+            for (SubtitlesStream s : streamDetails.getSubtitles()) {
+                if (s.getLanguageTag().equals(lastSubLang)) {
+                    subtitleSelStream = s;
+                    break;
+                }
+            }
+            if (subtitleSelStream == null) subtitleSelStream = streamDetails.getSubtitles().get(0);
+        }
+
         mainHandler.post(() -> {
             updateButtonStates(vBtn, aBtn);
             updateAuxButtonState(dialogView.findViewById(R.id.button_thumbnail), thumbSel);
@@ -294,7 +341,11 @@ public class DownloadDialog {
     private void showVideoQualityDialog(Button btn) {
         View v = LayoutInflater.from(context).inflate(R.layout.quality_selector, null);
         AlertDialog d = new MaterialAlertDialogBuilder(context).setTitle(R.string.video_quality).setView(v).create();
-        v.findViewById(R.id.button_cancel).setOnClickListener(v1 -> d.dismiss());
+        v.findViewById(R.id.button_cancel).setOnClickListener(v1 -> {
+            mode = "none";
+            updateButtonStates(btn, dialogView.findViewById(R.id.button_audio));
+            d.dismiss();
+        });
         setupVideoContainer(v, d, btn);
         d.show();
     }
@@ -376,7 +427,11 @@ public class DownloadDialog {
     private void showAudioSelectionDialog(Button btn) {
         View v = LayoutInflater.from(context).inflate(R.layout.quality_selector, null);
         AlertDialog d = new MaterialAlertDialogBuilder(context).setTitle(R.string.audio_track).setView(v).create();
-        v.findViewById(R.id.button_cancel).setOnClickListener(v1 -> d.dismiss());
+        v.findViewById(R.id.button_cancel).setOnClickListener(v1 -> {
+            mode = "none";
+            updateButtonStates(dialogView.findViewById(R.id.button_video), btn);
+            d.dismiss();
+        });
         setupAudioContainer(v, d, btn);
         d.show();
     }
@@ -453,6 +508,16 @@ public class DownloadDialog {
         return f.replaceAll("[<>:\"/|?*]", "_");
     }
 
+    private String findBestVideoAudioStream(List<AudioStream> audioStreams) {
+        if (audioStreams == null || audioStreams.isEmpty()) return null;
+        // Logic to select the highest bitrate m4a stream
+        return audioStreams.stream()
+                .filter(s -> s.getFormat() == MediaFormat.M4A)
+                .max(java.util.Comparator.comparingInt(s -> s.getAverageBitrate() > 0 ? s.getAverageBitrate() : s.getBitrate()))
+                .map(s -> String.valueOf(s.getAverageBitrate()))
+                .orElse(null);
+    }
+
     private String formatSize(long bytes) {
         return bytes <= 0 ? "Unknown" : String.format(Locale.US, "%.1f MB", bytes / 1048576.0);
     }
@@ -462,17 +527,21 @@ public class DownloadDialog {
         List<Task> t = new ArrayList<>();
         File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
         if (!d.exists()) d.mkdirs();
+        
         if ("video".equals(mode) && videoSelStream != null) {
             AudioStream audio = (videoAudioStream != null) ? videoAudioStream : streamDetails.getAudioStreams().get(0);
             t.add(new Task(videoDetails.getId() + ":v", videoSelStream, audio, null, null, f, d, threadCount, videoSelStream.getResolution()));
         } else if ("audio".equals(mode) && audioSelStream != null) {
             t.add(new Task(videoDetails.getId() + ":a", null, audioSelStream, null, null, f, d, threadCount, null));
         }
+        
         if (subtitleSel && subtitleSelStream != null) {
             t.add(new Task(videoDetails.getId() + ":s", null, null, subtitleSelStream, null, f, d, threadCount, null));
         }
+        
         if (thumbSel)
             t.add(new Task(videoDetails.getId() + ":t", null, null, null, videoDetails.getThumbnail(), f, d, threadCount, null));
+            
         return t;
     }
 }

@@ -192,8 +192,7 @@ public class PlaylistDownloadDialog {
     }
 
     private void styleButton(Button btn) {
-        if (btn instanceof MaterialButton) {
-            MaterialButton mBtn = (MaterialButton) btn;
+        if (btn instanceof MaterialButton mBtn) {
             mBtn.setBackgroundTintList(ColorStateList.valueOf(Color.WHITE));
             mBtn.setTextColor(Color.BLACK);
             mBtn.setCornerRadius(dpToPx(24));

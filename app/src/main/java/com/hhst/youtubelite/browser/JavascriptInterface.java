@@ -13,7 +13,6 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
-import com.hhst.youtubelite.extension.ExtensionDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
@@ -21,6 +20,7 @@ import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.ui.AboutActivity;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.ui.SettingsActivity;
 import org.schabi.newpipe.extractor.services.youtube.PoTokenResult;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -90,7 +90,15 @@ public final class JavascriptInterface {
 
     @android.webkit.JavascriptInterface
     public void extension() {
-        handler.post(() -> new ExtensionDialog(context, extensionManager).build());
+        litepipeSettings();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void litepipeSettings() {
+        handler.post(() -> {
+            Intent intent = new Intent(context, SettingsActivity.class);
+            context.startActivity(intent);
+        });
     }
 
     @android.webkit.JavascriptInterface

@@ -10,7 +10,12 @@ yt-mealbar-promo-renderer,
 ad-slot-renderer,
 .ytp-unmute,
 a.yt-spec-button-shape-next.yt-spec-button-shape-next--overlay,
-ytm-companion-ad-renderer
+ytm-companion-ad-renderer,
+ytm-premium-upsell-renderer,
+ytm-upsell-dialog-renderer,
+ytm-unlimited-offer-renderer,
+ytm-promoted-sparkles-web-renderer,
+[href*="/premium"]
 {
     display: none !important;
 }

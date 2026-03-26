@@ -8,9 +8,10 @@ import com.hhst.youtubelite.downloader.core.ProgressCallback;
 import com.hhst.youtubelite.downloader.core.ProgressCallback2;
 import com.hhst.youtubelite.downloader.core.StreamDownloader;
 import com.hhst.youtubelite.downloader.core.Task;
-import org.apache.commons.io.FileUtils;
 import org.schabi.newpipe.extractor.stream.Stream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -26,6 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import dagger.hilt.android.qualifiers.ApplicationContext;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Source;
 
 @Singleton
 public class LiteDownloaderImpl implements LiteDownloader {
@@ -68,11 +72,18 @@ public class LiteDownloaderImpl implements LiteDownloader {
 
     private void startTaskInternal(Task t) {
         if (t.subtitle() != null) {
-            exec(t, () -> FileUtils.copyURLToFile(new URL(t.subtitle().getContent()), new File(t.desDir(), t.fileName() + "." + t.subtitle().getExtension())));
+            exec(t, () -> copyURLToFile(new URL(t.subtitle().getContent()), new File(t.desDir(), t.fileName() + "." + t.subtitle().getExtension())));
         } else if (t.thumbnail() != null) {
-            exec(t, () -> FileUtils.copyURLToFile(new URL(t.thumbnail()), new File(t.desDir(), t.fileName() + ".jpg")));
+            exec(t, () -> copyURLToFile(new URL(t.thumbnail()), new File(t.desDir(), t.fileName() + ".jpg")));
         } else {
             downloadMedia(t);
+        }
+    }
+
+    private void copyURLToFile(URL url, File file) throws Exception {
+        try (InputStream in = url.openStream();
+             BufferedSink sink = Okio.buffer(Okio.sink(file))) {
+            sink.writeAll(Okio.source(in));
         }
     }
 
@@ -166,10 +177,10 @@ public class LiteDownloaderImpl implements LiteDownloader {
                         File mF = tmp(t, "_m");
                         MediaMuxer.merge(vF, aF, mF);
                         if (out.exists()) out.delete();
-                        FileUtils.moveFile(mF, out);
+                        moveFile(mF, out);
                     } else {
                         if (out.exists()) out.delete();
-                        FileUtils.moveFile(vFut != null ? vF : aF, out);
+                        moveFile(vFut != null ? vF : aF, out);
                     }
                     complete(t.vid(), out);
                 } catch (Exception e) {
@@ -177,6 +188,14 @@ public class LiteDownloaderImpl implements LiteDownloader {
                 }
             }).exceptionally(e -> handleErr(t, e));
         }
+    }
+
+    private void moveFile(File src, File dest) throws Exception {
+        try (Source source = Okio.source(src);
+             BufferedSink sink = Okio.buffer(Okio.sink(dest))) {
+            sink.writeAll(source);
+        }
+        src.delete();
     }
 
     private ProgressCallback createProgressAdapter(String vid, java.util.function.IntConsumer action) {
@@ -223,9 +242,13 @@ public class LiteDownloaderImpl implements LiteDownloader {
 
     private void clean(Task t) {
         if (t == null) return;
-        FileUtils.deleteQuietly(tmp(t, "_v"));
-        FileUtils.deleteQuietly(tmp(t, "_a"));
-        FileUtils.deleteQuietly(tmp(t, "_m"));
+        deleteFile(tmp(t, "_v"));
+        deleteFile(tmp(t, "_a"));
+        deleteFile(tmp(t, "_m"));
+    }
+
+    private void deleteFile(File file) {
+        if (file.exists()) file.delete();
     }
 
     private File tmp(Task t, String s) { return new File(ctx.getCacheDir(), t.fileName() + s + ".tmp"); }

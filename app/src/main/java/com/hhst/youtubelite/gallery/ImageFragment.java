@@ -12,11 +12,11 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.github.chrisbanes.photoview.PhotoView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
-import com.squareup.picasso.Callback;
-import com.squareup.picasso.Picasso;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -50,18 +50,10 @@ public class ImageFragment extends Fragment {
 			return photoView;
 		}
 
-		Picasso.get().load(url).into(photoView, new Callback() {
-			@Override
-			public void onSuccess() {
-			}
-
-			@Override
-			public void onError(Exception e) {
-				Log.e("ImageFragment", "Failed to load image: " + url, e);
-				if (isAdded() && getContext() != null)
-					Toast.makeText(requireContext(), R.string.failed_to_load_image, Toast.LENGTH_SHORT).show();
-			}
-		});
+		Glide.with(this)
+				.load(url)
+				.diskCacheStrategy(DiskCacheStrategy.ALL)
+				.into(photoView);
 
 		// Set long click listener to show context menu
 		photoView.setOnLongClickListener(view -> {

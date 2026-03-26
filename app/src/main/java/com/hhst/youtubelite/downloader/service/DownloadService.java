@@ -31,7 +31,6 @@ import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.MainActivity;
 
-import org.apache.commons.io.FileUtils;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
@@ -84,12 +83,16 @@ public class DownloadService extends Service {
                     liteDL.cancel(r.getTaskId());
                     String baseName = r.getFileName();
                     File cacheDir = getCacheDir();
-                    FileUtils.deleteQuietly(new File(cacheDir, baseName + "_v.tmp"));
-                    FileUtils.deleteQuietly(new File(cacheDir, baseName + "_a.tmp"));
-                    FileUtils.deleteQuietly(new File(cacheDir, baseName + "_m.tmp"));
+                    deleteFile(new File(cacheDir, baseName + "_v.tmp"));
+                    deleteFile(new File(cacheDir, baseName + "_a.tmp"));
+                    deleteFile(new File(cacheDir, baseName + "_m.tmp"));
                 }
             }
         }).start();
+    }
+
+    private void deleteFile(File file) {
+        if (file.exists()) file.delete();
     }
 
     private void createNotificationChannel() {
@@ -116,8 +119,24 @@ public class DownloadService extends Service {
         saveItags(task);
         DownloadRecord record = historyRepository.findByTaskId(task.vid());
         long now = System.currentTimeMillis();
-        DownloadType type = task.video() != null ? DownloadType.VIDEO : DownloadType.AUDIO;
-        String outPath = new File(task.desDir(), task.fileName() + (task.video() != null ? ".mp4" : ".m4a")).getAbsolutePath();
+        
+        DownloadType type;
+        String ext;
+        if (task.video() != null) {
+            type = DownloadType.VIDEO;
+            ext = ".mp4";
+        } else if (task.audio() != null) {
+            type = DownloadType.AUDIO;
+            ext = ".m4a";
+        } else if (task.subtitle() != null) {
+            type = DownloadType.SUBTITLE;
+            ext = ".vtt";
+        } else {
+            type = DownloadType.THUMBNAIL;
+            ext = ".jpg";
+        }
+        
+        String outPath = new File(task.desDir(), task.fileName() + ext).getAbsolutePath();
         
         if (record == null) {
             record = new DownloadRecord(task.vid(), task.vid(), type, DownloadStatus.RUNNING, 0,
@@ -172,7 +191,14 @@ public class DownloadService extends Service {
         long now = System.currentTimeMillis();
         if (record == null && activeTasks.containsKey(taskId)) {
             Task task = activeTasks.get(taskId);
-            record = new DownloadRecord(taskId, taskId, task.video() != null ? DownloadType.VIDEO : DownloadType.AUDIO,
+            
+            DownloadType type;
+            if (task.video() != null) type = DownloadType.VIDEO;
+            else if (task.audio() != null) type = DownloadType.AUDIO;
+            else if (task.subtitle() != null) type = DownloadType.SUBTITLE;
+            else type = DownloadType.THUMBNAIL;
+
+            record = new DownloadRecord(taskId, taskId, type,
                     status, p, task.fileName(), new File(task.desDir(), task.fileName()).getAbsolutePath(), now, now, null, d, t, task.quality());
         }
         if (record != null) {
@@ -262,7 +288,7 @@ public class DownloadService extends Service {
     private void ensureForeground() {
         if (notificationBuilder == null) {
             notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_launcher_foreground)
+                    .setSmallIcon(R.drawable.ic_download)
                     .setContentTitle("YouTube Lite Downloader")
                     .setContentIntent(createContentIntent())
                     .setPriority(NotificationCompat.PRIORITY_LOW)

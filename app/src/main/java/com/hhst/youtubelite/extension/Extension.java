@@ -10,6 +10,7 @@ import static com.hhst.youtubelite.Constant.SKIP_SPONSORS;
 
 import com.hhst.youtubelite.R;
 
+import java.util.Collections;
 import java.util.List;
 
 public record Extension(String key, int description, List<Extension> children) {
@@ -33,7 +34,9 @@ public record Extension(String key, int description, List<Extension> children) {
 										new Extension(SKIP_SPONSORS, R.string.skip_sponsors, null),
 										new Extension(SKIP_SELF_PROMO, R.string.skip_sponsors_selfpromo, null),
 										new Extension(SKIP_POI_HIGHLIGHT, R.string.skip_sponsors_highlight, null)
-						))
+						)),
+						new Extension(null, R.string.download, Collections.emptyList()),
+						new Extension(null, R.string.miscellaneous, Collections.emptyList())
 		);
 	}
 }

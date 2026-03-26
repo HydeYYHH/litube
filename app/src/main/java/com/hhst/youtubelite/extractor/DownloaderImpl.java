@@ -10,13 +10,9 @@ import org.schabi.newpipe.extractor.downloader.Downloader;
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -36,9 +32,12 @@ public final class DownloaderImpl extends Downloader {
 
 	@Inject
 	public DownloaderImpl(final OkHttpClient client) {
-		this.client = client.newBuilder().readTimeout(30, TimeUnit.SECONDS).connectTimeout(30, TimeUnit.SECONDS).build();
+		this.client = client.newBuilder()
+				.readTimeout(20, TimeUnit.SECONDS)
+				.connectTimeout(20, TimeUnit.SECONDS)
+				.followRedirects(true)
+				.build();
 	}
-
 
 	@Override
 	public org.schabi.newpipe.extractor.downloader.Response execute(@NonNull final org.schabi.newpipe.extractor.downloader.Request request) throws IOException, ReCaptchaException {
@@ -50,27 +49,30 @@ public final class DownloaderImpl extends Downloader {
 		RequestBody requestBody = null;
 		if (dataToSend != null) requestBody = RequestBody.create(dataToSend);
 
-		final Request.Builder builder = new Request.Builder().url(url).method(httpMethod, requestBody).header("User-Agent", Constant.USER_AGENT);
+		final Request.Builder builder = new Request.Builder()
+				.url(url)
+				.method(httpMethod, requestBody)
+				.header("User-Agent", Constant.USER_AGENT);
 
-		// Get cookies from WebView
+		// Optimized cookie handling
 		final String webViewCookies = CookieManager.getInstance().getCookie(url);
+		StringBuilder cookieBuilder = new StringBuilder();
+		if (webViewCookies != null) {
+			cookieBuilder.append(webViewCookies);
+		}
 
-		// Handle restricted mode cookie
-		String restrictedModeCookie = null;
-		if (url.contains(Constant.YOUTUBE_DOMAIN)) {
+		if (url.contains("youtube.com") || url.contains("youtu.be")) {
 			if (webViewCookies == null || !webViewCookies.contains("PREF=")) {
-				restrictedModeCookie = YOUTUBE_RESTRICTED_MODE_COOKIE;
+				if (cookieBuilder.length() > 0) cookieBuilder.append("; ");
+				cookieBuilder.append(YOUTUBE_RESTRICTED_MODE_COOKIE);
 			}
 		}
 
-		// Merge and deduplicate cookies
-		final String mergedCookies = Stream.of(webViewCookies, restrictedModeCookie).filter(Objects::nonNull).flatMap(cookies -> Arrays.stream(cookies.split("; *"))).filter(s -> !s.isEmpty()).distinct().collect(Collectors.joining("; "));
-
-		if (!mergedCookies.isEmpty()) {
-			builder.header("Cookie", mergedCookies);
+		String finalCookies = cookieBuilder.toString();
+		if (!finalCookies.isEmpty()) {
+			builder.header("Cookie", finalCookies);
 		}
 
-		// Override with headers from request
 		if (headers != null) {
 			for (final Map.Entry<String, List<String>> entry : headers.entrySet()) {
 				final String headerName = entry.getKey();
@@ -86,13 +88,14 @@ public final class DownloaderImpl extends Downloader {
 				throw new ReCaptchaException("reCaptcha Challenge requested", url);
 			}
 
-			final int responseCode = response.code();
-			final String responseMessage = response.message();
-			final Map<String, List<String>> responseHeaders = response.headers().toMultimap();
 			final ResponseBody responseBody = response.body();
-			final String responseBodyString = responseBody.string();
-
-			return new org.schabi.newpipe.extractor.downloader.Response(responseCode, responseMessage, responseHeaders, responseBodyString, url);
+			return new org.schabi.newpipe.extractor.downloader.Response(
+					response.code(),
+					response.message(),
+					response.headers().toMultimap(),
+					responseBody != null ? responseBody.string() : "",
+					url
+			);
 		}
 	}
 }

@@ -30,6 +30,8 @@ import javax.inject.Singleton;
 
 @Singleton
 public final class YoutubeExtractor {
+	private static final Pattern VIDEO_ID_PATTERN = Pattern.compile("(?:v=|=v/|/v/|/u/\\w/|embed/|watch\\?v=|shorts/|youtu.be/)([a-zA-Z0-9_-]{11})");
+	
 	private final MMKV cache = MMKV.defaultMMKV();
 	private final Gson gson = new Gson();
 	private StreamInfo info = null;
@@ -43,16 +45,8 @@ public final class YoutubeExtractor {
 	@Nullable
 	public static String getVideoId(@Nullable final String url) {
 		if (url == null) return null;
-
-		// Improved Regex to handle playlist URLs, shorts, and standard watch links
-		final String pattern = "(?:v=|=v/|/v/|/u/\\w/|embed/|watch\\?v=|shorts/|youtu.be/)([a-zA-Z0-9_-]{11})";
-		final Pattern compiledPattern = Pattern.compile(pattern);
-		final Matcher matcher = compiledPattern.matcher(url);
-
-		if (matcher.find()) {
-			return matcher.group(1);
-		}
-		return null;
+		final Matcher matcher = VIDEO_ID_PATTERN.matcher(url);
+		return matcher.find() ? matcher.group(1) : null;
 	}
 
 	@NonNull
@@ -60,8 +54,10 @@ public final class YoutubeExtractor {
 		final String videoID = getVideoId(videoUrl);
 		if (videoID == null) throw new ExtractionException("Invalid URL: " + videoUrl);
 
-		if (cache.contains(videoID))
-			return gson.fromJson(cache.decodeString(videoID, null), VideoDetails.class);
+		if (cache.contains(videoID)) {
+			String cached = cache.decodeString(videoID, null);
+			if (cached != null) return gson.fromJson(cached, VideoDetails.class);
+		}
 
 		final StreamInfo streamInfo = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=" + videoID);
 		this.info = streamInfo;
@@ -81,7 +77,7 @@ public final class YoutubeExtractor {
 		details.setViewCount(streamInfo.getViewCount());
 		details.setSegments(streamInfo.getStreamSegments());
 
-		cache.encode(videoID, gson.toJson(details, VideoDetails.class), 3600);
+		cache.encode(videoID, gson.toJson(details), 3600);
 		return details;
 	}
 
@@ -90,10 +86,9 @@ public final class YoutubeExtractor {
 		StreamInfo streamInfo = this.info;
 		this.info = null;
 
-		final String videoID = getVideoId(videoUrl);
-		if (videoID == null) throw new ExtractionException("Invalid URL: " + videoUrl);
-
 		if (streamInfo == null) {
+			final String videoID = getVideoId(videoUrl);
+			if (videoID == null) throw new ExtractionException("Invalid URL: " + videoUrl);
 			streamInfo = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=" + videoID);
 		}
 
@@ -108,16 +103,23 @@ public final class YoutubeExtractor {
 	}
 
 	private List<AudioStream> filterAudioStreams(@Nullable final List<AudioStream> streams) {
-		if (streams == null) return Collections.emptyList();
+		if (streams == null || streams.isEmpty()) return Collections.emptyList();
+		
 		final List<AudioStream> m4aStreams = streams.stream()
 						.filter(stream -> stream.getFormat() == MediaFormat.M4A)
 						.toList();
+						
 		if (m4aStreams.isEmpty()) return Collections.emptyList();
-		final int maxBitrate = m4aStreams.stream()
-						.mapToInt(stream -> stream.getAverageBitrate() > 0 ? stream.getAverageBitrate() : stream.getBitrate())
-						.max().orElse(-1);
+		
+		int maxBitrate = -1;
+		for (AudioStream s : m4aStreams) {
+			int bitrate = s.getAverageBitrate() > 0 ? s.getAverageBitrate() : s.getBitrate();
+			if (bitrate > maxBitrate) maxBitrate = bitrate;
+		}
+		
+		final int finalMaxBitrate = maxBitrate;
 		return m4aStreams.stream()
-						.filter(stream -> (stream.getAverageBitrate() > 0 ? stream.getAverageBitrate() : stream.getBitrate()) == maxBitrate)
+						.filter(stream -> (stream.getAverageBitrate() > 0 ? stream.getAverageBitrate() : stream.getBitrate()) == finalMaxBitrate)
 						.collect(Collectors.toList());
 	}
 
@@ -134,7 +136,15 @@ public final class YoutubeExtractor {
 	@Nullable
 	private String getBestImageUrl(@NonNull final List<Image> images) {
 		if (images.isEmpty()) return null;
-		final Map<Image.ResolutionLevel, Integer> priority = Map.of(Image.ResolutionLevel.HIGH, 3, Image.ResolutionLevel.MEDIUM, 2, Image.ResolutionLevel.LOW, 1, Image.ResolutionLevel.UNKNOWN, 0);
-		return images.stream().max(Comparator.comparingInt(img -> priority.getOrDefault(img.getEstimatedResolutionLevel(), 0))).map(Image::getUrl).orElse(null);
+		final Map<Image.ResolutionLevel, Integer> priority = Map.of(
+			Image.ResolutionLevel.HIGH, 3, 
+			Image.ResolutionLevel.MEDIUM, 2, 
+			Image.ResolutionLevel.LOW, 1, 
+			Image.ResolutionLevel.UNKNOWN, 0
+		);
+		return images.stream()
+				.max(Comparator.comparingInt(img -> priority.getOrDefault(img.getEstimatedResolutionLevel(), 0)))
+				.map(Image::getUrl)
+				.orElse(null);
 	}
 }

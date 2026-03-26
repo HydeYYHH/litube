@@ -1,4 +1,6 @@
-package com.hhst.youtubelite.ui;import android.Manifest;
+package com.hhst.youtubelite.ui;
+
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
@@ -9,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -17,6 +20,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -171,20 +175,38 @@ public final class MainActivity extends AppCompatActivity {
 
     public void showVideoOptionsDialog(String url) {
         boolean isPl = url.contains("list=");
-        String[] opts = isPl ? new String[]{"Download Video", "Download Playlist", "Share Link", "Open Downloads", "Cancel"}
-                : new String[]{"Download Video", "Share Link", "Open Downloads", "Cancel"};
-        new MaterialAlertDialogBuilder(this).setTitle("Video Options").setItems(opts, (d, w) -> {
-            if (isPl) {
-                if (w == 0) triggerDownload(url);
-                else if (w == 1) triggerPlaylistDownload(url);
-                else if (w == 2) shareUrl(url);
-                else if (w == 3) startActivity(new Intent(this, DownloadActivity.class));
-            } else {
-                if (w == 0) triggerDownload(url);
-                else if (w == 1) shareUrl(url);
-                else if (w == 2) startActivity(new Intent(this, DownloadActivity.class));
-            }
-        }).show();
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_video_options, null);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setView(view)
+                .create();
+
+        if (isPl) {
+            view.findViewById(R.id.option_playlist).setVisibility(View.VISIBLE);
+        }
+
+        view.findViewById(R.id.option_download).setOnClickListener(v -> {
+            dialog.dismiss();
+            triggerDownload(url);
+        });
+
+        view.findViewById(R.id.option_playlist).setOnClickListener(v -> {
+            dialog.dismiss();
+            triggerPlaylistDownload(url);
+        });
+
+        view.findViewById(R.id.option_share).setOnClickListener(v -> {
+            dialog.dismiss();
+            shareUrl(url);
+        });
+
+        view.findViewById(R.id.option_open_downloads).setOnClickListener(v -> {
+            dialog.dismiss();
+            startActivity(new Intent(this, DownloadActivity.class));
+        });
+
+        view.findViewById(R.id.btn_close).setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
     }
 
     public void triggerDownload(String url) {
