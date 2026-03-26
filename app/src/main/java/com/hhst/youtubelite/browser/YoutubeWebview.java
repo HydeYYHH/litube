@@ -134,15 +134,51 @@ public class YoutubeWebview extends WebView {
 	@Override
 	public void loadUrl(@NonNull final String url) {
 		final String resolvedUrl = sanitizeLoadUrl(url);
-		if (UrlUtils.isAllowedDomain(Uri.parse(resolvedUrl))) {
+		if (canLoad(resolvedUrl)) {
 			super.loadUrl(resolvedUrl);
-		} else {
-			final String currentUrl = getUrl();
-			if (currentUrl != null && UrlUtils.isAllowedDomain(Uri.parse(currentUrl))) {
-				super.loadUrl(resolvedUrl);
-			} else {
-				Log.w("YoutubeWebview", "Blocked attempt to load unauthorized URL: " + resolvedUrl);
-			}
+			return;
+		}
+		if (canOpenExternal(resolvedUrl)) {
+			openExternal(Uri.parse(resolvedUrl));
+			return;
+		}
+		Log.w("YoutubeWebview", "Blocked attempt to load unauthorized URL: " + resolvedUrl);
+	}
+
+	static boolean canLoad(@NonNull final String url) {
+		if (UrlUtils.isAllowedUrl(url)) return true;
+		final String scheme = scheme(url);
+		return isScheme(scheme, "file")
+						|| isScheme(scheme, "about")
+						|| isScheme(scheme, "data")
+						|| isScheme(scheme, "javascript");
+	}
+
+	static boolean canOpenExternal(@NonNull final String url) {
+		if (UrlUtils.isAllowedUrl(url)) return false;
+		final String scheme = scheme(url);
+		return isScheme(scheme, "http") || isScheme(scheme, "https");
+	}
+
+	@Nullable
+	private static String scheme(@NonNull final String url) {
+		try {
+			return URI.create(url).getScheme();
+		} catch (final IllegalArgumentException ignored) {
+			return null;
+		}
+	}
+
+	private static boolean isScheme(@Nullable final String actual, @NonNull final String expected) {
+		return expected.equalsIgnoreCase(actual);
+	}
+
+	private void openExternal(@NonNull final Uri uri) {
+		try {
+			getContext().startActivity(new Intent(Intent.ACTION_VIEW, uri));
+		} catch (final ActivityNotFoundException e) {
+			post(() -> Toast.makeText(getContext(), R.string.application_not_found, Toast.LENGTH_SHORT).show());
+			Log.e(getContext().getString(R.string.application_not_found), e.toString());
 		}
 	}
 
@@ -232,8 +268,7 @@ public class YoutubeWebview extends WebView {
 				} else {
 					// restrict domain
 					if (UrlUtils.isAllowedDomain(uri)) return false;
-					// open in browser
-					getContext().startActivity(new Intent(Intent.ACTION_VIEW, uri));
+					openExternal(uri);
 				}
 				return true;
 			}
