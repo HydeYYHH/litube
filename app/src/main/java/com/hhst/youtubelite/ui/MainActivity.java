@@ -239,24 +239,28 @@ public final class MainActivity extends AppCompatActivity {
 		return isInAppMiniPlayer && !isChangingConfigurations && !isInPictureInPictureMode;
 	}
 
-	static int resolveQueueBottomSheetMaxHeight(final int mainHeight,
-	                                            final int topInset,
-	                                            final int playerBottom,
-	                                            final boolean isInAppMiniPlayer) {
+	static int sheetMax(final int mainHeight,
+	                    final int topInset,
+	                    final int playerBottom,
+	                    final boolean isInAppMiniPlayer) {
 		if (mainHeight <= 0) return 0;
 		if (isInAppMiniPlayer) return Math.max(0, mainHeight - Math.max(0, topInset));
 		if (playerBottom <= 0 || playerBottom >= mainHeight) return mainHeight;
 		return mainHeight - playerBottom;
 	}
 
-	static int resolveQueueBottomSheetBottomPadding(final int baseBottomPadding, final int bottomInset) {
+	static int sheetPad(final int baseBottomPadding, final int bottomInset) {
 		return baseBottomPadding + Math.max(0, bottomInset);
 	}
 
-	static int resolveQueueRecyclerBottomPadding(final int baseBottomPadding,
-	                                             final int bottomInset,
-	                                             final int minimumTrailingSpace) {
+	static int listPad(final int baseBottomPadding,
+	                   final int bottomInset,
+	                   final int minimumTrailingSpace) {
 		return baseBottomPadding + Math.max(Math.max(0, bottomInset), Math.max(0, minimumTrailingSpace));
+	}
+
+	static int queueAnchor(final int listHeight, final int topPadding) {
+		return Math.max(0, topPadding) + Math.max(0, listHeight) / 3;
 	}
 
 	private String extractUrlFromText(String text) {
@@ -437,13 +441,13 @@ public final class MainActivity extends AppCompatActivity {
 		final ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
 		final TextView emptyView = sheetView.findViewById(R.id.queue_empty);
 		final RecyclerView recyclerView = sheetView.findViewById(R.id.queue_items_recycler);
-		final QueueAdapter adapter = getQueueAdapter(dialog, recyclerView, emptyView);
+		final QueueAdapter adapter = queueAdapter(dialog, recyclerView, emptyView);
 		final Player.Listener queuePlaybackListener = new Player.Listener() {
 			@Override
 			public void onPlaybackStateChanged(final int state) {
 				mainHandler.post(() -> {
 					if (queueBottomSheetDialog == dialog) {
-						refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+						syncQueueSheet(adapter, recyclerView, emptyView);
 					}
 				});
 			}
@@ -472,10 +476,10 @@ public final class MainActivity extends AppCompatActivity {
 			@Override
 			public void onDragFinished() {
 				if (dirty.getAndSet(false)) {
-					persistQueueOrder(adapter.snapshotItems());
+					saveQueueOrder(adapter.snapshotItems());
 					player.refreshQueueNavigationAvailability();
 				}
-				refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+				syncQueueSheet(adapter, recyclerView, emptyView);
 				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
 				if (behavior != null) {
 					behavior.setDraggable(true);
@@ -501,18 +505,18 @@ public final class MainActivity extends AppCompatActivity {
 			});
 		}
 		if (orderButton != null) {
-			renderLoopModeButton(orderButton, player.getLoopMode());
+			renderLoop(orderButton, player.getLoopMode());
 			orderButton.setOnClickListener(v -> {
 				final PlayerLoopMode newMode = player.getLoopMode().next();
 				player.setLoopMode(newMode);
-				renderLoopModeButton(orderButton, newMode);
+				renderLoop(orderButton, newMode);
 			});
 		}
 		if (clearButton != null) {
-			clearButton.setOnClickListener(v -> confirmClearQueue(() -> {
+			clearButton.setOnClickListener(v -> confirmClear(() -> {
 				queueRepository.clear();
 				player.refreshQueueNavigationAvailability();
-				refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+				syncQueueSheet(adapter, recyclerView, emptyView);
 			}));
 		}
 		dialog.setOnShowListener(ignored -> {
@@ -534,15 +538,15 @@ public final class MainActivity extends AppCompatActivity {
 					sheetView.getPaddingLeft(),
 					sheetView.getPaddingTop(),
 					sheetView.getPaddingRight(),
-					resolveQueueBottomSheetBottomPadding(sheetBasePaddingBottom, bottomInset));
+					sheetPad(sheetBasePaddingBottom, bottomInset));
 			// Keep last row visible.
 			recyclerView.setPadding(
 					recyclerView.getPaddingLeft(),
 					recyclerView.getPaddingTop(),
 					recyclerView.getPaddingRight(),
-					resolveQueueRecyclerBottomPadding(recyclerBasePaddingBottom, bottomInset, recyclerTrailingSpace));
+					listPad(recyclerBasePaddingBottom, bottomInset, recyclerTrailingSpace));
 			final View playerRoot = findViewById(R.id.playerView);
-			final int maxSheetHeight = resolveQueueBottomSheetMaxHeight(
+			final int maxSheetHeight = sheetMax(
 					mainView != null ? mainView.getHeight() : 0,
 					mainView != null ? mainView.getPaddingTop() : 0,
 					playerRoot != null ? playerRoot.getBottom() : 0,
@@ -559,6 +563,7 @@ public final class MainActivity extends AppCompatActivity {
 			}
 			behavior.setPeekHeight(maxSheetHeight > 0 ? maxSheetHeight : sheetView.getMeasuredHeight());
 			behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+			scrollToPlaying(adapter, recyclerView);
 		});
 		dialog.setOnDismissListener(d -> {
 			engine.removeListener(queuePlaybackListener);
@@ -566,12 +571,12 @@ public final class MainActivity extends AppCompatActivity {
 				queueBottomSheetDialog = null;
 			}
 		});
-		refreshQueueBottomSheet(adapter, recyclerView, emptyView);
+		syncQueueSheet(adapter, recyclerView, emptyView);
 		dialog.show();
 	}
 
 	@NonNull
-	private QueueAdapter getQueueAdapter(BottomSheetDialog dialog, RecyclerView recyclerView, TextView emptyView) {
+	private QueueAdapter queueAdapter(BottomSheetDialog dialog, RecyclerView recyclerView, TextView emptyView) {
 		final AtomicReference<QueueAdapter> adapterRef = new AtomicReference<>();
 		final QueueAdapter adapter = new QueueAdapter(new QueueAdapter.Actions() {
 			@Override
@@ -584,14 +589,14 @@ public final class MainActivity extends AppCompatActivity {
 
 			@Override
 			public void onDeleteRequested(@NonNull final QueueItem item) {
-				confirmRemoveQueueItem(item, () -> {
+				confirmRemove(item, () -> {
 					final String videoId = item.getVideoId();
 					if (videoId == null) return;
 					if (queueRepository.remove(videoId)) {
 						player.refreshQueueNavigationAvailability();
 						final QueueAdapter a = adapterRef.get();
 						if (a != null) {
-							refreshQueueBottomSheet(a, recyclerView, emptyView);
+							syncQueueSheet(a, recyclerView, emptyView);
 						}
 					}
 				});
@@ -601,7 +606,7 @@ public final class MainActivity extends AppCompatActivity {
 		return adapter;
 	}
 
-	private void confirmClearQueue(@NonNull final Runnable onConfirmed) {
+	private void confirmClear(@NonNull final Runnable onConfirmed) {
 		new MaterialAlertDialogBuilder(this)
 						.setMessage(R.string.clear_queue_confirmation)
 						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
@@ -609,8 +614,8 @@ public final class MainActivity extends AppCompatActivity {
 						.show();
 	}
 
-	private void confirmRemoveQueueItem(@NonNull final QueueItem item,
-	                                    @NonNull final Runnable onConfirmed) {
+	private void confirmRemove(@NonNull final QueueItem item,
+	                           @NonNull final Runnable onConfirmed) {
 		new MaterialAlertDialogBuilder(this)
 						.setMessage(R.string.remove_queue_item_confirmation)
 						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
@@ -618,20 +623,36 @@ public final class MainActivity extends AppCompatActivity {
 						.show();
 	}
 
-	private void refreshQueueBottomSheet(@NonNull final QueueAdapter adapter,
-	                                     @NonNull final RecyclerView recyclerView,
-	                                     @NonNull final TextView emptyView) {
+	private void syncQueueSheet(@NonNull final QueueAdapter adapter,
+	                            @NonNull final RecyclerView recyclerView,
+	                            @NonNull final TextView emptyView) {
 		final List<QueueItem> items = queueRepository.getItems();
 		adapter.replaceItems(items, player.getLoadedVideoId());
 		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
 		recyclerView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
 	}
 
-	private void persistQueueOrder(@NonNull final List<QueueItem> order) {
+	private void scrollToPlaying(@NonNull final QueueAdapter adapter,
+	                             @NonNull final RecyclerView recyclerView) {
+		final int i = adapter.playingPos();
+		if (i < 0) {
+			return;
+		}
+		recyclerView.post(() -> {
+			final RecyclerView.LayoutManager m = recyclerView.getLayoutManager();
+			if (m instanceof LinearLayoutManager l) {
+				l.scrollToPositionWithOffset(i, queueAnchor(recyclerView.getHeight(), recyclerView.getPaddingTop()));
+				return;
+			}
+			recyclerView.scrollToPosition(i);
+		});
+	}
+
+	private void saveQueueOrder(@NonNull final List<QueueItem> order) {
 		final List<QueueItem> items = queueRepository.getItems();
 		for (int to = 0; to < order.size(); to++) {
 			final String videoId = order.get(to).getVideoId();
-			final int from = indexOfQueueItem(items, videoId);
+			final int from = find(items, videoId);
 			if (from < 0 || from == to) continue;
 			if (queueRepository.move(from, to)) {
 				final QueueItem item = items.remove(from);
@@ -640,8 +661,8 @@ public final class MainActivity extends AppCompatActivity {
 		}
 	}
 
-	private int indexOfQueueItem(@NonNull final List<QueueItem> items,
-	                             @Nullable final String videoId) {
+	private int find(@NonNull final List<QueueItem> items,
+	                 @Nullable final String videoId) {
 		if (videoId == null) return -1;
 		for (int i = 0; i < items.size(); i++) {
 			if (videoId.equals(items.get(i).getVideoId())) {
@@ -651,7 +672,7 @@ public final class MainActivity extends AppCompatActivity {
 		return -1;
 	}
 
-	private void renderLoopModeButton(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {
+	private void renderLoop(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {
 		switch (mode) {
 			case PLAYLIST_NEXT -> {
 				button.setImageResource(R.drawable.ic_playback_end_next);

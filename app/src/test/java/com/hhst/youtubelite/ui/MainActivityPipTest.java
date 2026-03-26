@@ -103,31 +103,37 @@ public class MainActivityPipTest {
 	}
 
 	@Test
-	public void resolveQueueBottomSheetMaxHeight_usesSpaceBelowEmbeddedPlayer() {
-		assertEquals(1180, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 740, false));
+	public void sheetMax_usesSpaceBelowEmbeddedPlayer() {
+		assertEquals(1180, MainActivity.sheetMax(1920, 0, 740, false));
 	}
 
 	@Test
-	public void resolveQueueBottomSheetMaxHeight_fallsBackToFullHeightWhenPlayerBottomIsUnavailable() {
-		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 0, false));
-		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 1920, false));
-		assertEquals(1920, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 0, 2200, false));
+	public void sheetMax_fallsBackToFullHeightWhenPlayerBottomIsUnavailable() {
+		assertEquals(1920, MainActivity.sheetMax(1920, 0, 0, false));
+		assertEquals(1920, MainActivity.sheetMax(1920, 0, 1920, false));
+		assertEquals(1920, MainActivity.sheetMax(1920, 0, 2200, false));
 	}
 
 	@Test
-	public void resolveQueueBottomSheetMaxHeight_reservesTopInsetForMiniPlayerMode() {
-		assertEquals(1880, MainActivity.resolveQueueBottomSheetMaxHeight(1920, 40, 1680, true));
+	public void sheetMax_reservesTopInsetForMiniPlayerMode() {
+		assertEquals(1880, MainActivity.sheetMax(1920, 40, 1680, true));
 	}
 
 	@Test
-	public void resolveQueueBottomSheetBottomPadding_includesSystemBarInset() {
-		assertEquals(36, MainActivity.resolveQueueBottomSheetBottomPadding(4, 32));
-		assertEquals(4, MainActivity.resolveQueueBottomSheetBottomPadding(4, 0));
+	public void sheetPad_includesSystemBarInset() {
+		assertEquals(36, MainActivity.sheetPad(4, 32));
+		assertEquals(4, MainActivity.sheetPad(4, 0));
 	}
 
 	@Test
-	public void resolveQueueRecyclerBottomPadding_preservesTrailingScrollSpace() {
-		assertEquals(36, MainActivity.resolveQueueRecyclerBottomPadding(4, 32, 24));
-		assertEquals(28, MainActivity.resolveQueueRecyclerBottomPadding(4, 0, 24));
+	public void listPad_preservesTrailingScrollSpace() {
+		assertEquals(36, MainActivity.listPad(4, 32, 24));
+		assertEquals(28, MainActivity.listPad(4, 0, 24));
+	}
+
+	@Test
+	public void queueAnchor_biasesTowardUpperMiddle() {
+		assertEquals(340, MainActivity.queueAnchor(900, 40));
+		assertEquals(0, MainActivity.queueAnchor(0, 0));
 	}
 }

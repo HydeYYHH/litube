@@ -25,19 +25,23 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 	@NonNull
 	private final Actions actions;
 	@Nullable
-	private String currentVideoId;
+	private String playingId;
 
 	public QueueAdapter(@NonNull final Actions actions) {
 		this.actions = actions;
 	}
 
-	public void replaceItems(@NonNull final List<QueueItem> newItems, @Nullable final String currentVideoId) {
+	public void replaceItems(@NonNull final List<QueueItem> newItems, @Nullable final String playingId) {
 		items.clear();
 		for (final QueueItem item : newItems) {
 			items.add(item.copy());
 		}
-		this.currentVideoId = currentVideoId;
-		dispatchAdapterNotification(this::notifyDataSetChanged);
+		this.playingId = playingId;
+		notifySafe(this::notifyDataSetChanged);
+	}
+
+	public int playingPos() {
+		return find(items, playingId);
 	}
 
 	public boolean moveItem(final int from, final int to) {
@@ -46,7 +50,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 		}
 		final QueueItem moved = items.remove(from);
 		items.add(to, moved);
-		dispatchAdapterNotification(() -> notifyItemMoved(from, to));
+		notifySafe(() -> notifyItemMoved(from, to));
 		return true;
 	}
 
@@ -56,7 +60,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 			return null;
 		}
 		final QueueItem removed = items.remove(position);
-		dispatchAdapterNotification(() -> notifyItemRemoved(position));
+		notifySafe(() -> notifyItemRemoved(position));
 		return removed.copy();
 	}
 
@@ -79,7 +83,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 
 	@Override
 	public void onBindViewHolder(@NonNull final ViewHolder holder, final int position) {
-		holder.bind(items.get(position), currentVideoId, actions);
+		holder.bind(items.get(position), playingId, actions);
 	}
 
 	@Override
@@ -87,18 +91,30 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 		return items.size();
 	}
 
-	static boolean shouldHighlightItem(@Nullable final String itemVideoId,
-	                                   @Nullable final String currentVideoId) {
-		return itemVideoId != null && Objects.equals(itemVideoId, currentVideoId);
+	static boolean isPlaying(@Nullable final String itemId,
+	                         @Nullable final String videoId) {
+		return itemId != null && Objects.equals(itemId, videoId);
+	}
+
+	static int find(@NonNull final List<QueueItem> items, @Nullable final String videoId) {
+		if (videoId == null) {
+			return -1;
+		}
+		for (int i = 0; i < items.size(); i++) {
+			if (Objects.equals(videoId, items.get(i).getVideoId())) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	private boolean isValidIndex(final int index) {
 		return index >= 0 && index < items.size();
 	}
 
-	private void dispatchAdapterNotification(@NonNull final Runnable notification) {
+	private void notifySafe(@NonNull final Runnable task) {
 		try {
-			notification.run();
+			task.run();
 		} catch (final NullPointerException ignored) {
 			// The JVM unit-test stub for RecyclerView.Adapter has no observer list until attached.
 		}
@@ -132,7 +148,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 		}
 
 		void bind(@NonNull final QueueItem item,
-		          @Nullable final String currentVideoId,
+		          @Nullable final String playingId,
 		          @NonNull final Actions actions) {
 			titleView.setText(item.getTitle() == null || item.getTitle().isBlank()
 					? item.getUrl()
@@ -149,10 +165,10 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 			} else {
 				thumbnailView.setImageResource(R.drawable.ic_broken_image);
 			}
-			final boolean isCurrentItem = shouldHighlightItem(item.getVideoId(), currentVideoId);
-			itemView.setActivated(isCurrentItem);
+			final boolean playing = isPlaying(item.getVideoId(), playingId);
+			itemView.setActivated(playing);
 			itemView.setAlpha(1.0f);
-			playingBadgeView.setVisibility(isCurrentItem ? View.VISIBLE : View.GONE);
+			playingBadgeView.setVisibility(playing ? View.VISIBLE : View.GONE);
 			itemView.setOnClickListener(v -> actions.onPlayRequested(item.copy()));
 			deleteButton.setOnClickListener(v -> actions.onDeleteRequested(item.copy()));
 		}

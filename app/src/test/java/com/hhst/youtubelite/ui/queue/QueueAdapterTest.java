@@ -15,11 +15,11 @@ import java.util.List;
 
 public class QueueAdapterTest {
 	@Test
-	public void shouldHighlightItem_onlyForMatchingCurrentVideoId() {
-		assertTrue(QueueAdapter.shouldHighlightItem("two", "two"));
-		assertFalse(QueueAdapter.shouldHighlightItem("one", "two"));
-		assertFalse(QueueAdapter.shouldHighlightItem(null, "two"));
-		assertFalse(QueueAdapter.shouldHighlightItem("two", null));
+	public void isPlaying_onlyForMatchingVideoId() {
+		assertTrue(QueueAdapter.isPlaying("two", "two"));
+		assertFalse(QueueAdapter.isPlaying("one", "two"));
+		assertFalse(QueueAdapter.isPlaying(null, "two"));
+		assertFalse(QueueAdapter.isPlaying("two", null));
 	}
 
 	@Test
@@ -41,6 +41,22 @@ public class QueueAdapterTest {
 		assertNotNull(removed);
 		assertEquals("two", removed.getVideoId());
 		assertEquals(List.of("one", "three"), videoIds(adapter.snapshotItems()));
+	}
+
+	@Test
+	public void playingPos_returnsMatchedItemIndex() {
+		final QueueAdapter adapter = createAdapter();
+		adapter.replaceItems(List.of(item("one"), item("two"), item("three")), "two");
+
+		assertEquals(1, adapter.playingPos());
+	}
+
+	@Test
+	public void playingPos_returnsMissingWhenItemIsAbsent() {
+		final QueueAdapter adapter = createAdapter();
+		adapter.replaceItems(List.of(item("one"), item("two"), item("three")), "four");
+
+		assertEquals(-1, adapter.playingPos());
 	}
 
 	private static QueueAdapter createAdapter() {
