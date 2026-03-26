@@ -2,6 +2,8 @@ package com.hhst.youtubelite.player.controller;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,8 +38,10 @@ import androidx.media3.ui.AspectRatioFrameLayout;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.browser.TabManager;
+import com.hhst.youtubelite.browser.YoutubeFragment;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.player.LitePlayerView;
@@ -49,6 +53,7 @@ import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.ViewUtils;
 import com.squareup.picasso.Picasso;
 
@@ -96,6 +101,10 @@ public class Controller {
 	private boolean longPress = false;
 	@NonNull
 	private final ControllerMachine stateMachine = new ControllerMachine();
+	private boolean block = false;
+	// Exit fullscreen after portrait.
+	private boolean pending = false;
+	private boolean autoFs = false;
 	private long lastVideoRenderedCount = 0;
 	private long lastFpsUpdateTime = 0;
 	private float fps = 0;	@NonNull
@@ -138,6 +147,47 @@ public class Controller {
 
 	static float nextButtonAlpha(@NonNull final QueueNav availability) {
 		return shouldEnableNext(availability) ? 1.0f : DISABLED_BUTTON_ALPHA;
+	}
+
+	static boolean shouldEnterFs(final boolean watch,
+	                             final boolean rotate,
+	                             final boolean visible,
+	                             final boolean fullscreen,
+	                             final boolean pip,
+	                             final boolean mini,
+	                             final int orientation,
+	                             final boolean blocked) {
+		return watch
+						&& rotate
+						&& visible
+						&& !fullscreen
+						&& !pip
+						&& !mini
+						&& orientation == Configuration.ORIENTATION_LANDSCAPE
+						&& !blocked;
+	}
+
+	static boolean shouldExitFs(final boolean watch,
+	                            final boolean fullscreen,
+	                            final int orientation) {
+		return watch
+						&& fullscreen
+						&& orientation == Configuration.ORIENTATION_PORTRAIT;
+	}
+
+	static boolean shouldLockPortrait(final boolean watch,
+	                                  final boolean fullscreen,
+	                                  final int orientation) {
+		return watch
+						&& fullscreen
+						&& orientation == Configuration.ORIENTATION_LANDSCAPE;
+	}
+
+	static int fsOrientation(final boolean autoFs, final boolean portrait) {
+		if (autoFs) return ActivityInfo.SCREEN_ORIENTATION_FULL_USER;
+		return portrait
+						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
 	}
 
 	public void refreshQueueNavigationAvailability(@NonNull final QueueNav availability) {
@@ -632,16 +682,81 @@ public class Controller {
 	}
 
 	public void enterFullscreen() {
+		if (shouldEnterFs(
+						isWatch(),
+						DeviceUtils.isRotateOn(activity),
+						playerView.getVisibility() == View.VISIBLE,
+						stateMachine.isFullscreen(),
+						stateMachine.isInPictureInPicture(),
+						stateMachine.isInMiniPlayer(),
+						orientation(),
+						false)) {
+			enterAutoFs();
+			return;
+		}
+		autoFs = false;
 		final ControllerMachine.State previousState = stateMachine.getState();
 		stateMachine.enterFullscreen();
 		applyControllerState(previousState, true);
 	}
 
 	public void exitFullscreen() {
+		if (shouldLockPortrait(isWatch(), stateMachine.isFullscreen(), orientation())) {
+			pending = true;
+			block = true;
+			activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+			return;
+		}
+		exitNow();
+	}
+
+	private void exitNow() {
+		pending = false;
+		autoFs = false;
 		final ControllerMachine.State previousState = stateMachine.getState();
 		stateMachine.exitFullscreen();
 		applyControllerState(previousState, true);
 		zoomListener.reset();
+	}
+
+	public void syncRotation(final boolean autoRotate, final int orientation) {
+		if (!isWatch()
+						|| stateMachine.isInPictureInPicture()
+						|| stateMachine.isInMiniPlayer()
+						|| playerView.getVisibility() != View.VISIBLE) {
+			clearRotation();
+			return;
+		}
+		if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+			if (pending) {
+				pending = false;
+				if (stateMachine.isFullscreen()) exitNow();
+				return;
+			}
+			block = false;
+			if (shouldExitFs(true, stateMachine.isFullscreen(), orientation)) {
+				exitNow();
+			}
+			return;
+		}
+		if (orientation != Configuration.ORIENTATION_LANDSCAPE || pending) return;
+		if (shouldEnterFs(
+						true,
+						autoRotate,
+						playerView.getVisibility() == View.VISIBLE,
+						stateMachine.isFullscreen(),
+						stateMachine.isInPictureInPicture(),
+						stateMachine.isInMiniPlayer(),
+						orientation,
+						block)) {
+			enterAutoFs();
+		}
+	}
+
+	public void clearRotation() {
+		block = false;
+		pending = false;
+		autoFs = false;
 	}
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
@@ -739,12 +854,32 @@ public class Controller {
 		playerView.applyControllerState(
 						previousState,
 						stateMachine.getState(),
-						PlayerUtils.isPortrait(engine),
+						fsOrientation(autoFs, PlayerUtils.isPortrait(engine)),
 						prefs.getResizeMode());
 		if (stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) {
 			hideHint();
 		}
 		setControlsVisible(controlsVisible);
+	}
+
+	private void enterAutoFs() {
+		autoFs = true;
+		pending = false;
+		final ControllerMachine.State previousState = stateMachine.getState();
+		stateMachine.enterFullscreen();
+		applyControllerState(previousState, true);
+	}
+
+	private int orientation() {
+		return activity.getResources().getConfiguration().orientation;
+	}
+
+	private boolean isWatch() {
+		final YoutubeFragment tab = tabManager.getTab();
+		if (tab == null) return false;
+		if (Constant.PAGE_WATCH.equals(tab.getMTag())) return true;
+		final String url = tab.getUrl();
+		return url != null && Constant.PAGE_WATCH.equals(UrlUtils.getPageClass(url));
 	}
 
 	private void updateLockButton(@Nullable final ImageButton lockBtn) {

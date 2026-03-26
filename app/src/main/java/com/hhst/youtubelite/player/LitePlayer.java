@@ -27,6 +27,7 @@ import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
+import com.hhst.youtubelite.util.DeviceUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -227,6 +228,9 @@ public class LitePlayer {
 			final DefaultTimeBar bar = playerView.findViewById(R.id.exo_progress);
 			bar.setAdGroupTimesMs(null, null, 0);
 			playerView.show();
+			controller.syncRotation(
+							DeviceUtils.isRotateOn(activity),
+							activity.getResources().getConfiguration().orientation);
 		});
 
 		cancelCurrentExtraction();
@@ -283,6 +287,7 @@ public class LitePlayer {
 		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		activity.runOnUiThread(() -> {
+			controller.clearRotation();
 			exitInAppMiniPlayer();
 			setMiniPlayerCallbacks(null, null);
 			playerView.hide();
@@ -324,6 +329,10 @@ public class LitePlayer {
 
 	public void exitFullscreen() {
 		controller.exitFullscreen();
+	}
+
+	public void syncRotation(final boolean autoRotate, final int orientation) {
+		controller.syncRotation(autoRotate, orientation);
 	}
 
 	public void enterPictureInPicture() {

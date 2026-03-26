@@ -162,6 +162,14 @@ public final class MainActivity extends AppCompatActivity {
 		syncQueueUiVisibility(isInPictureInPictureMode);
 	}
 
+	@Override
+	public void onConfigurationChanged(@NonNull final Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		if (player != null) {
+			player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
+		}
+	}
+
 	private void handleIntent(@Nullable Intent intent) {
 		if (intent == null) return;
 		String action = intent.getAction();
@@ -780,6 +788,9 @@ public final class MainActivity extends AppCompatActivity {
 		suppressNextUserLeaveHintPictureInPicture = false;
 		if (player != null && shouldRestoreMiniPlayerOnResume(player.isInAppMiniPlayer(), DeviceUtils.isInPictureInPictureMode(this))) {
 			player.restoreInAppMiniPlayerUiIfNeeded();
+		}
+		if (player != null) {
+			player.syncRotation(DeviceUtils.isRotateOn(this), getResources().getConfiguration().orientation);
 		}
 	}
 

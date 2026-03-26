@@ -13,6 +13,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.view.ViewTreeObserver;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -61,6 +63,7 @@ public class LitePlayerView extends PlayerView {
 	private static final int MINI_CONTROL_DEFAULT_SPACE_DP = 18;
 	private static final int MINI_SIDE_CONTROL_SIZE_DP = 30;
 	private static final int MINI_CENTER_CONTROL_SIZE_DP = 34;
+	private static final long MINI_TRANSITION_MS = 220L;
 	private static final int[] MINI_PLAYER_TAP_TARGET_IDS = {
 					R.id.btn_mini_queue,
 					R.id.btn_mini_close,
@@ -113,6 +116,8 @@ public class LitePlayerView extends PlayerView {
 	private float miniPlayerPinchStartDistancePx;
 	private int miniPlayerPinchStartWidthPx;
 	private int miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
+	private boolean miniAnimating;
+	private int miniAnimToken;
 
 	public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
@@ -149,13 +154,13 @@ public class LitePlayerView extends PlayerView {
 
 	public void applyControllerState(@NonNull final ControllerMachine.State previousState,
 	                                 @NonNull final ControllerMachine.State newState,
-	                                 final boolean isPortraitVideo,
+	                                 final int fsOrientation,
 	                                 final int defaultResizeMode) {
 		post(() -> {
 			switch (newState) {
 				case NORMAL, MINI_PLAYER -> applyNormalState(defaultResizeMode);
 				case FULLSCREEN_UNLOCKED, FULLSCREEN_LOCKED ->
-								applyFullscreenState(previousState, isPortraitVideo, defaultResizeMode);
+								applyFullscreenState(previousState, fsOrientation, defaultResizeMode);
 				case PIP -> applyPictureInPictureState(previousState);
 			}
 		});
@@ -216,16 +221,27 @@ public class LitePlayerView extends PlayerView {
 
 	public void enterInAppMiniPlayer() {
 		if (inAppMiniPlayer) return;
+		final float startX = getX();
+		final float startY = getY();
+		final int startWidth = getWidth();
+		final int startHeight = getHeight();
+		stopMiniTransition();
 		miniPlayerRestoreResizeMode = getResizeMode();
 		miniPlayerRestoreFullscreen = isFs;
 		inAppMiniPlayer = true;
 		loadPersistedMiniPlayerLayoutState();
 		updatePlayerLayout(false);
 		updateMiniPlayerInteractionHandlers();
+		animateMiniTransition(startX, startY, startWidth, startHeight);
 	}
 
 	public void exitInAppMiniPlayer() {
 		if (!inAppMiniPlayer) return;
+		final float startX = getX();
+		final float startY = getY();
+		final int startWidth = getWidth();
+		final int startHeight = getHeight();
+		stopMiniTransition();
 		inAppMiniPlayer = false;
 		resetMiniPlayerTouchTracking();
 		miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
@@ -233,6 +249,7 @@ public class LitePlayerView extends PlayerView {
 		updatePlayerLayout(miniPlayerRestoreFullscreen);
 		setResizeMode(miniPlayerRestoreResizeMode);
 		updateMiniPlayerInteractionHandlers();
+		animateMiniTransition(startX, startY, startWidth, startHeight);
 	}
 
 	public void setMiniPlayerCallbacks(@Nullable final Runnable onRestore, @Nullable final Runnable onClose) {
@@ -335,10 +352,72 @@ public class LitePlayerView extends PlayerView {
 
 	@Override
 	public boolean dispatchTouchEvent(@NonNull final MotionEvent event) {
+		if (miniAnimating) {
+			return true;
+		}
 		if (inAppMiniPlayer && handleMiniPlayerTouch(event)) {
 			return true;
 		}
 		return super.dispatchTouchEvent(event);
+	}
+
+	private void animateMiniTransition(final float startX,
+	                                   final float startY,
+	                                   final int startWidth,
+	                                   final int startHeight) {
+		if (startWidth <= 0 || startHeight <= 0 || !isAttachedToWindow()) return;
+		final int token = ++miniAnimToken;
+		miniAnimating = true;
+		getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+			@Override
+			public boolean onPreDraw() {
+				final ViewTreeObserver observer = getViewTreeObserver();
+				if (observer.isAlive()) observer.removeOnPreDrawListener(this);
+				if (token != miniAnimToken || !isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0) {
+					finishMiniTransition(token);
+					return true;
+				}
+				final float endX = getX();
+				final float endY = getY();
+				final int endWidth = getWidth();
+				final int endHeight = getHeight();
+				final float endTranslationX = getTranslationX();
+				final float endTranslationY = getTranslationY();
+				setPivotX(endWidth / 2.0f);
+				setPivotY(endHeight / 2.0f);
+				setScaleX(startWidth / (float) endWidth);
+				setScaleY(startHeight / (float) endHeight);
+				setTranslationX(endTranslationX + startX + startWidth / 2.0f - (endX + endWidth / 2.0f));
+				setTranslationY(endTranslationY + startY + startHeight / 2.0f - (endY + endHeight / 2.0f));
+				animate().cancel();
+				animate()
+								.translationX(endTranslationX)
+								.translationY(endTranslationY)
+								.scaleX(1.0f)
+								.scaleY(1.0f)
+								.setDuration(MINI_TRANSITION_MS)
+								.setInterpolator(new DecelerateInterpolator(1.4f))
+								.withLayer()
+								.withEndAction(() -> finishMiniTransition(token))
+								.start();
+				return true;
+			}
+		});
+	}
+
+	private void stopMiniTransition() {
+		miniAnimating = false;
+		miniAnimToken++;
+		animate().cancel();
+		setScaleX(1.0f);
+		setScaleY(1.0f);
+	}
+
+	private void finishMiniTransition(final int token) {
+		if (token != miniAnimToken) return;
+		miniAnimating = false;
+		setScaleX(1.0f);
+		setScaleY(1.0f);
 	}
 
 	private void applyMiniPlayerLayout(@NonNull final ConstraintLayout.LayoutParams params) {
@@ -612,15 +691,13 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	private void applyFullscreenState(@NonNull final ControllerMachine.State previousState,
-	                                  final boolean isPortraitVideo,
+	                                  final int fsOrientation,
 	                                  final int defaultResizeMode) {
 		isFs = true;
 		if (previousState == ControllerMachine.State.NORMAL && !activity.isInPictureInPictureMode()) {
 			normalHeight = playerHeight;
 		}
-		activity.setRequestedOrientation(isPortraitVideo
-						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+		activity.setRequestedOrientation(fsOrientation);
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
 		updatePlayerLayout(true);
 		setResizeMode(defaultResizeMode);

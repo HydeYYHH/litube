@@ -16,6 +16,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import android.app.Activity;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.view.View;
 
 import androidx.media3.common.PlaybackException;
@@ -38,6 +40,7 @@ import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
+import com.hhst.youtubelite.util.DeviceUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.junit.After;
@@ -68,6 +71,7 @@ public class LitePlayerTest {
 	private YoutubeExtractor extractor;
 	private MMKV kv;
 	private MockedStatic<MMKV> mmkvStatic;
+	private MockedStatic<DeviceUtils> deviceUtilsStatic;
 	private Activity activity;
 	private LitePlayerView playerView;
 	private Controller controller;
@@ -89,6 +93,9 @@ public class LitePlayerTest {
 		kv = mock(MMKV.class);
 		sponsorOverlayView = mock(SponsorOverlayView.class);
 		timeBar = mock(DefaultTimeBar.class);
+		final Resources resources = mock(Resources.class);
+		final Configuration configuration = new Configuration();
+		configuration.orientation = Configuration.ORIENTATION_PORTRAIT;
 
 		doAnswer(invocation -> {
 			invocation.<Runnable>getArgument(0).run();
@@ -104,12 +111,16 @@ public class LitePlayerTest {
 			invocation.<Runnable>getArgument(0).run();
 			return true;
 		}).when(playerView).post(any(Runnable.class));
+		when(activity.getResources()).thenReturn(resources);
+		when(resources.getConfiguration()).thenReturn(configuration);
 		when(engine.position()).thenReturn(321L);
 		when(engine.getPlaybackRate()).thenReturn(1.25f);
 		when(engine.isPlaying()).thenReturn(true);
 
 		mmkvStatic = org.mockito.Mockito.mockStatic(MMKV.class);
 		mmkvStatic.when(MMKV::defaultMMKV).thenReturn(kv);
+		deviceUtilsStatic = org.mockito.Mockito.mockStatic(DeviceUtils.class);
+		deviceUtilsStatic.when(() -> DeviceUtils.isRotateOn(activity)).thenReturn(false);
 		player = new LitePlayer(activity, extractor, playerView, controller, engine, sponsor, executor);
 		final ArgumentCaptor<Player.Listener> listenerCaptor = ArgumentCaptor.forClass(Player.Listener.class);
 		verify(engine).addListener(listenerCaptor.capture());
@@ -120,6 +131,9 @@ public class LitePlayerTest {
 	public void tearDown() {
 		if (mmkvStatic != null) {
 			mmkvStatic.close();
+		}
+		if (deviceUtilsStatic != null) {
+			deviceUtilsStatic.close();
 		}
 	}
 
@@ -271,10 +285,12 @@ public class LitePlayerTest {
 	public void fullscreenAndPictureInPictureApis_delegateToController() {
 		player.enterFullscreen();
 		player.exitFullscreen();
+		player.syncRotation(true, Configuration.ORIENTATION_LANDSCAPE);
 		player.onPictureInPictureModeChanged(true);
 
 		verify(controller).enterFullscreen();
 		verify(controller).exitFullscreen();
+		verify(controller).syncRotation(true, Configuration.ORIENTATION_LANDSCAPE);
 		verify(controller).onPictureInPictureModeChanged(true);
 	}
 
