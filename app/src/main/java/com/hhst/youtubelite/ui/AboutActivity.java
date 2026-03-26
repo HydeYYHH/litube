@@ -1,7 +1,5 @@
 package com.hhst.youtubelite.ui;
 
-import android.R.id;
-import android.R.string;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -25,13 +23,12 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
-
-import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,11 +46,14 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Source;
 
 @AndroidEntryPoint
 public class AboutActivity extends AppCompatActivity {
 	private static final String TAG = "AboutActivity";
-	private static final String GITHUB_RELEASE_API = "https://api.github.com/repos/HydeYYHH/litube/releases/latest";
+	private static final String GITHUB_RELEASE_API = "https://api.github.com/repos/codelabs-sk/litepipe/releases/latest";
 	@Inject
 	OkHttpClient client;
 	@Inject
@@ -66,12 +66,18 @@ public class AboutActivity extends AppCompatActivity {
 		super.onCreate(savedInstanceState);
 		EdgeToEdge.enable(this);
 		setContentView(R.layout.activity_about);
-		View mainView = findViewById(id.content);
+		
+		View mainView = findViewById(android.R.id.content);
 		ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
 			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
 			v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
 			return insets;
 		});
+
+		MaterialToolbar toolbar = findViewById(R.id.toolbar);
+		if (toolbar != null) {
+			toolbar.setNavigationOnClickListener(v -> finish());
+		}
 
 		ImageView iconView = findViewById(R.id.app_icon);
 		TextView nameView = findViewById(R.id.app_name);
@@ -105,18 +111,28 @@ public class AboutActivity extends AppCompatActivity {
 	}
 
 	private void showClearCacheDialog() {
-		new MaterialAlertDialogBuilder(this).setTitle(R.string.clear_cache).setMessage(R.string.clear_cache_confirmation).setPositiveButton(R.string.clear, (dialog, which) -> clearAppCache()).setNegativeButton(string.cancel, null).show();
+		new MaterialAlertDialogBuilder(this)
+				.setTitle(R.string.clear_cache)
+				.setMessage(R.string.clear_cache_confirmation)
+				.setPositiveButton(R.string.clear, (dialog, which) -> clearAppCache())
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
 	}
 
 	private void checkForUpdates() {
 		checkUpdateLayout.setEnabled(false);
 		checkUpdateText.setText(R.string.checking_for_updates);
 
-		Request request = new Request.Builder().url(GITHUB_RELEASE_API).build();
+		Request request = new Request.Builder()
+				.url(GITHUB_RELEASE_API)
+				.header("Accept", "application/vnd.github.v3+json")
+				.header("User-Agent", "YouTube-Lite-App")
+				.build();
 
 		client.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(@NonNull Call call, @NonNull IOException e) {
+				Log.e(TAG, "Update check network failure", e);
 				runOnUiThread(() -> {
 					checkUpdateLayout.setEnabled(true);
 					checkUpdateText.setText(R.string.check_for_updates);
@@ -127,8 +143,11 @@ public class AboutActivity extends AppCompatActivity {
 			@Override
 			public void onResponse(@NonNull Call call, @NonNull Response response) {
 				try (response) {
-					if (!response.isSuccessful())
+					if (!response.isSuccessful()) {
+						String errorBody = response.body() != null ? response.body().string() : "no body";
+						Log.e(TAG, "Update check failed: " + response.code() + " " + errorBody);
 						throw new IOException("Unexpected code " + response);
+					}
 
 					String body = Objects.requireNonNull(response.body()).string();
 					JsonObject json = gson.fromJson(body, JsonObject.class);
@@ -144,6 +163,7 @@ public class AboutActivity extends AppCompatActivity {
 								Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
 								startActivity(intent);
 							});
+							Toast.makeText(AboutActivity.this, getString(R.string.update_available, latest), Toast.LENGTH_LONG).show();
 						});
 					} else {
 						runOnUiThread(() -> {
@@ -214,11 +234,13 @@ public class AboutActivity extends AppCompatActivity {
 
 				String header = String.format(Locale.US, "--------- Device Info ---------\nDevice: %s\nModel: %s\nAndroid: %s\nApp Version: %s\n-------------------------------\n\n", Build.DEVICE, Build.MODEL, Build.VERSION.RELEASE, version);
 
-				FileUtils.writeStringToFile(destFile, header, StandardCharsets.UTF_8);
-
-				if (srcFile.exists()) {
-					String logs = FileUtils.readFileToString(srcFile, StandardCharsets.UTF_8);
-					FileUtils.writeStringToFile(destFile, logs, StandardCharsets.UTF_8, true);
+				try (BufferedSink sink = Okio.buffer(Okio.sink(destFile))) {
+					sink.writeString(header, StandardCharsets.UTF_8);
+					if (srcFile.exists()) {
+						try (Source source = Okio.source(srcFile)) {
+							sink.writeAll(source);
+						}
+					}
 				}
 
 				Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", destFile);

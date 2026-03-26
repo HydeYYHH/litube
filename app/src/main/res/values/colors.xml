@@ -12,4 +12,9 @@
     <color name="surface_variant">#F1F1F1</color>
     <color name="on_surface_variant">#606060</color>
     <color name="outline">#E5E5E5</color>
+
+    <!-- Professional Splash Colors -->
+    <color name="splash_bg">#0F0F0F</color>
+    <color name="splash_text">#FFFFFF</color>
+    <color name="splash_secondary_text">#AAAAAA</color>
 </resources>

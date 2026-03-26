@@ -42,6 +42,16 @@
             </intent-filter>
         </receiver>
 
+        <activity
+            android:name=".ui.SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.YoutubeLite.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".downloader.service.DownloadService"
             android:exported="false"
@@ -64,11 +74,6 @@
             android:exported="true">
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
-            <intent-filter>
                 <action android:name="TRIGGER_DOWNLOAD_FROM_SHARE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
@@ -85,7 +90,6 @@
                 <data android:host="youtu.be" />
                 <data android:pathPrefix="/watch" />
                 <data android:pathPrefix="/live" />
-                <data android:pathPrefix="/shorts" />
                 <data android:pathPrefix="/playlist" />
                 <data android:pathPrefix="/view_all_playlists" />
                 <data android:pathPrefix="/v/" />
@@ -121,6 +125,16 @@
 
         <activity
             android:name=".ui.AboutActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.SubSettingsActivity"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
             android:exported="false" />
 

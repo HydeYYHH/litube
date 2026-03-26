@@ -9,21 +9,32 @@
 	<com.google.android.material.appbar.AppBarLayout
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
-		android:background="?attr/colorSurface">
+		android:background="?attr/colorSurface"
+		app:elevation="0dp"
+		app:liftOnScroll="true">
 
 		<com.google.android.material.appbar.MaterialToolbar
 			android:id="@+id/toolbar"
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			app:title="@string/download_history">
+			app:title="@string/download_history"
+			app:titleCentered="true"
+			app:navigationIcon="@drawable/ic_arrow_back"
+			app:navigationIconTint="?attr/colorControlNormal"
+			app:titleTextColor="?attr/colorOnSurface" />
 
+		<com.google.android.material.card.MaterialCardView
+			android:id="@+id/selection_header"
+			style="@style/AppCard"
+			android:layout_marginVertical="8dp"
+			android:visibility="gone">
 			<LinearLayout
-				android:id="@+id/selection_header"
 				android:layout_width="match_parent"
-				android:layout_height="match_parent"
+				android:layout_height="wrap_content"
 				android:gravity="center_vertical"
 				android:orientation="horizontal"
-				android:visibility="gone">
+				android:paddingHorizontal="16dp"
+				android:paddingVertical="8dp">
 
 				<com.google.android.material.checkbox.MaterialCheckBox
 					android:id="@+id/toolbar_checkbox"
@@ -32,8 +43,8 @@
 					android:text="Select All"
 					android:textAppearance="?attr/textAppearanceTitleMedium" />
 			</LinearLayout>
+		</com.google.android.material.card.MaterialCardView>
 
-		</com.google.android.material.appbar.MaterialToolbar>
 	</com.google.android.material.appbar.AppBarLayout>
 
 	<FrameLayout
@@ -46,7 +57,8 @@
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
 			android:clipToPadding="false"
-			android:padding="16dp" />
+			android:paddingTop="8dp"
+			android:paddingBottom="16dp" />
 
 		<TextView
 			android:id="@+id/emptyView"

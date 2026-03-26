@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingBottom="16dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="12dp"
+        android:paddingBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/btn_close"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="?attr/colorOnSurface" />
+
+        <TextView
+            android:id="@+id/dialog_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:fontFamily="sans-serif-black"
+            android:text="@string/more_options"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="?attr/colorOnSurface"
+            android:textStyle="bold" />
+
+    </RelativeLayout>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_download"
+        style="@style/AppCard"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="2dp"
+        app:cardElevation="0dp">
+        <androidx.appcompat.widget.AppCompatTextView
+            style="@style/AppCardItem"
+            android:padding="12dp"
+            android:text="Download Video"
+            app:drawableStartCompat="@drawable/ic_download" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_playlist"
+        style="@style/AppCard"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="2dp"
+        android:visibility="gone"
+        app:cardElevation="0dp">
+        <androidx.appcompat.widget.AppCompatTextView
+            style="@style/AppCardItem"
+            android:padding="12dp"
+            android:text="Download Playlist"
+            app:drawableStartCompat="@drawable/ic_add" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_share"
+        style="@style/AppCard"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="2dp"
+        app:cardElevation="0dp">
+        <androidx.appcompat.widget.AppCompatTextView
+            style="@style/AppCardItem"
+            android:padding="12dp"
+            android:text="Share Link"
+            app:drawableStartCompat="@drawable/ic_export" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_open_downloads"
+        style="@style/AppCard"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="2dp"
+        app:cardElevation="0dp">
+        <androidx.appcompat.widget.AppCompatTextView
+            style="@style/AppCardItem"
+            android:padding="12dp"
+            android:text="Open Downloads"
+            app:drawableStartCompat="@drawable/ic_track" />
+    </com.google.android.material.card.MaterialCardView>
+
+</LinearLayout>

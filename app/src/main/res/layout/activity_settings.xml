@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        app:liftOnScroll="true">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:title="@string/litepipe_settings"
+            app:titleCentered="true" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingVertical="12dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/category_general"
+                style="@style/AppCard">
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/general"
+                    app:drawableStartCompat="@drawable/ic_track" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/category_player"
+                style="@style/AppCard">
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/player"
+                    app:drawableStartCompat="@drawable/ic_play" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/category_sponsorblock"
+                style="@style/AppCard">
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/sponsorblock"
+                    app:drawableStartCompat="@drawable/ic_segment" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/category_download"
+                style="@style/AppCard">
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/download"
+                    app:drawableStartCompat="@drawable/ic_download" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/category_miscellaneous"
+                style="@style/AppCard">
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/miscellaneous"
+                    app:drawableStartCompat="@drawable/ic_settings" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="16dp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/reset_layout"
+                style="@style/AppCard"
+                app:strokeColor="?attr/colorError">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    style="@style/AppCardItem"
+                    android:text="@string/reset"
+                    android:textColor="?attr/colorError"
+                    app:drawableStartCompat="@drawable/ic_refresh"
+                    app:drawableTint="?attr/colorError" />
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
