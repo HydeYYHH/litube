@@ -178,6 +178,11 @@ public class Engine {
 	}
 
 	private void handlePlaybackEnded() {
+		if (isShortVideo()) {
+			player.seekTo(0);
+			player.play();
+			return;
+		}
 		if (loopMode.skipsToNextOnEnded()) {
 			skipToNext();
 			return;
@@ -185,6 +190,11 @@ public class Engine {
 		if (loopMode.selectsRandomPlaylistItemOnEnded()) {
 			playRandomPlaylistItem();
 		}
+	}
+
+	private boolean isShortVideo() {
+		final long duration = player.getDuration();
+		return duration > 0 && duration < SAFE_ZONE_MS;
 	}
 
 	public boolean isPlaying() {
@@ -605,6 +615,17 @@ public class Engine {
 		if (videoStream != null) return videoStream.getResolution();
 		final Format format = getVideoFormat();
 		return format != null ? format.height + "p" : prefs.getQuality();
+	}
+
+	public String getQualityLabel() {
+		return normalizeQualityLabel(getQuality());
+	}
+
+	@NonNull
+	private String normalizeQualityLabel(@Nullable final String quality) {
+		if (quality == null || quality.isEmpty()) return prefs.getQuality();
+		final int height = StringUtils.parseHeight(quality);
+		return height > 0 ? height + "p" : quality;
 	}
 
 	public void setRepeatMode(final int mode) {

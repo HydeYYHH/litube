@@ -296,7 +296,7 @@
             android:id="@+id/play_pause_container"
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:layout_marginHorizontal="32dp"
+            android:layout_marginHorizontal="20dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btn_next"
             app:layout_constraintStart_toEndOf="@+id/btn_prev"

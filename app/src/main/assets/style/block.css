@@ -11,7 +11,8 @@ ad-slot-renderer,
 .ytp-unmute,
 a.yt-spec-button-shape-next.yt-spec-button-shape-next--overlay,
 ytm-companion-ad-renderer,
-.yt-searchbox-suggestions-container
+.yt-searchbox-suggestions-container,
+.playlist-engagement-panel-top-level-buttons
 {
     display: none !important;
 }

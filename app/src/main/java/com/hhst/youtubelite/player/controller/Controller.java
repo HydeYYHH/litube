@@ -216,7 +216,7 @@ public class Controller {
 							speedView.setText(String.format(Locale.getDefault(), "%sx", engine.getPlaybackRate()));
 						}
 						final TextView qualityView = playerView.findViewById(R.id.btn_quality);
-						if (qualityView != null) qualityView.setText(engine.getQuality());
+						if (qualityView != null) qualityView.setText(engine.getQualityLabel());
 					});
 				}
 			}
@@ -226,7 +226,7 @@ public class Controller {
 				updateSubtitleButtonState();
 				playerView.post(() -> {
 					final TextView qualityView = playerView.findViewById(R.id.btn_quality);
-					if (qualityView != null) qualityView.setText(engine.getQuality());
+					if (qualityView != null) qualityView.setText(engine.getQualityLabel());
 				});
 			}
 
@@ -363,7 +363,7 @@ public class Controller {
 		}
 
 		if (qualityView != null) {
-			qualityView.setText(engine.getQuality());
+			qualityView.setText(engine.getQualityLabel());
 			qualityView.setOnClickListener(v -> {
 				List<String> available = engine.getAvailableResolutions();
 				if (available.isEmpty()) return;
