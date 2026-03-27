@@ -26,6 +26,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:background="@android:color/black"
         android:visibility="gone"
+        app:surface_type="texture_view"
         app:use_controller="true"
         app:show_timeout="0"
         app:show_buffering="always"

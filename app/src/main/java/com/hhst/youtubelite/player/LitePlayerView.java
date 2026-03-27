@@ -6,6 +6,7 @@ import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Outline;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Rational;
@@ -13,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageButton;
@@ -60,6 +62,7 @@ public class LitePlayerView extends PlayerView {
 
 	private static final float SUBTITLE_LINE_FRACTION = 0.92f;
 	private static final float SUBTITLE_POSITION_FRACTION = 0.5f;
+	private static final int MINI_PLAYER_CORNER_RADIUS_DP = 16;
 	private static final int MINI_CONTROL_DEFAULT_SPACE_DP = 18;
 	private static final int MINI_SIDE_CONTROL_SIZE_DP = 30;
 	private static final int MINI_CENTER_CONTROL_SIZE_DP = 34;
@@ -118,6 +121,13 @@ public class LitePlayerView extends PlayerView {
 	private int miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
 	private boolean miniAnimating;
 	private int miniAnimToken;
+	@NonNull
+	private final ViewOutlineProvider miniPlayerOutlineProvider = new ViewOutlineProvider() {
+		@Override
+		public void getOutline(final View view, final Outline outline) {
+			outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dpToPx(MINI_PLAYER_CORNER_RADIUS_DP));
+		}
+	};
 
 	public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
@@ -136,6 +146,8 @@ public class LitePlayerView extends PlayerView {
 		setControllerHideOnTouch(false);
 		setControllerAutoShow(false);
 		setControllerShowTimeoutMs(0);
+		setOutlineProvider(miniPlayerOutlineProvider);
+		setClipToOutline(false);
 		setResizeMode(prefs.getResizeMode());
 		final ConstraintLayout.LayoutParams params = (ConstraintLayout.LayoutParams) getLayoutParams();
 		params.topMargin = ViewUtils.dpToPx(activity, Constant.TOP_MARGIN_DP);
@@ -149,6 +161,7 @@ public class LitePlayerView extends PlayerView {
 				playerWidth = right - left;
 				playerHeight = bottom - top;
 			}
+			if (inAppMiniPlayer) invalidateOutline();
 		});
 	}
 
@@ -231,6 +244,7 @@ public class LitePlayerView extends PlayerView {
 		inAppMiniPlayer = true;
 		loadPersistedMiniPlayerLayoutState();
 		updatePlayerLayout(false);
+		updateMiniPlayerCornerClipping();
 		updateMiniPlayerInteractionHandlers();
 		animateMiniTransition(startX, startY, startWidth, startHeight);
 	}
@@ -247,6 +261,7 @@ public class LitePlayerView extends PlayerView {
 		miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
 		resetMiniPlayerTranslation();
 		updatePlayerLayout(miniPlayerRestoreFullscreen);
+		updateMiniPlayerCornerClipping();
 		setResizeMode(miniPlayerRestoreResizeMode);
 		updateMiniPlayerInteractionHandlers();
 		animateMiniTransition(startX, startY, startWidth, startHeight);
@@ -458,6 +473,11 @@ public class LitePlayerView extends PlayerView {
 		params.rightToRight = ConstraintLayout.LayoutParams.UNSET;
 		params.startToEnd = ConstraintLayout.LayoutParams.UNSET;
 		params.endToStart = ConstraintLayout.LayoutParams.UNSET;
+	}
+
+	private void updateMiniPlayerCornerClipping() {
+		setClipToOutline(inAppMiniPlayer);
+		invalidateOutline();
 	}
 
 	private boolean exceedsTouchSlop(final float deltaX, final float deltaY) {
