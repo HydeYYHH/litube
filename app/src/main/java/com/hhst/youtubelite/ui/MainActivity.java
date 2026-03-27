@@ -57,6 +57,7 @@ import com.hhst.youtubelite.player.queue.QueueRepository;
 import com.hhst.youtubelite.ui.queue.QueueAdapter;
 import com.hhst.youtubelite.ui.queue.QueueTouch;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
@@ -365,9 +366,8 @@ public final class MainActivity extends AppCompatActivity {
 
 	private void triggerDownload(String url) {
 		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
-		final Toast fetchToast = Toast.makeText(this, "Fetching download links...", Toast.LENGTH_SHORT);
-		fetchToast.show();
-		mainHandler.postDelayed(fetchToast::cancel, 1000);
+		final long fetchToast = ToastUtils.show(this, "Fetching download links...");
+		mainHandler.postDelayed(() -> ToastUtils.cancel(fetchToast), 1000);
 		mainHandler.postDelayed(() -> {
 			DownloadDialog dialog = new DownloadDialog(cleanUrl, this, youtubeExtractor);
 			dialog.show();
@@ -376,8 +376,7 @@ public final class MainActivity extends AppCompatActivity {
 
 	private void triggerPlaylistDownload(String url) {
 		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
-		final Toast fetchToast = Toast.makeText(this, "Fetching playlist...", Toast.LENGTH_SHORT);
-		fetchToast.show();
+		final long fetchToast = ToastUtils.show(this, "Fetching playlist...");
 
 		new Thread(() -> {
 			List<String> videoUrls = new ArrayList<>();
@@ -394,14 +393,14 @@ public final class MainActivity extends AppCompatActivity {
 					page = extractor.getPage(page.getNextPage());
 				}
 
-				mainHandler.post(fetchToast::cancel);
+				ToastUtils.cancel(fetchToast);
 
 				if (videoUrls.isEmpty()) {
-					mainHandler.post(() -> Toast.makeText(this, "Playlist is empty", Toast.LENGTH_LONG).show());
+					ToastUtils.show(this, "Playlist is empty", Toast.LENGTH_LONG);
 					return;
 				}
 
-				mainHandler.post(() -> Toast.makeText(this, "Downloading " + videoUrls.size() + " videos...", Toast.LENGTH_LONG).show());
+				ToastUtils.show(this, "Downloading " + videoUrls.size() + " videos...", Toast.LENGTH_LONG);
 
 				for (String videoUrl : videoUrls) {
 					mainHandler.post(() -> triggerDownload(videoUrl));
@@ -409,7 +408,7 @@ public final class MainActivity extends AppCompatActivity {
 				}
 
 			} catch (ExtractionException | IOException | InterruptedException e) {
-				mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG).show());
+				ToastUtils.show(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG);
 			}
 		}).start();
 	}
@@ -422,10 +421,10 @@ public final class MainActivity extends AppCompatActivity {
 		}
 		final List<QueueItem> items = queueRepository.getItems();
 		if (items.isEmpty()) {
-			Toast.makeText(this, R.string.queue_download_unavailable, Toast.LENGTH_SHORT).show();
+			ToastUtils.show(this, R.string.queue_download_unavailable);
 			return;
 		}
-		Toast.makeText(this, getString(R.string.downloading_queue_count, items.size()), Toast.LENGTH_LONG).show();
+		ToastUtils.show(this, getString(R.string.downloading_queue_count, items.size()), Toast.LENGTH_LONG);
 		for (int i = 0; i < items.size(); i++) {
 			final String itemUrl = items.get(i).getUrl();
 			if (itemUrl == null || itemUrl.isBlank()) continue;
@@ -503,7 +502,7 @@ public final class MainActivity extends AppCompatActivity {
 			enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
 				queueRepository.setEnabled(isChecked);
 				player.refreshQueueNavigationAvailability();
-				Toast.makeText(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off);
 			});
 		}
 		if (downloadButton != null) {
@@ -755,7 +754,7 @@ public final class MainActivity extends AppCompatActivity {
 			if (time - lastBackTime < DOUBLE_TAP_EXIT_INTERVAL_MS) finish();
 			else {
 				lastBackTime = time;
-				Toast.makeText(this, R.string.press_back_again_to_exit, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(this, R.string.press_back_again_to_exit);
 			}
 		}
 	}

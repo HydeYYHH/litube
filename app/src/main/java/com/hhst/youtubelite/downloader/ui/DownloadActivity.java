@@ -19,7 +19,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -46,7 +45,8 @@ import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.downloader.service.DownloadService;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.util.DownloadStorageUtils;
-import com.squareup.picasso.Picasso;
+import com.hhst.youtubelite.util.ImageUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -216,13 +216,13 @@ public class DownloadActivity extends AppCompatActivity {
 
 	private void openRecordFile(@NonNull final DownloadRecord record) {
 		if (!DownloadStorageUtils.exists(this, record.getOutputPath())) {
-			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+			ToastUtils.show(this, R.string.file_not_found);
 			loadRecords();
 			return;
 		}
 		final Uri uri = DownloadStorageUtils.getOpenUri(this, record.getOutputPath());
 		if (uri == null) {
-			Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_SHORT).show();
+			ToastUtils.show(this, R.string.file_not_found);
 			loadRecords();
 			return;
 		}
@@ -234,7 +234,7 @@ public class DownloadActivity extends AppCompatActivity {
 		try {
 			startActivity(intent);
 		} catch (Exception e) {
-			Toast.makeText(this, R.string.application_not_found, Toast.LENGTH_SHORT).show();
+			ToastUtils.show(this, R.string.application_not_found);
 		}
 	}	private final DownloadRecordsAdapter adapter = new DownloadRecordsAdapter(new ArrayList<>(), new DownloadRecordsAdapter.Actions() {
 		@Override
@@ -265,7 +265,7 @@ public class DownloadActivity extends AppCompatActivity {
 			if (clipboard != null) {
 				String cleanVid = record.getVid().split(":")[0];
 				clipboard.setPrimaryClip(ClipData.newPlainText("vid", cleanVid));
-				Toast.makeText(DownloadActivity.this, R.string.vid_copied, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(DownloadActivity.this, R.string.vid_copied);
 			}
 		}
 
@@ -388,10 +388,7 @@ public class DownloadActivity extends AppCompatActivity {
 
 				String cleanVid = record.getVid().split(":")[0];
 				String thumbUrl = "https://i.ytimg.com/vi/" + cleanVid + "/mqdefault.jpg";
-				Picasso.get().load(thumbUrl)
-								.placeholder(R.drawable.ic_launcher_foreground)
-								.error(R.drawable.ic_launcher_foreground)
-								.into(thumbnail);
+				ImageUtils.loadThumb(thumbnail, thumbUrl);
 
 				more.setOnClickListener(v -> showPopupMenu(v, record, actions));
 				itemView.setOnClickListener(v -> {

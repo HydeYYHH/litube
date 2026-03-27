@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.queue.QueueItem;
-import com.squareup.picasso.Picasso;
+import com.hhst.youtubelite.util.ImageUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -156,15 +156,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 			authorView.setText(item.getAuthor() == null || item.getAuthor().isBlank()
 					? itemView.getContext().getString(R.string.queue_unknown_author)
 					: item.getAuthor());
-			if (item.getThumbnailUrl() != null && !item.getThumbnailUrl().isBlank()) {
-				Picasso.get()
-						.load(item.getThumbnailUrl())
-						.placeholder(R.drawable.ic_broken_image)
-						.error(R.drawable.ic_broken_image)
-						.into(thumbnailView);
-			} else {
-				thumbnailView.setImageResource(R.drawable.ic_broken_image);
-			}
+			ImageUtils.loadThumb(thumbnailView, item.getThumbnailUrl());
 			final boolean playing = isPlaying(item.getVideoId(), playingId);
 			itemView.setActivated(playing);
 			itemView.setAlpha(1.0f);

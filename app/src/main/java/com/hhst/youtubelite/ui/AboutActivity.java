@@ -14,7 +14,6 @@ import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -30,6 +29,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import org.apache.commons.io.FileUtils;
 
@@ -120,7 +120,7 @@ public class AboutActivity extends AppCompatActivity {
 				runOnUiThread(() -> {
 					checkUpdateLayout.setEnabled(true);
 					checkUpdateText.setText(R.string.check_for_updates);
-					Toast.makeText(AboutActivity.this, R.string.failed_to_check_for_updates, Toast.LENGTH_SHORT).show();
+					ToastUtils.show(AboutActivity.this, R.string.failed_to_check_for_updates);
 				});
 			}
 
@@ -149,7 +149,7 @@ public class AboutActivity extends AppCompatActivity {
 						runOnUiThread(() -> {
 							checkUpdateLayout.setEnabled(true);
 							checkUpdateText.setText(R.string.check_for_updates);
-							Toast.makeText(AboutActivity.this, R.string.no_updates_available, Toast.LENGTH_SHORT).show();
+							ToastUtils.show(AboutActivity.this, R.string.no_updates_available);
 						});
 					}
 				} catch (Exception e) {
@@ -157,7 +157,7 @@ public class AboutActivity extends AppCompatActivity {
 					runOnUiThread(() -> {
 						checkUpdateLayout.setEnabled(true);
 						checkUpdateText.setText(R.string.check_for_updates);
-						Toast.makeText(AboutActivity.this, R.string.failed_to_check_for_updates, Toast.LENGTH_SHORT).show();
+						ToastUtils.show(AboutActivity.this, R.string.failed_to_check_for_updates);
 					});
 				}
 			}
@@ -178,7 +178,7 @@ public class AboutActivity extends AppCompatActivity {
 				deleteDir(getCacheDir());
 				deleteDir(getExternalCacheDir());
 
-				runOnUiThread(() -> Toast.makeText(AboutActivity.this, R.string.cache_cleared, Toast.LENGTH_SHORT).show());
+				ToastUtils.show(AboutActivity.this, R.string.cache_cleared);
 			} catch (Exception e) {
 				Log.e(TAG, "Failed to clear cache", e);
 			}
@@ -228,7 +228,7 @@ public class AboutActivity extends AppCompatActivity {
 
 			} catch (Exception e) {
 				Log.e(TAG, "Log export error", e);
-				runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_export_log, Toast.LENGTH_SHORT).show());
+				ToastUtils.show(this, R.string.failed_to_export_log);
 			}
 		}).start();
 	}

@@ -19,7 +19,6 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -38,7 +37,8 @@ import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.util.DownloadStorageUtils;
-import com.squareup.picasso.Picasso;
+import com.hhst.youtubelite.util.ImageUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.MediaFormat;
@@ -126,8 +126,7 @@ public class DownloadDialog {
 			} catch (InterruptedIOException ignored) {
 			} catch (Exception e) {
 				if (!extractionSession.isCancelled()) {
-					new Handler(Looper.getMainLooper()).post(() ->
-									Toast.makeText(context, R.string.failed_to_load_video_details, Toast.LENGTH_SHORT).show());
+					ToastUtils.show(context, R.string.failed_to_load_video_details);
 				}
 			} finally {
 				videoLatch.countDown();
@@ -181,7 +180,7 @@ public class DownloadDialog {
 				dialogView.post(() -> {
 					progressBar.setVisibility(View.GONE);
 					if (videoDetails != null) {
-						Picasso.get().load(videoDetails.getThumbnail()).into(imageView);
+						ImageUtils.loadThumb(imageView, videoDetails.getThumbnail());
 						editText.setText(String.format("%s-%s", videoDetails.getTitle(), videoDetails.getAuthor()));
 
 						// GALLERY FIX: Restore full ArrayList logic
@@ -241,11 +240,11 @@ public class DownloadDialog {
 			try {
 				tasks = getTasks(fileName);
 			} catch (RuntimeException e) {
-				Toast.makeText(context, R.string.failed_to_download, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(context, R.string.failed_to_download);
 				return;
 			}
 			if (tasks.isEmpty()) {
-				Toast.makeText(context, R.string.select_something_first, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(context, R.string.select_something_first);
 				return;
 			}
 			if (isBound && downloadService != null) {
@@ -255,7 +254,7 @@ public class DownloadDialog {
 				pendingTasks = tasks;
 				if (DownloadDialog.this.downloadButton != null)
 					DownloadDialog.this.downloadButton.setEnabled(false);
-				Toast.makeText(context, R.string.preparing_download, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(context, R.string.preparing_download);
 			}
 		});
 
@@ -491,7 +490,7 @@ public class DownloadDialog {
 		final CharSequence message = tasks.size() == 1
 						? context.getString(R.string.download_tasks_added)
 						: context.getString(R.string.download_tasks_added_count, tasks.size());
-		Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+		ToastUtils.show(context, message);
 	}
 
 	@NonNull

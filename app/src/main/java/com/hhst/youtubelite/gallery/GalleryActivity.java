@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -22,6 +21,7 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.util.DownloadStorageUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import org.apache.commons.io.FileUtils;
 
@@ -125,7 +125,7 @@ public class GalleryActivity extends AppCompatActivity {
 						});
 					} catch (IOException e) {
 						Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
-						runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
+						ToastUtils.show(this, R.string.failed_to_download_thumbnail);
 					}
 				});
 		}
@@ -136,10 +136,10 @@ public class GalleryActivity extends AppCompatActivity {
 			try {
 				final String displayName = sanitizeFileName(filename) + ".jpg";
 				DownloadStorageUtils.saveUrlToDownloads(this, new URL(url), displayName);
-				runOnUiThread(() -> Toast.makeText(this, getString(R.string.download_finished, displayName, DownloadStorageUtils.getDownloadsLocationLabel(this)), Toast.LENGTH_SHORT).show());
+				ToastUtils.show(this, getString(R.string.download_finished, displayName, DownloadStorageUtils.getDownloadsLocationLabel(this)));
 			} catch (Exception e) {
 				Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
-				runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
+				ToastUtils.show(this, R.string.failed_to_download_thumbnail);
 			}
 		});
 	}

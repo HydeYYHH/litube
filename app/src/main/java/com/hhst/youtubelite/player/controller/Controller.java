@@ -53,9 +53,9 @@ import com.hhst.youtubelite.player.controller.gesture.ZoomTouchListener;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.ImageUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.ViewUtils;
-import com.squareup.picasso.Picasso;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
@@ -997,7 +997,8 @@ public class Controller {
 		View v = activity.getLayoutInflater().inflate(R.layout.dialog_segment, null, false);
 		((TextView) v.findViewById(R.id.segment_title)).setText(seg.getTitle());
 		((TextView) v.findViewById(R.id.segment_time)).setText(DateUtils.formatElapsedTime(Math.max(seg.getStartTimeSeconds(), 0)));
-		Picasso.get().load(seg.getPreviewUrl() != null ? seg.getPreviewUrl() : engine.getThumbnail()).into((ImageView) v.findViewById(R.id.segment_thumbnail));
+		ImageUtils.loadThumb((ImageView) v.findViewById(R.id.segment_thumbnail),
+				seg.getPreviewUrl() != null ? seg.getPreviewUrl() : engine.getThumbnail());
 		b.setView(v).setPositiveButton(R.string.jump, (d, w) -> {
 			engine.seekTo(seg.getStartTimeSeconds() * 1000L);
 			showHint(activity.getString(R.string.jumped_to_segment, seg.getTitle()), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);

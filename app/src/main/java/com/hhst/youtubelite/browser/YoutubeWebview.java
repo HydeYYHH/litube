@@ -20,7 +20,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -36,6 +35,7 @@ import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.ui.MainActivity;
 import com.hhst.youtubelite.ui.widget.LoadingProgressBar;
 import com.hhst.youtubelite.util.StreamIOUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 import com.hhst.youtubelite.util.ViewUtils;
 
@@ -177,7 +177,7 @@ public class YoutubeWebview extends WebView {
 		try {
 			getContext().startActivity(new Intent(Intent.ACTION_VIEW, uri));
 		} catch (final ActivityNotFoundException e) {
-			post(() -> Toast.makeText(getContext(), R.string.application_not_found, Toast.LENGTH_SHORT).show());
+			ToastUtils.show(getContext(), R.string.application_not_found);
 			Log.e(getContext().getString(R.string.application_not_found), e.toString());
 		}
 	}
@@ -262,7 +262,7 @@ public class YoutubeWebview extends WebView {
 						final Intent intent = Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME);
 						getContext().startActivity(intent);
 					} catch (final ActivityNotFoundException | URISyntaxException e) {
-						post(() -> Toast.makeText(getContext(), R.string.application_not_found, Toast.LENGTH_SHORT).show());
+						ToastUtils.show(getContext(), R.string.application_not_found);
 						Log.e(getContext().getString(R.string.application_not_found), e.toString());
 					}
 				} else {

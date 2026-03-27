@@ -24,8 +24,7 @@ import com.hhst.youtubelite.player.queue.QueueRepository;
 import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.ui.AboutActivity;
 import com.hhst.youtubelite.R;
-
-import android.widget.Toast;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -135,14 +134,14 @@ public final class JavascriptInterface {
 				if (vid == null || vid.isBlank()
 						|| item.getTitle() == null || item.getTitle().isBlank()
 						|| item.getAuthor() == null || item.getAuthor().isBlank()) {
-					Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show();
+					ToastUtils.show(context, R.string.queue_item_unavailable);
 					return;
 				}
 				item.setVideoId(vid);
 				queueRepository.add(item);
 				queueWarmer.warmItem(item);
 				player.refreshQueueNavigationAvailability();
-				Toast.makeText(context, R.string.queue_item_added, Toast.LENGTH_SHORT).show();
+				ToastUtils.show(context, R.string.queue_item_added);
 			} catch (final Exception ignored) {
 			}
 		});
@@ -150,7 +149,7 @@ public final class JavascriptInterface {
 
 	@android.webkit.JavascriptInterface
 	public void showQueueItemUnavailable() {
-		handler.post(() -> Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show());
+		ToastUtils.show(context, R.string.queue_item_unavailable);
 	}
 
 	@android.webkit.JavascriptInterface

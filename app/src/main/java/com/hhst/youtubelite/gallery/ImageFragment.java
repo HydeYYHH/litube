@@ -5,7 +5,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,8 +14,9 @@ import androidx.fragment.app.Fragment;
 import com.github.chrisbanes.photoview.PhotoView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.util.ImageUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 import com.squareup.picasso.Callback;
-import com.squareup.picasso.Picasso;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -46,11 +46,12 @@ public class ImageFragment extends Fragment {
 		PhotoView photoView = new PhotoView(requireContext());
 
 		if (url == null || url.isEmpty()) {
-			Toast.makeText(requireContext(), "Image URL is empty", Toast.LENGTH_SHORT).show();
+			ImageUtils.showThumb(photoView);
+			ToastUtils.show(requireContext(), "Image URL is empty");
 			return photoView;
 		}
 
-		Picasso.get().load(url).into(photoView, new Callback() {
+		ImageUtils.loadThumb(photoView, url, new Callback() {
 			@Override
 			public void onSuccess() {
 			}
@@ -58,8 +59,9 @@ public class ImageFragment extends Fragment {
 			@Override
 			public void onError(Exception e) {
 				Log.e("ImageFragment", "Failed to load image: " + url, e);
-				if (isAdded() && getContext() != null)
-					Toast.makeText(requireContext(), R.string.failed_to_load_image, Toast.LENGTH_SHORT).show();
+				if (isAdded() && getContext() != null) {
+					ToastUtils.show(requireContext(), R.string.failed_to_load_image);
+				}
 			}
 		});
 
