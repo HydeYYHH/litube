@@ -4,7 +4,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -23,6 +22,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.R.attr;
 import androidx.appcompat.app.AlertDialog;
 import androidx.media3.common.util.UnstableApi;
@@ -31,10 +31,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.core.Task;
 import com.hhst.youtubelite.downloader.service.DownloadService;
+import com.hhst.youtubelite.extractor.ExtractionSession;
+import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
+import com.hhst.youtubelite.util.DownloadStorageUtils;
 import com.squareup.picasso.Picasso;
 import com.tencent.mmkv.MMKV;
 
@@ -44,6 +47,7 @@ import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.File;
+import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +64,7 @@ public class DownloadDialog {
 	private final CountDownLatch videoLatch;
 	private final CountDownLatch streamLatch;
 	private final View dialogView;
+	private final ExtractionSession extractionSession = new ExtractionSession();
 	private final MMKV kv = MMKV.defaultMMKV();
 	private VideoDetails videoDetails;
 	private StreamDetails streamDetails;
@@ -69,18 +74,38 @@ public class DownloadDialog {
 	private SubtitlesStream subtitleSelStream;
 	private int threadCount = 4;
 	private DownloadService downloadService;
+	private boolean bindingRequested = false;
 	private boolean isBound = false;
+	private boolean isDismissed = false;
+	@Nullable
+	private AlertDialog dialog;
+	@Nullable
+	private Button downloadButton;
+	@Nullable
+	private List<Task> pendingTasks;
 	private final ServiceConnection connection = new ServiceConnection() {
 		@Override
 		public void onServiceConnected(ComponentName name, IBinder service) {
 			DownloadService.DownloadBinder binder = (DownloadService.DownloadBinder) service;
 			downloadService = binder.getService();
 			isBound = true;
+			if (isDismissed) {
+				safelyUnbindService();
+				return;
+			}
+			if (downloadButton != null) downloadButton.setEnabled(true);
+			if (pendingTasks != null && downloadService != null) {
+				dispatchDownloadTasks(pendingTasks);
+				pendingTasks = null;
+				if (dialog != null && dialog.isShowing()) dialog.dismiss();
+			}
 		}
 
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
+			downloadService = null;
 			isBound = false;
+			if (downloadButton != null) downloadButton.setEnabled(true);
 		}
 	};
 
@@ -90,25 +115,23 @@ public class DownloadDialog {
 		executor = Executors.newCachedThreadPool();
 		videoLatch = new CountDownLatch(1);
 		streamLatch = new CountDownLatch(1);
-		context.bindService(new Intent(context, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
 
 		executor.submit(() -> {
 			try {
-				videoDetails = youtubeExtractor.getVideoInfo(url);
-				videoLatch.countDown();
+				final PlaybackDetails playbackDetails = youtubeExtractor.getPlaybackDetails(url, extractionSession);
+				videoDetails = playbackDetails.getVideoDetails();
+				streamDetails = playbackDetails.getStreamDetails();
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			} catch (InterruptedIOException ignored) {
 			} catch (Exception e) {
+				if (!extractionSession.isCancelled()) {
+					new Handler(Looper.getMainLooper()).post(() ->
+									Toast.makeText(context, R.string.failed_to_load_video_details, Toast.LENGTH_SHORT).show());
+				}
+			} finally {
 				videoLatch.countDown();
-			}
-		});
-
-		executor.submit(() -> {
-			try {
-				streamDetails = youtubeExtractor.getStreamInfo(url);
 				streamLatch.countDown();
-			} catch (Exception e) {
-				streamLatch.countDown();
-				new Handler(Looper.getMainLooper()).post(() ->
-								Toast.makeText(context, R.string.failed_to_load_video_details, Toast.LENGTH_SHORT).show());
 			}
 		});
 	}
@@ -121,18 +144,21 @@ public class DownloadDialog {
 		Button thumbnailButton = dialogView.findViewById(R.id.button_thumbnail);
 		Button audioButton = dialogView.findViewById(R.id.button_audio);
 		Button subtitleButton = dialogView.findViewById(R.id.button_subtitle);
-		Button downloadButton = dialogView.findViewById(R.id.button_download);
+		Button downloadButtonView = dialogView.findViewById(R.id.button_download);
 		Button cancelButton = dialogView.findViewById(R.id.button_cancel);
 		SeekBar threadsSeekBar = dialogView.findViewById(R.id.threads_seekbar);
 		TextView threadsCountText = dialogView.findViewById(R.id.threads_count);
 		editText.setHorizontallyScrolling(false);
 		editText.setVerticalScrollBarEnabled(true);
 
-		AlertDialog dialog = new MaterialAlertDialogBuilder(context)
+		dialog = new MaterialAlertDialogBuilder(context)
 						.setTitle(context.getString(R.string.download))
 						.setView(dialogView)
 						.setCancelable(true)
 						.create();
+		isDismissed = false;
+		requestServiceBinding();
+		this.downloadButton = downloadButtonView;
 
 		threadCount = kv.decodeInt(KEY_THREAD_COUNT, 4);
 		threadsSeekBar.setProgress(threadCount - 1);
@@ -205,25 +231,64 @@ public class DownloadDialog {
 			}
 		});
 
-		downloadButton.setOnClickListener(v -> {
+		downloadButtonView.setOnClickListener(v -> {
 			if (videoDetails == null) {
-				dialog.dismiss();
+				if (dialog != null) dialog.dismiss();
 				return;
 			}
-			String fileName = sanitizeFileName(editText.getText().toString().isEmpty() ? videoDetails.getTitle() : editText.getText().toString());
-			if (isBound && downloadService != null) downloadService.download(getTasks(fileName));
-			dialog.dismiss();
-		});
-
-		cancelButton.setOnClickListener(v -> dialog.dismiss());
-		dialog.setOnDismissListener(di -> {
-			executor.shutdownNow();
-			if (isBound) {
-				context.unbindService(connection);
-				isBound = false;
+			final String fileName = sanitizeFileName(editText.getText().toString().isEmpty() ? videoDetails.getTitle() : editText.getText().toString());
+			final List<Task> tasks;
+			try {
+				tasks = getTasks(fileName);
+			} catch (RuntimeException e) {
+				Toast.makeText(context, R.string.failed_to_download, Toast.LENGTH_SHORT).show();
+				return;
+			}
+			if (tasks.isEmpty()) {
+				Toast.makeText(context, R.string.select_something_first, Toast.LENGTH_SHORT).show();
+				return;
+			}
+			if (isBound && downloadService != null) {
+				dispatchDownloadTasks(tasks);
+				if (dialog != null) dialog.dismiss();
+			} else {
+				pendingTasks = tasks;
+				if (DownloadDialog.this.downloadButton != null)
+					DownloadDialog.this.downloadButton.setEnabled(false);
+				Toast.makeText(context, R.string.preparing_download, Toast.LENGTH_SHORT).show();
 			}
 		});
+
+		cancelButton.setOnClickListener(v -> {
+			if (dialog != null) dialog.dismiss();
+		});
+		dialog.setOnDismissListener(di -> {
+			isDismissed = true;
+			pendingTasks = null;
+			DownloadDialog.this.downloadButton = null;
+			dialog = null;
+			extractionSession.cancel();
+			executor.shutdownNow();
+			safelyUnbindService();
+		});
 		dialog.show();
+	}
+
+	private void requestServiceBinding() {
+		if (bindingRequested) return;
+		bindingRequested = context.bindService(new Intent(context, DownloadService.class), connection, Context.BIND_AUTO_CREATE);
+	}
+
+	private void safelyUnbindService() {
+		downloadService = null;
+		isBound = false;
+		if (!bindingRequested) return;
+		try {
+			context.unbindService(connection);
+		} catch (IllegalArgumentException ignored) {
+		} finally {
+			bindingRequested = false;
+		}
 	}
 
 	private void showVideoQualityDialog(Button btn, int color) {
@@ -420,11 +485,19 @@ public class DownloadDialog {
 		return bytes <= 0 ? "Unknown" : String.format(Locale.US, "%.1f MB", bytes / 1048576.0);
 	}
 
+	private void dispatchDownloadTasks(@NonNull final List<Task> tasks) {
+		if (downloadService == null) return;
+		downloadService.download(tasks);
+		final CharSequence message = tasks.size() == 1
+						? context.getString(R.string.download_tasks_added)
+						: context.getString(R.string.download_tasks_added_count, tasks.size());
+		Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+	}
+
 	@NonNull
 	private List<Task> getTasks(String f) {
 		List<Task> t = new ArrayList<>();
-		File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
-		if (!d.exists()) d.mkdirs();
+		File d = DownloadStorageUtils.getWorkingDirectory(context);
 		if (videoSel && videoSelStream != null) {
 			AudioStream audio = (audioSelStream != null) ? audioSelStream : streamDetails.getAudioStreams().get(0);
 			t.add(new Task(videoDetails.getId() + ":v", videoSelStream, audio, null, null, f, d, threadCount));

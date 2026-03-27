@@ -14,19 +14,19 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.controller.Controller;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 
 import java.util.Objects;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
-import lombok.Getter;
+import okhttp3.OkHttpClient;
 
-@Getter
 @AndroidEntryPoint
 @UnstableApi
 public final class YoutubeFragment extends Fragment {
@@ -45,7 +45,11 @@ public final class YoutubeFragment extends Fragment {
 	@Inject
 	TabManager tabManager;
 	@Inject
-	PoTokenProviderImpl poTokenProvider;
+	QueueRepository queueRepository;
+	@Inject
+	QueueWarmer queueWarmer;
+	@Inject
+	OkHttpClient okHttpClient;
 
 	@Nullable
 	private String url;
@@ -53,8 +57,6 @@ public final class YoutubeFragment extends Fragment {
 	private String mTag;
 	@Nullable
 	private YoutubeWebview webview;
-	@Nullable
-	private SwipeRefreshLayout swipeRefreshLayout;
 	@Nullable
 	private WebBackForwardList historySnapshot;
 
@@ -65,6 +67,8 @@ public final class YoutubeFragment extends Fragment {
 		args.putString(ARG_URL, url);
 		args.putString(ARG_TAG, tag);
 		fragment.setArguments(args);
+		fragment.url = url;
+		fragment.mTag = tag;
 		return fragment;
 	}
 
@@ -92,7 +96,7 @@ public final class YoutubeFragment extends Fragment {
 	public View onCreateView(@NonNull final LayoutInflater inflater, @Nullable final ViewGroup container, @Nullable final Bundle savedInstanceState) {
 		final View view = inflater.inflate(R.layout.fragment_webview, container, false);
 		webview = view.findViewById(R.id.webview);
-		swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+		SwipeRefreshLayout swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
 		swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
 		swipeRefreshLayout.setOnRefreshListener(() -> webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", value -> {
@@ -103,7 +107,9 @@ public final class YoutubeFragment extends Fragment {
 		webview.setPlayer(player);
 		webview.setExtensionManager(extensionManager);
 		webview.setTabManager(tabManager);
-		webview.setPoTokenProvider(poTokenProvider);
+		webview.setQueueRepository(queueRepository);
+		webview.setQueueWarmer(queueWarmer);
+		webview.setOkHttpClient(okHttpClient);
 		webview.setUpdateVisitedHistory(url -> {
 			YoutubeFragment.this.url = url;
 			tabManager.onUrlChanged(this, url);
@@ -172,6 +178,26 @@ public final class YoutubeFragment extends Fragment {
 	public void onSaveInstanceState(@NonNull final Bundle outState) {
 		super.onSaveInstanceState(outState);
 		if (webview != null) webview.saveState(outState);
+	}
+
+	@Nullable
+	public String getUrl() {
+		return url;
+	}
+
+	@Nullable
+	public String getMTag() {
+		return mTag;
+	}
+
+	@Nullable
+	public YoutubeWebview getWebview() {
+		return webview;
+	}
+
+	@Nullable
+	public WebBackForwardList getHistorySnapshot() {
+		return historySnapshot;
 	}
 
 }

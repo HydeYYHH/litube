@@ -9,15 +9,13 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <ProgressBar
+        <com.hhst.youtubelite.ui.widget.LoadingProgressBar
             android:id="@+id/progressBar"
-            style="@android:style/Widget.DeviceDefault.Light.ProgressBar.Horizontal"
             android:layout_width="match_parent"
             android:layout_height="2dp"
-            android:indeterminateOnly="false"
-            android:progressDrawable="@drawable/progress_bar"
-            android:visibility="gone"
-            android:max="100" />
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:visibility="gone" />
 
     </com.hhst.youtubelite.browser.YoutubeWebview>
 

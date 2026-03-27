@@ -7,7 +7,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
-import android.media.MediaScannerConnection;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
@@ -27,9 +26,13 @@ import com.hhst.youtubelite.downloader.core.history.DownloadStatus;
 import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.util.DownloadStorageUtils;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.inject.Inject;
 
@@ -42,14 +45,14 @@ public class DownloadService extends Service {
 	public static final String EXTRA_TASK_ID = "extra_task_id";
 	private static final String CHANNEL_ID = "download_channel";
 	private static final int NOTIFICATION_ID = 1001;
-
+	private final Set<String> activeTaskIds = ConcurrentHashMap.newKeySet();
+	private final Map<String, String> activeTaskNames = new ConcurrentHashMap<>();
 	@Inject
 	LiteDownloader liteDL;
 	@Inject
 	DownloadHistoryRepository historyRepository;
 	@Inject
 	YoutubeExtractor youtubeExtractor;
-
 	private NotificationManager notificationManager;
 	private NotificationCompat.Builder notificationBuilder;
 
@@ -91,6 +94,7 @@ public class DownloadService extends Service {
 	}
 
 	public void download(@NonNull List<Task> tasks) {
+		if (tasks.isEmpty()) return;
 		initNotification();
 		for (Task task : tasks) {
 			startTask(task);
@@ -110,6 +114,8 @@ public class DownloadService extends Service {
 						task.fileName(), expectedOut.getAbsolutePath(), createdAt, now, null, 0L, 0L);
 		historyRepository.upsert(record);
 		broadcastRecordUpdated(taskId);
+		activeTaskIds.add(taskId);
+		activeTaskNames.put(taskId, task.fileName());
 
 		liteDL.setCallback(taskId, new ProgressCallback2() {
 			@Override
@@ -120,23 +126,27 @@ public class DownloadService extends Service {
 
 			@Override
 			public void onComplete(File file) {
-				updateRecordProgress(taskId, 100, -1, -1, DownloadStatus.COMPLETED);
-				finalizeNotification(file.getName(), true);
-				MediaScannerConnection.scanFile(DownloadService.this, new String[]{file.getAbsolutePath()}, null, null);
+				final long fileSize = file.length();
+				try {
+					final String outputReference = DownloadStorageUtils.publishToDownloads(DownloadService.this, file, file.getName());
+					markRecordCompleted(taskId, outputReference, fileSize);
+					onTaskCompleted(taskId, file.getName(), true);
+				} catch (Exception e) {
+					updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
+					onTaskCompleted(taskId, task.fileName(), false);
+				}
 			}
 
 			@Override
 			public void onError(Exception error) {
 				updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
-				finalizeNotification(task.fileName(), false);
+				onTaskCompleted(taskId, task.fileName(), false);
 			}
 
 			@Override
 			public void onCancel() {
 				updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.CANCELED);
-				// Force remove notification immediately on cancel
-				stopForeground(STOP_FOREGROUND_REMOVE);
-				notificationManager.cancel(NOTIFICATION_ID);
+				onTaskCancelled(taskId);
 			}
 
 			@Override
@@ -164,7 +174,20 @@ public class DownloadService extends Service {
 		broadcastRecordUpdated(taskId);
 	}
 
-	private void initNotification() {
+	private void markRecordCompleted(@NonNull final String taskId, @NonNull final String outputReference, final long fileSize) {
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		if (record == null) return;
+		record.setProgress(100);
+		record.setDownloadedSize(fileSize);
+		record.setTotalSize(fileSize);
+		record.setOutputPath(outputReference);
+		record.setStatus(DownloadStatus.COMPLETED);
+		record.setUpdatedAt(System.currentTimeMillis());
+		historyRepository.upsert(record);
+		broadcastRecordUpdated(taskId);
+	}
+
+	private synchronized void initNotification() {
 		notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
 						.setSmallIcon(R.drawable.ic_launcher_foreground)
 						.setContentTitle("Initializing...")
@@ -179,7 +202,7 @@ public class DownloadService extends Service {
 		}
 	}
 
-	private void updateNotificationProgress(String fileName, int progress) {
+	private synchronized void updateNotificationProgress(String fileName, int progress) {
 		if (notificationBuilder != null) {
 			notificationBuilder.setContentTitle("Downloading: " + fileName)
 							.setContentText(progress + "%")
@@ -189,7 +212,7 @@ public class DownloadService extends Service {
 		}
 	}
 
-	private void updateNotificationMerging(String fileName) {
+	private synchronized void updateNotificationMerging(String fileName) {
 		if (notificationBuilder != null) {
 			notificationBuilder.setContentTitle("Merging: " + fileName)
 							.setContentText("Finalizing file...")
@@ -199,7 +222,45 @@ public class DownloadService extends Service {
 		}
 	}
 
-	private void finalizeNotification(String fileName, boolean success) {
+	private synchronized void updateNotificationForRemainingTasks() {
+		if (notificationBuilder == null || activeTaskIds.isEmpty()) return;
+		final int remaining = activeTaskIds.size();
+		final String fileName = activeTaskNames.values().stream().findFirst().orElse(getString(R.string.download));
+		notificationBuilder.setOngoing(true)
+						.setAutoCancel(false)
+						.setProgress(0, 0, remaining > 1)
+						.setContentTitle(remaining == 1
+										? getString(R.string.downloading_file, fileName)
+										: getString(R.string.downloads_running, remaining))
+						.setContentText(remaining == 1
+										? getString(R.string.status_queued)
+										: getString(R.string.downloads_running, remaining));
+		notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+	}
+
+	private synchronized void onTaskCompleted(@NonNull final String taskId, @NonNull final String fileName, final boolean success) {
+		activeTaskIds.remove(taskId);
+		activeTaskNames.remove(taskId);
+		if (activeTaskIds.isEmpty()) {
+			finalizeNotification(fileName, success);
+		} else {
+			updateNotificationForRemainingTasks();
+		}
+	}
+
+	private synchronized void onTaskCancelled(@NonNull final String taskId) {
+		activeTaskIds.remove(taskId);
+		activeTaskNames.remove(taskId);
+		if (activeTaskIds.isEmpty()) {
+			stopForeground(STOP_FOREGROUND_REMOVE);
+			notificationManager.cancel(NOTIFICATION_ID);
+			notificationBuilder = null;
+		} else {
+			updateNotificationForRemainingTasks();
+		}
+	}
+
+	private synchronized void finalizeNotification(String fileName, boolean success) {
 		if (notificationBuilder != null) {
 			notificationBuilder.setOngoing(false)
 							.setAutoCancel(true)
@@ -209,6 +270,7 @@ public class DownloadService extends Service {
 			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
 
 			stopForeground(STOP_FOREGROUND_DETACH);
+			notificationBuilder = null;
 		}
 	}
 

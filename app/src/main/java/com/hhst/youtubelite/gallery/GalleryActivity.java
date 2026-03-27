@@ -21,7 +21,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.hhst.youtubelite.R;
-import com.hhst.youtubelite.downloader.service.DownloadService;
+import com.hhst.youtubelite.util.DownloadStorageUtils;
 
 import org.apache.commons.io.FileUtils;
 
@@ -40,6 +40,7 @@ import dagger.hilt.android.AndroidEntryPoint;
  */
 @AndroidEntryPoint
 public class GalleryActivity extends AppCompatActivity {
+	private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
 	// thumbnail filenames, used for saving or caching
 	private final List<String> filenames = new ArrayList<>();
@@ -96,53 +97,71 @@ public class GalleryActivity extends AppCompatActivity {
 	}
 
 	public void onContextMenuClicked(int index) {
-		if (position >= urls.size()) return;
+		final int currentPosition = position;
+		if (currentPosition >= urls.size()) return;
 
-		String url = urls.get(position);
-		String filename = filenames.get(position);
+		String url = urls.get(currentPosition);
+		String filename = filenames.get(currentPosition);
 
 		switch (index) {
 			case 0: // Save
-				Intent saveIntent = new Intent(this, DownloadService.class);
-				saveIntent.setAction("DOWNLOAD_THUMBNAIL");
-				saveIntent.putExtra("thumbnail", url);
-				saveIntent.putExtra("filename", filename);
-				startService(saveIntent);
+				saveCurrentImage(url, filename);
 				return;
 			case 1: // Share
 				File file = new File(getCacheDir(), filename + ".jpg");
 				// download thumbnail to local cache directory and send it
-				try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
-					executorService.execute(() -> {
-						try {
-							// download thumbnail
-							if (!file.exists()) FileUtils.copyURLToFile(new URL(url), file);
-							files.set(position, file);
-							// build uri
-							Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
-							Intent shareIntent = new Intent(Intent.ACTION_SEND);
-							shareIntent.setType("image/*");
-							shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
-							shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				ioExecutor.execute(() -> {
+					try {
+						if (!file.exists()) FileUtils.copyURLToFile(new URL(url), file);
+						files.set(currentPosition, file);
+						Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
+						Intent shareIntent = new Intent(Intent.ACTION_SEND);
+						shareIntent.setType("image/*");
+						shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+						shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+						runOnUiThread(() -> {
+							if (isFinishing() || isDestroyed()) return;
 							startActivity(Intent.createChooser(shareIntent, getString(R.string.share_thumbnail)));
-						} catch (IOException e) {
-							Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
-							runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
-						}
-					});
-				}
+						});
+					} catch (IOException e) {
+						Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
+						runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
+					}
+				});
 		}
+	}
+
+	private void saveCurrentImage(@NonNull final String url, @Nullable final String filename) {
+		ioExecutor.execute(() -> {
+			try {
+				final String displayName = sanitizeFileName(filename) + ".jpg";
+				DownloadStorageUtils.saveUrlToDownloads(this, new URL(url), displayName);
+				runOnUiThread(() -> Toast.makeText(this, getString(R.string.download_finished, displayName, DownloadStorageUtils.getDownloadsLocationLabel(this)), Toast.LENGTH_SHORT).show());
+			} catch (Exception e) {
+				Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
+				runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
+			}
+		});
+	}
+
+	@NonNull
+	private String sanitizeFileName(@Nullable final String fileName) {
+		final String safeName = fileName == null || fileName.isBlank() ? "thumbnail" : fileName;
+		return safeName.replaceAll("[<>:\"/\\\\|?*]", "_");
 	}
 
 	@Override
 	public void finish() {
+		ioExecutor.execute(() -> {
+			for (File file : files) if (file != null) FileUtils.deleteQuietly(file);
+		});
 		super.finish();
-		// clean cached images
-		try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
-			executorService.execute(() -> {
-				for (File file : files) if (file != null) FileUtils.deleteQuietly(file);
-			});
-		}
+	}
+
+	@Override
+	protected void onDestroy() {
+		ioExecutor.shutdown();
+		super.onDestroy();
 	}
 
 	private class ImagePagerAdapter extends FragmentStateAdapter {

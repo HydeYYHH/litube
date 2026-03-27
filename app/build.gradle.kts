@@ -7,6 +7,10 @@ android {
     namespace = "com.hhst.youtubelite"
     compileSdk = 36
 
+    installation {
+        installOptions.add("-t")
+    }
+
     lint {
         disable.add("MissingTranslation")
         disable.add("ExtraTranslation")

@@ -88,7 +88,7 @@ public final class PlayerUtils {
 	 */
 	public static int getCodecPriority(@Nullable final String codec) {
 		if (codec == null) return 0;
-		final String lowerCodec = codec.toLowerCase();
+		final String lowerCodec = codec.toLowerCase(Locale.ROOT);
 		if (lowerCodec.startsWith("avc") || lowerCodec.startsWith("h264")) return 4;
 		if (lowerCodec.contains("vp9") || lowerCodec.contains("vp8")) return 3;
 		if (lowerCodec.contains("h265")) return 2;

@@ -25,15 +25,21 @@ import lombok.NoArgsConstructor;
 public final class PlayerPreferences {
 	private static final String KEY_PLAYBACK_SPEED = "playback_speed";
 	private static final String KEY_VIDEO_QUALITY = "video_quality";
+	private static final String KEY_LOOP_MODE = "loop_mode";
 	private static final String KEY_LOOP_ENABLED = "loop_enabled";
 	private static final String KEY_SUBTITLE_ENABLED = "subtitle_enabled";
 	private static final String KEY_SUBTITLE_LANGUAGE = "subtitle_language";
 	private static final String KEY_RESIZE_MODE = "resize_mode";
+	private static final String KEY_MINI_PLAYER_WIDTH_DP = "mini_player_width_dp";
+	private static final String KEY_MINI_PLAYER_TRANSLATION_X_DP = "mini_player_translation_x_dp";
+	private static final String KEY_MINI_PLAYER_TRANSLATION_Y_DP = "mini_player_translation_y_dp";
 	private static final String PREFIX_PROGRESS = "progress:";
 
 	private static final float DEFAULT_SPEED = 1.0f;
 	private static final String DEFAULT_QUALITY = "480p";
 	private static final long EXPIRATION_DAYS_3 = 3L * 24 * 60 * 60 * 1000;
+	private static final int DEFAULT_MINI_PLAYER_WIDTH_DP = -1;
+	private static final float DEFAULT_MINI_PLAYER_TRANSLATION_DP = 0.0f;
 
 	@NonNull
 	private final ExtensionManager extensionManager;
@@ -74,12 +80,18 @@ public final class PlayerPreferences {
 		mmkv.encode(KEY_VIDEO_QUALITY, quality);
 	}
 
-	public boolean isLoopEnabled() {
-		return mmkv.decodeBool(KEY_LOOP_ENABLED, false);
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		final int persistedMode = mmkv.decodeInt(KEY_LOOP_MODE, Integer.MIN_VALUE);
+		if (persistedMode != Integer.MIN_VALUE) {
+			return PlayerLoopMode.fromPersistedValue(persistedMode);
+		}
+		return mmkv.decodeBool(KEY_LOOP_ENABLED, false) ? PlayerLoopMode.LOOP_ONE : PlayerLoopMode.PLAYLIST_NEXT;
 	}
 
-	public void setLoopEnabled(final boolean enabled) {
-		mmkv.encode(KEY_LOOP_ENABLED, enabled);
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		mmkv.encode(KEY_LOOP_MODE, mode.persistedValue());
+		mmkv.encode(KEY_LOOP_ENABLED, mode == PlayerLoopMode.LOOP_ONE);
 	}
 
 	public boolean isSubtitleEnabled() {
@@ -134,6 +146,22 @@ public final class PlayerPreferences {
 	}
 
 	@NonNull
+	public MiniPlayerLayoutState getMiniPlayerLayoutState() {
+		return new MiniPlayerLayoutState(
+						mmkv.decodeInt(KEY_MINI_PLAYER_WIDTH_DP, DEFAULT_MINI_PLAYER_WIDTH_DP),
+						mmkv.decodeFloat(KEY_MINI_PLAYER_TRANSLATION_X_DP, DEFAULT_MINI_PLAYER_TRANSLATION_DP),
+						mmkv.decodeFloat(KEY_MINI_PLAYER_TRANSLATION_Y_DP, DEFAULT_MINI_PLAYER_TRANSLATION_DP));
+	}
+
+	public void persistMiniPlayerLayoutState(final int widthDp,
+	                                         final float translationXDp,
+	                                         final float translationYDp) {
+		mmkv.encode(KEY_MINI_PLAYER_WIDTH_DP, widthDp);
+		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_X_DP, translationXDp);
+		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_Y_DP, translationYDp);
+	}
+
+	@NonNull
 	public Set<String> getSponsorBlockCategories() {
 		final Set<String> cats = new HashSet<>();
 		if (extensionManager.isEnabled(Constant.SKIP_SPONSORS)) cats.add("sponsor");
@@ -149,5 +177,8 @@ public final class PlayerPreferences {
 		private long position;
 		private long duration;
 		private long timestamp;
+	}
+
+	public record MiniPlayerLayoutState(int widthDp, float translationXDp, float translationYDp) {
 	}
 }

@@ -28,6 +28,8 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
 	private static final int HINT_HIDE_FAST_MS = 500;
 	private static final float FULLSCREEN_SWIPE_THRESHOLD_RATIO = 0.08f;
+	private static final float LEFT_ZONE_MAX_RATIO = 1f / 3f;
+	private static final float RIGHT_ZONE_MIN_RATIO = 2f / 3f;
 
 	private final Activity activity;
 	private final LitePlayerView playerView;
@@ -45,6 +47,12 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	private final Runnable resetSeekRunnable = () -> cumulativeSeekAmount = 0;
 	private long lastTapTime = 0;
 	private float vol = -1;
+
+	enum DoubleTapAction {
+		SEEK_BACKWARD,
+		TOGGLE_PLAYBACK,
+		SEEK_FORWARD
+	}
 
 	public PlayerGestureListener(Activity activity, LitePlayerView playerView, Engine engine, Controller controller) {
 		this.activity = activity;
@@ -92,10 +100,12 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		long currentTime = System.currentTimeMillis();
 		float x = e.getX();
 		float width = playerView.getWidth();
+		final DoubleTapAction action = resolveDoubleTapAction(x, width);
 
 		if (cumulativeSeekAmount != 0 && (currentTime - lastTapTime < SEEK_CONTINUATION_WINDOW_MS)) {
-			if ((cumulativeSeekAmount < 0 && x < width * 0.35f) || (cumulativeSeekAmount > 0 && x > width * 0.65f)) {
-				processSeek(x < width * 0.5f);
+			if ((cumulativeSeekAmount < 0 && action == DoubleTapAction.SEEK_BACKWARD)
+					|| (cumulativeSeekAmount > 0 && action == DoubleTapAction.SEEK_FORWARD)) {
+				processSeek(action == DoubleTapAction.SEEK_BACKWARD);
 				lastTapTime = currentTime;
 				return true;
 			}
@@ -112,14 +122,39 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	@Override
 	public boolean onDoubleTap(@NonNull MotionEvent e) {
 		if (!isEnabled()) return false;
-		float x = e.getX();
-		float width = playerView.getWidth();
-		if (x < width * 0.35f || x > width * 0.65f) {
-			processSeek(x < width * 0.5f);
-			lastTapTime = System.currentTimeMillis();
-			return true;
+		switch (resolveDoubleTapAction(e.getX(), playerView.getWidth())) {
+			case SEEK_BACKWARD:
+				processSeek(true);
+				lastTapTime = System.currentTimeMillis();
+				return true;
+			case SEEK_FORWARD:
+				processSeek(false);
+				lastTapTime = System.currentTimeMillis();
+				return true;
+			case TOGGLE_PLAYBACK:
+				if (engine.isPlaying()) {
+					engine.pause();
+				} else {
+					engine.play();
+				}
+				controller.setControlsVisible(true);
+				return true;
+			default:
+				return false;
 		}
-		return false;
+	}
+
+	static DoubleTapAction resolveDoubleTapAction(final float x, final float width) {
+		if (width <= 0f) {
+			return DoubleTapAction.TOGGLE_PLAYBACK;
+		}
+		if (x < width * LEFT_ZONE_MAX_RATIO) {
+			return DoubleTapAction.SEEK_BACKWARD;
+		}
+		if (x > width * RIGHT_ZONE_MIN_RATIO) {
+			return DoubleTapAction.SEEK_FORWARD;
+		}
+		return DoubleTapAction.TOGGLE_PLAYBACK;
 	}
 
 	private void processSeek(boolean isLeft) {
@@ -220,9 +255,9 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		if (Math.abs(deltaY) < threshold) return;
 
 		fullscreenSwipeTriggered = true;
-		if (deltaY < 0 && !playerView.isFs()) {
+		if (deltaY < 0 && !controller.isFullscreen()) {
 			controller.enterFullscreen();
-		} else if (deltaY > 0 && playerView.isFs()) {
+		} else if (deltaY > 0 && controller.isFullscreen()) {
 			controller.exitFullscreen();
 		}
 	}

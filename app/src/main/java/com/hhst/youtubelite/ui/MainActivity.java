@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -14,6 +15,8 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.webkit.WebView;
+import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -26,9 +29,16 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
@@ -39,6 +49,13 @@ import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
+import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.ui.queue.QueueAdapter;
+import com.hhst.youtubelite.ui.queue.QueueTouch;
 import com.hhst.youtubelite.util.DeviceUtils;
 import com.hhst.youtubelite.util.UrlUtils;
 
@@ -52,6 +69,8 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,12 +92,21 @@ public final class MainActivity extends AppCompatActivity {
 	@Inject
 	LitePlayer player;
 	@Inject
+	Engine engine;
+	@Inject
 	YoutubeExtractor youtubeExtractor;
+	@Inject
+	QueueRepository queueRepository;
+	@Inject
+	QueueWarmer queueWarmer;
 	@Nullable
 	private PlaybackService playbackService;
 	@Nullable
 	private ServiceConnection playbackServiceConnection;
+	@Nullable
+	private BottomSheetDialog queueBottomSheetDialog;
 	private long lastBackTime = 0;
+	private boolean suppressNextUserLeaveHintPictureInPicture;
 
 	@Override
 	protected void onCreate(@Nullable final Bundle savedInstanceState) {
@@ -97,9 +125,11 @@ public final class MainActivity extends AppCompatActivity {
 		});
 
 		setupNativeContextMenu();
+		setupQueueUi();
 		requestPermissions();
 		startPlaybackService();
 		setupBackNavigation();
+		queueWarmer.warmItems(queueRepository.getItems());
 
 		mainView.post(() -> handleIntent(getIntent()));
 	}
@@ -109,6 +139,35 @@ public final class MainActivity extends AppCompatActivity {
 		super.onNewIntent(intent);
 		setIntent(intent);
 		handleIntent(intent);
+	}
+
+	@Override
+	protected void onUserLeaveHint() {
+		super.onUserLeaveHint();
+		final boolean suppressAutoEnterPictureInPicture = suppressNextUserLeaveHintPictureInPicture;
+		suppressNextUserLeaveHintPictureInPicture = false;
+		if (shouldEnterPictureInPictureOnUserLeaveHint(
+						player,
+						extensionManager,
+						DeviceUtils.isInPictureInPictureMode(this),
+						suppressAutoEnterPictureInPicture)) {
+			player.enterPictureInPicture();
+		}
+	}
+
+	@Override
+	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
+		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		dispatchPictureInPictureModeChanged(player, isInPictureInPictureMode);
+		syncQueueUiVisibility(isInPictureInPictureMode);
+	}
+
+	@Override
+	public void onConfigurationChanged(@NonNull final Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		if (player != null) {
+			player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
+		}
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
@@ -143,6 +202,73 @@ public final class MainActivity extends AppCompatActivity {
 		} else if (tabManager.getWebview() == null) {
 			tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
 		}
+	}
+
+	static boolean shouldEnterPictureInPictureOnUserLeaveHint(@Nullable final LitePlayer player,
+	                                                          @Nullable final ExtensionManager extensionManager,
+	                                                          final boolean isInPictureInPictureMode,
+	                                                          final boolean suppressAutoEnterPictureInPicture) {
+		return !isInPictureInPictureMode
+						&& !suppressAutoEnterPictureInPicture
+						&& player != null
+						&& extensionManager != null
+						&& extensionManager.isEnabled(Constant.ENABLE_PIP)
+						&& player.shouldAutoEnterPictureInPicture();
+	}
+
+	static boolean shouldSuppressPictureInPictureForStartedActivity(@Nullable final Intent intent,
+	                                                                @NonNull final String appPackageName) {
+		if (intent == null || intent.getComponent() == null) return false;
+		return appPackageName.equals(intent.getComponent().getPackageName());
+	}
+
+	static void dispatchPictureInPictureModeChanged(@Nullable final LitePlayer player, final boolean isInPictureInPictureMode) {
+		if (player != null) {
+			player.onPictureInPictureModeChanged(isInPictureInPictureMode);
+		}
+	}
+
+	static boolean shouldShowQueueUi(final boolean isInPictureInPictureMode) {
+		return !isInPictureInPictureMode;
+	}
+
+	static boolean shouldReleasePlayerOnDestroy(final boolean isChangingConfigurations) {
+		return !isChangingConfigurations;
+	}
+
+	static boolean shouldRestoreMiniPlayerOnResume(final boolean isInAppMiniPlayer,
+	                                               final boolean isInPictureInPictureMode) {
+		return isInAppMiniPlayer && !isInPictureInPictureMode;
+	}
+
+	static boolean shouldSuspendMiniPlayerOnStop(final boolean isInAppMiniPlayer,
+	                                             final boolean isChangingConfigurations,
+	                                             final boolean isInPictureInPictureMode) {
+		return isInAppMiniPlayer && !isChangingConfigurations && !isInPictureInPictureMode;
+	}
+
+	static int sheetMax(final int mainHeight,
+	                    final int topInset,
+	                    final int playerBottom,
+	                    final boolean isInAppMiniPlayer) {
+		if (mainHeight <= 0) return 0;
+		if (isInAppMiniPlayer) return Math.max(0, mainHeight - Math.max(0, topInset));
+		if (playerBottom <= 0 || playerBottom >= mainHeight) return mainHeight;
+		return mainHeight - playerBottom;
+	}
+
+	static int sheetPad(final int baseBottomPadding, final int bottomInset) {
+		return baseBottomPadding + Math.max(0, bottomInset);
+	}
+
+	static int listPad(final int baseBottomPadding,
+	                   final int bottomInset,
+	                   final int minimumTrailingSpace) {
+		return baseBottomPadding + Math.max(Math.max(0, bottomInset), Math.max(0, minimumTrailingSpace));
+	}
+
+	static int queueAnchor(final int listHeight, final int topPadding) {
+		return Math.max(0, topPadding) + Math.max(0, listHeight) / 3;
 	}
 
 	private String extractUrlFromText(String text) {
@@ -207,6 +333,36 @@ public final class MainActivity extends AppCompatActivity {
 						.show();
 	}
 
+	private void setupQueueUi() {
+		final View playerRoot = findViewById(R.id.playerView);
+		if (playerRoot == null) return;
+		playerRoot.post(() -> {
+			final View queueButton = findViewById(R.id.btn_queue);
+			if (queueButton != null) {
+				queueButton.setOnClickListener(v -> showQueueBottomSheet());
+			}
+			final View miniQueueButton = findViewById(R.id.btn_mini_queue);
+			if (miniQueueButton != null) {
+				miniQueueButton.setOnClickListener(v -> showQueueBottomSheet());
+			}
+			syncQueueUiVisibility(DeviceUtils.isInPictureInPictureMode(this));
+		});
+	}
+
+	private void syncQueueUiVisibility(final boolean isInPictureInPictureMode) {
+		final View queueButton = findViewById(R.id.btn_queue);
+		final View miniQueueButton = findViewById(R.id.btn_mini_queue);
+		if (shouldShowQueueUi(isInPictureInPictureMode)) {
+			if (queueButton != null) queueButton.setVisibility(View.VISIBLE);
+			return;
+		}
+		if (queueButton != null) queueButton.setVisibility(View.GONE);
+		if (miniQueueButton != null) miniQueueButton.setVisibility(View.GONE);
+		if (queueBottomSheetDialog != null && queueBottomSheetDialog.isShowing()) {
+			queueBottomSheetDialog.dismiss();
+		}
+	}
+
 	private void triggerDownload(String url) {
 		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
 		final Toast fetchToast = Toast.makeText(this, "Fetching download links...", Toast.LENGTH_SHORT);
@@ -256,6 +412,293 @@ public final class MainActivity extends AppCompatActivity {
 				mainHandler.post(() -> Toast.makeText(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG).show());
 			}
 		}).start();
+	}
+
+	private void triggerQueueDownload() {
+		final String playbackUrl = tabManager != null ? tabManager.getPlaybackSessionUrl() : null;
+		if (playbackUrl != null && playbackUrl.contains("list=")) {
+			triggerPlaylistDownload(playbackUrl);
+			return;
+		}
+		final List<QueueItem> items = queueRepository.getItems();
+		if (items.isEmpty()) {
+			Toast.makeText(this, R.string.queue_download_unavailable, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		Toast.makeText(this, getString(R.string.downloading_queue_count, items.size()), Toast.LENGTH_LONG).show();
+		for (int i = 0; i < items.size(); i++) {
+			final String itemUrl = items.get(i).getUrl();
+			if (itemUrl == null || itemUrl.isBlank()) continue;
+			mainHandler.postDelayed(() -> triggerDownload(itemUrl), i * 250L);
+		}
+	}
+
+	private void showQueueBottomSheet() {
+		if (!shouldShowQueueUi(DeviceUtils.isInPictureInPictureMode(this))) return;
+		final BottomSheetDialog dialog = new BottomSheetDialog(this);
+		queueBottomSheetDialog = dialog;
+		final View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_queue, new android.widget.FrameLayout(this), false);
+		dialog.setContentView(sheetView);
+		final AtomicReference<BottomSheetBehavior<android.widget.FrameLayout>> sheetRef = new AtomicReference<>();
+		final AtomicBoolean dirty = new AtomicBoolean(false);
+
+		final ImageButton closeButton = sheetView.findViewById(R.id.btn_queue_close);
+		final SwitchMaterial enabledSwitch = sheetView.findViewById(R.id.switch_queue_enabled);
+		final ImageButton downloadButton = sheetView.findViewById(R.id.btn_queue_download);
+		final ImageButton orderButton = sheetView.findViewById(R.id.btn_queue_order);
+		final ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
+		final TextView emptyView = sheetView.findViewById(R.id.queue_empty);
+		final RecyclerView recyclerView = sheetView.findViewById(R.id.queue_items_recycler);
+		final QueueAdapter adapter = queueAdapter(dialog, recyclerView, emptyView);
+		final Player.Listener queuePlaybackListener = new Player.Listener() {
+			@Override
+			public void onPlaybackStateChanged(final int state) {
+				mainHandler.post(() -> {
+					if (queueBottomSheetDialog == dialog) {
+						syncQueueSheet(adapter, recyclerView, emptyView);
+					}
+				});
+			}
+		};
+		engine.addListener(queuePlaybackListener);
+		recyclerView.setLayoutManager(new LinearLayoutManager(this));
+		recyclerView.setAdapter(adapter);
+		recyclerView.setNestedScrollingEnabled(true);
+		recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+		new ItemTouchHelper(new QueueTouch((from, to) -> {
+			final boolean moved = adapter.moveItem(from, to);
+			if (moved) {
+				dirty.set(true);
+			}
+			return moved;
+		}, new QueueTouch.DragStateCallback() {
+			@Override
+			public void onDragStateChanged(final boolean dragging) {
+				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
+				if (behavior != null) {
+					// Avoid gesture fights.
+					behavior.setDraggable(!dragging);
+				}
+			}
+
+			@Override
+			public void onDragFinished() {
+				if (dirty.getAndSet(false)) {
+					saveQueueOrder(adapter.snapshotItems());
+					player.refreshQueueNavigationAvailability();
+				}
+				syncQueueSheet(adapter, recyclerView, emptyView);
+				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
+				if (behavior != null) {
+					behavior.setDraggable(true);
+				}
+			}
+		})).attachToRecyclerView(recyclerView);
+
+		if (closeButton != null) {
+			closeButton.setOnClickListener(v -> dialog.dismiss());
+		}
+		if (enabledSwitch != null) {
+			enabledSwitch.setChecked(queueRepository.isEnabled());
+			enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+				queueRepository.setEnabled(isChecked);
+				player.refreshQueueNavigationAvailability();
+				Toast.makeText(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off, Toast.LENGTH_SHORT).show();
+			});
+		}
+		if (downloadButton != null) {
+			downloadButton.setOnClickListener(v -> {
+				dialog.dismiss();
+				triggerQueueDownload();
+			});
+		}
+		if (orderButton != null) {
+			renderLoop(orderButton, player.getLoopMode());
+			orderButton.setOnClickListener(v -> {
+				final PlayerLoopMode newMode = player.getLoopMode().next();
+				player.setLoopMode(newMode);
+				renderLoop(orderButton, newMode);
+			});
+		}
+		if (clearButton != null) {
+			clearButton.setOnClickListener(v -> confirmClear(() -> {
+				queueRepository.clear();
+				player.refreshQueueNavigationAvailability();
+				syncQueueSheet(adapter, recyclerView, emptyView);
+			}));
+		}
+		dialog.setOnShowListener(ignored -> {
+			final android.widget.FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+			if (bottomSheet == null) return;
+			final BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
+			sheetRef.set(behavior);
+			final int sheetBasePaddingBottom = sheetView.getPaddingBottom();
+			final int recyclerBasePaddingBottom = recyclerView.getPaddingBottom();
+			final int recyclerTrailingSpace = Math.round(getResources().getDisplayMetrics().density * 24);
+			final View mainView = findViewById(R.id.main);
+			final WindowInsetsCompat rootInsets = mainView != null
+					? ViewCompat.getRootWindowInsets(mainView)
+					: ViewCompat.getRootWindowInsets(bottomSheet);
+			final int bottomInset = rootInsets != null
+					? rootInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+					: 0;
+			sheetView.setPadding(
+					sheetView.getPaddingLeft(),
+					sheetView.getPaddingTop(),
+					sheetView.getPaddingRight(),
+					sheetPad(sheetBasePaddingBottom, bottomInset));
+			// Keep last row visible.
+			recyclerView.setPadding(
+					recyclerView.getPaddingLeft(),
+					recyclerView.getPaddingTop(),
+					recyclerView.getPaddingRight(),
+					listPad(recyclerBasePaddingBottom, bottomInset, recyclerTrailingSpace));
+			final View playerRoot = findViewById(R.id.playerView);
+			final int maxSheetHeight = sheetMax(
+					mainView != null ? mainView.getHeight() : 0,
+					mainView != null ? mainView.getPaddingTop() : 0,
+					playerRoot != null ? playerRoot.getBottom() : 0,
+					player != null && player.isInAppMiniPlayer());
+			final android.view.ViewGroup.LayoutParams bottomSheetLayoutParams = bottomSheet.getLayoutParams();
+			if (bottomSheetLayoutParams != null && maxSheetHeight > 0) {
+				bottomSheetLayoutParams.height = maxSheetHeight;
+				bottomSheet.setLayoutParams(bottomSheetLayoutParams);
+			}
+			final android.view.ViewGroup.LayoutParams sheetLayoutParams = sheetView.getLayoutParams();
+			if (sheetLayoutParams != null && maxSheetHeight > 0) {
+				sheetLayoutParams.height = maxSheetHeight;
+				sheetView.setLayoutParams(sheetLayoutParams);
+			}
+			behavior.setPeekHeight(maxSheetHeight > 0 ? maxSheetHeight : sheetView.getMeasuredHeight());
+			behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+			scrollToPlaying(adapter, recyclerView);
+		});
+		dialog.setOnDismissListener(d -> {
+			engine.removeListener(queuePlaybackListener);
+			if (queueBottomSheetDialog == dialog) {
+				queueBottomSheetDialog = null;
+			}
+		});
+		syncQueueSheet(adapter, recyclerView, emptyView);
+		dialog.show();
+	}
+
+	@NonNull
+	private QueueAdapter queueAdapter(BottomSheetDialog dialog, RecyclerView recyclerView, TextView emptyView) {
+		final AtomicReference<QueueAdapter> adapterRef = new AtomicReference<>();
+		final QueueAdapter adapter = new QueueAdapter(new QueueAdapter.Actions() {
+			@Override
+			public void onPlayRequested(@NonNull final QueueItem item) {
+				dialog.dismiss();
+				if (item.getUrl() != null) {
+					tabManager.playInPlaybackSession(item.getUrl());
+				}
+			}
+
+			@Override
+			public void onDeleteRequested(@NonNull final QueueItem item) {
+				confirmRemove(item, () -> {
+					final String videoId = item.getVideoId();
+					if (videoId == null) return;
+					if (queueRepository.remove(videoId)) {
+						player.refreshQueueNavigationAvailability();
+						final QueueAdapter a = adapterRef.get();
+						if (a != null) {
+							syncQueueSheet(a, recyclerView, emptyView);
+						}
+					}
+				});
+			}
+		});
+		adapterRef.set(adapter);
+		return adapter;
+	}
+
+	private void confirmClear(@NonNull final Runnable onConfirmed) {
+		new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.clear_queue_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+	}
+
+	private void confirmRemove(@NonNull final QueueItem item,
+	                           @NonNull final Runnable onConfirmed) {
+		new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.remove_queue_item_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+	}
+
+	private void syncQueueSheet(@NonNull final QueueAdapter adapter,
+	                            @NonNull final RecyclerView recyclerView,
+	                            @NonNull final TextView emptyView) {
+		final List<QueueItem> items = queueRepository.getItems();
+		adapter.replaceItems(items, player.getLoadedVideoId());
+		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+		recyclerView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+	}
+
+	private void scrollToPlaying(@NonNull final QueueAdapter adapter,
+	                             @NonNull final RecyclerView recyclerView) {
+		final int i = adapter.playingPos();
+		if (i < 0) {
+			return;
+		}
+		recyclerView.post(() -> {
+			final RecyclerView.LayoutManager m = recyclerView.getLayoutManager();
+			if (m instanceof LinearLayoutManager l) {
+				l.scrollToPositionWithOffset(i, queueAnchor(recyclerView.getHeight(), recyclerView.getPaddingTop()));
+				return;
+			}
+			recyclerView.scrollToPosition(i);
+		});
+	}
+
+	private void saveQueueOrder(@NonNull final List<QueueItem> order) {
+		final List<QueueItem> items = queueRepository.getItems();
+		for (int to = 0; to < order.size(); to++) {
+			final String videoId = order.get(to).getVideoId();
+			final int from = find(items, videoId);
+			if (from < 0 || from == to) continue;
+			if (queueRepository.move(from, to)) {
+				final QueueItem item = items.remove(from);
+				items.add(to, item);
+			}
+		}
+	}
+
+	private int find(@NonNull final List<QueueItem> items,
+	                 @Nullable final String videoId) {
+		if (videoId == null) return -1;
+		for (int i = 0; i < items.size(); i++) {
+			if (videoId.equals(items.get(i).getVideoId())) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private void renderLoop(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {
+		switch (mode) {
+			case PLAYLIST_NEXT -> {
+				button.setImageResource(R.drawable.ic_playback_end_next);
+				button.setContentDescription(getString(R.string.playback_end_next));
+			}
+			case LOOP_ONE -> {
+				button.setImageResource(R.drawable.ic_playback_end_loop);
+				button.setContentDescription(getString(R.string.playback_end_loop));
+			}
+			case PAUSE_AT_END -> {
+				button.setImageResource(R.drawable.ic_playback_end_pause);
+				button.setContentDescription(getString(R.string.playback_end_pause));
+			}
+			case PLAYLIST_RANDOM -> {
+				button.setImageResource(R.drawable.ic_playback_end_shuffle);
+				button.setContentDescription(getString(R.string.playback_end_playlist_random));
+			}
+		}
 	}
 
 	private void shareUrl(String url) {
@@ -340,10 +783,48 @@ public final class MainActivity extends AppCompatActivity {
 	}
 
 	@Override
+	protected void onResume() {
+		super.onResume();
+		suppressNextUserLeaveHintPictureInPicture = false;
+		if (player != null && shouldRestoreMiniPlayerOnResume(player.isInAppMiniPlayer(), DeviceUtils.isInPictureInPictureMode(this))) {
+			player.restoreInAppMiniPlayerUiIfNeeded();
+		}
+		if (player != null) {
+			player.syncRotation(DeviceUtils.isRotateOn(this), getResources().getConfiguration().orientation);
+		}
+	}
+
+	@Override
+	public void startActivity(@Nullable final Intent intent) {
+		suppressNextUserLeaveHintPictureInPicture =
+						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+		super.startActivity(intent);
+	}
+
+	@Override
+	public void startActivity(@Nullable final Intent intent, @Nullable final Bundle options) {
+		suppressNextUserLeaveHintPictureInPicture =
+						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+		super.startActivity(intent, options);
+	}
+
+	@Override
+	protected void onStop() {
+		if (player != null
+						&& shouldSuspendMiniPlayerOnStop(
+						player.isInAppMiniPlayer(),
+						isChangingConfigurations(),
+						DeviceUtils.isInPictureInPictureMode(this))) {
+			player.suspendInAppMiniPlayerUiIfNeeded();
+		}
+		super.onStop();
+	}
+
+	@Override
 	protected void onDestroy() {
 		super.onDestroy();
 		if (playbackServiceConnection != null) unbindService(playbackServiceConnection);
-		if (player != null) player.release();
+		if (player != null && shouldReleasePlayerOnDestroy(isChangingConfigurations())) player.release();
 	}
 }
 

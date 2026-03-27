@@ -1,7 +1,7 @@
 package com.hhst.youtubelite.player;
 
 import android.app.Activity;
-import android.util.Log;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -9,20 +9,25 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.ui.DefaultTimeBar;
 
 import com.hhst.youtubelite.PlaybackService;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.extractor.ExtractionSession;
 import com.hhst.youtubelite.extractor.ExtractionException;
+import com.hhst.youtubelite.extractor.PlaybackDetails;
 import com.hhst.youtubelite.extractor.StreamDetails;
-import com.hhst.youtubelite.extractor.VideoDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.common.PlayerUtils;
+import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
+import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
+import com.hhst.youtubelite.util.DeviceUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -30,6 +35,7 @@ import org.schabi.newpipe.extractor.stream.AudioStream;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -39,11 +45,14 @@ import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 
 import dagger.hilt.android.scopes.ActivityScoped;
+import lombok.Getter;
 
 @UnstableApi
 @ActivityScoped
 public class LitePlayer {
 	private static final String KEY_LAST_AUDIO_LANG = "last_audio_lang";
+	private static final String UNKNOWN_LANGUAGE = "und";
+	private static final Locale NORMALIZATION_LOCALE = Locale.ROOT;
 
 	@NonNull
 	private final Activity activity;
@@ -66,6 +75,17 @@ public class LitePlayer {
 	private CompletableFuture<Void> cf;
 	@Nullable
 	private String vid = null;
+	@Nullable
+	private volatile String loadedVideoId;
+	@Nullable
+	private ExtractionSession extractionSession;
+	@Nullable
+	private Runnable onMiniPlayerRestore;
+	@Nullable
+	private Runnable onMiniPlayerClose;
+	@Getter
+	private boolean inAppMiniPlayer;
+	private boolean wasInPictureInPicture;
 
 	@Inject
 	public LitePlayer(@NonNull final Activity activity,
@@ -107,7 +127,8 @@ public class LitePlayer {
 
 			@Override
 			public void onPlayerError(@NonNull PlaybackException error) {
-				ErrorDialog.show(activity, error.getMessage(), Log.getStackTraceString(error));
+				invalidatePlaybackCacheIfSourceOpenFailure(error);
+				ErrorDialog.show(activity, error.getMessage(), error);
 			}
 		});
 	}
@@ -139,41 +160,59 @@ public class LitePlayer {
 		this.playbackService = service;
 		if (service != null) {
 			service.initialize(engine);
+			refreshQueueNavigationAvailability();
 		}
 	}
 
-	private void applyAudioPreference(StreamDetails si) {
-		List<AudioStream> audioStreams = si.getAudioStreams();
+	public void refreshQueueNavigationAvailability() {
+		final QueueNav availability = engine.getQueueNavigationAvailability();
+		activity.runOnUiThread(() -> controller.refreshQueueNavigationAvailability(availability));
+		if (playbackService != null) {
+			playbackService.updateQueueNavigationAvailability(availability);
+		}
+	}
+
+	private void applyAudioPreference(@NonNull final StreamDetails streamDetails) {
+		final List<AudioStream> audioStreams = streamDetails.getAudioStreams();
 		if (audioStreams == null || audioStreams.isEmpty()) return;
 
-		String savedLang = kv.decodeString(KEY_LAST_AUDIO_LANG, "und");
-		List<AudioStream> mutableStreams = new ArrayList<>(audioStreams);
+		final String savedLanguage = kv.decodeString(KEY_LAST_AUDIO_LANG, UNKNOWN_LANGUAGE);
+		final List<AudioStream> reordered = new ArrayList<>(audioStreams);
+		reordered.sort((first, second) -> compareAudioStreams(first, second, savedLanguage));
+		streamDetails.setAudioStreams(reordered);
+	}
 
-		mutableStreams.sort((s1, s2) -> {
+	private static int compareAudioStreams(@NonNull final AudioStream first,
+	                                       @NonNull final AudioStream second,
+	                                       @NonNull final String savedLanguage) {
+		final int originalComparison = Boolean.compare(
+						isOriginalAudioTrack(second),
+						isOriginalAudioTrack(first));
+		if (originalComparison != 0) return originalComparison;
 
-			String n1 = s1.getAudioTrackName() != null ? s1.getAudioTrackName().toLowerCase() : "";
-			String n2 = s2.getAudioTrackName() != null ? s2.getAudioTrackName().toLowerCase() : "";
-			boolean s1IsOriginal = n1.contains("original");
-			boolean s2IsOriginal = n2.contains("original");
+		final int savedLanguageComparison = Boolean.compare(
+						matchesSavedLanguage(second, savedLanguage),
+						matchesSavedLanguage(first, savedLanguage));
+		if (savedLanguageComparison != 0) return savedLanguageComparison;
 
-			if (s1IsOriginal && !s2IsOriginal) return -1;
-			if (!s1IsOriginal && s2IsOriginal) return 1;
+		return Integer.compare(second.getAverageBitrate(), first.getAverageBitrate());
+	}
 
+	private static boolean isOriginalAudioTrack(@NonNull final AudioStream audioStream) {
+		final String trackName = audioStream.getAudioTrackName();
+		return trackName != null && trackName.toLowerCase(NORMALIZATION_LOCALE).contains("original");
+	}
 
-			String l1 = (s1.getAudioLocale() != null) ? s1.getAudioLocale().getLanguage() : "und";
-			String l2 = (s2.getAudioLocale() != null) ? s2.getAudioLocale().getLanguage() : "und";
+	private static boolean matchesSavedLanguage(@NonNull final AudioStream audioStream,
+	                                            @NonNull final String savedLanguage) {
+		return audioLanguage(audioStream).equalsIgnoreCase(savedLanguage);
+	}
 
-			boolean s1Matches = l1.equalsIgnoreCase(savedLang);
-			boolean s2Matches = l2.equalsIgnoreCase(savedLang);
-
-			if (s1Matches && !s2Matches) return -1;
-			if (!s1Matches && s2Matches) return 1;
-
-			return Integer.compare(s2.getAverageBitrate(), s1.getAverageBitrate());
-		});
-
-		si.getAudioStreams().clear();
-		si.getAudioStreams().addAll(mutableStreams);
+	@NonNull
+	private static String audioLanguage(@NonNull final AudioStream audioStream) {
+		return audioStream.getAudioLocale() != null
+						? audioStream.getAudioLocale().getLanguage()
+						: UNKNOWN_LANGUAGE;
 	}
 
 	public void play(String url) {
@@ -189,41 +228,53 @@ public class LitePlayer {
 			final DefaultTimeBar bar = playerView.findViewById(R.id.exo_progress);
 			bar.setAdGroupTimesMs(null, null, 0);
 			playerView.show();
+			controller.syncRotation(
+							DeviceUtils.isRotateOn(activity),
+							activity.getResources().getConfiguration().orientation);
 		});
 
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
+		final ExtractionSession session = new ExtractionSession();
+		extractionSession = session;
 
 		cf = CompletableFuture.supplyAsync(() -> {
 			try {
 				sponsor.load(videoId);
-				VideoDetails vi = extractor.getVideoInfo(url);
-				StreamDetails si = extractor.getStreamInfo(url);
-				si.setVideoStreams(PlayerUtils.filterBestStreams(si.getVideoStreams()));
-
-				applyAudioPreference(si);
-
-				return new ExtractionResult(vi, si);
-			} catch (InterruptedException | InterruptedIOException e) {
-				throw new CompletionException("interrupted", e);
+				if (session.isCancelled()) throw new InterruptedException("Extraction canceled");
+				PlaybackDetails playbackDetails = extractor.getPlaybackDetails(url, session);
+				StreamDetails streamDetails = playbackDetails.getStreamDetails();
+				streamDetails.setVideoStreams(PlayerUtils.filterBestStreams(streamDetails.getVideoStreams()));
+				applyAudioPreference(streamDetails);
+				return playbackDetails;
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new CompletionException("Interrupted", e);
+			} catch (InterruptedIOException e) {
+				throw new CompletionException("Interrupted", e);
 			} catch (Exception e) {
-				throw new ExtractionException("extract failed", e);
+				throw new ExtractionException("Extract failed", e);
 			}
 		}, executor).thenAccept(er -> activity.runOnUiThread(() -> {
+			if (this.extractionSession == session) this.extractionSession = null;
 			if (!Objects.equals(this.vid, videoId)) return;
-			playerView.setTitle(er.vi.getTitle());
-			playerView.updateSkipMarkers(er.vi.getDuration(), TimeUnit.SECONDS);
+			this.loadedVideoId = videoId;
+			playerView.setTitle(er.getVideoDetails().getTitle());
+			playerView.updateSkipMarkers(er.getVideoDetails().getDuration(), TimeUnit.SECONDS);
 
-			engine.play(er.vi, er.si);
+			engine.play(er.getVideoDetails(), er.getStreamDetails());
 
 			if (playbackService != null) {
-				playbackService.showNotification(er.vi.getTitle(), er.vi.getAuthor(), er.vi.getThumbnail(), er.vi.getDuration() * 1000);
+				playbackService.showNotification(er.getVideoDetails().getTitle(), er.getVideoDetails().getAuthor(), er.getVideoDetails().getThumbnail(), er.getVideoDetails().getDuration() * 1000);
 			}
+			refreshQueueNavigationAvailability();
 		})).exceptionally(e -> {
+			if (this.extractionSession == session) this.extractionSession = null;
 			Throwable cause = e instanceof CompletionException ? e.getCause() : e;
 			if (cause instanceof ExtractionException) {
 				activity.runOnUiThread(() -> {
 					if (!Objects.equals(this.vid, videoId)) return;
-					ErrorDialog.show(activity, cause.getMessage(), Log.getStackTraceString(cause));
+					ErrorDialog.show(activity, cause.getMessage(), cause);
 				});
 			}
 			return null;
@@ -232,8 +283,13 @@ public class LitePlayer {
 
 	public void hide() {
 		this.vid = null;
+		this.loadedVideoId = null;
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
 		activity.runOnUiThread(() -> {
+			controller.clearRotation();
+			exitInAppMiniPlayer();
+			setMiniPlayerCallbacks(null, null);
 			playerView.hide();
 			engine.clear();
 			if (playbackService != null) {
@@ -250,8 +306,21 @@ public class LitePlayer {
 		engine.pause();
 	}
 
+	public void seekToIfLoaded(final long positionMs) {
+		if (loadedVideoId == null || positionMs < 0L) return;
+		activity.runOnUiThread(() -> engine.seekTo(positionMs));
+	}
+
+	public boolean seekLoadedVideo(@Nullable final String url, final long positionMs) {
+		if (positionMs < 0L || url == null) return false;
+		final String videoId = YoutubeExtractor.getVideoId(url);
+		if (videoId == null || !Objects.equals(loadedVideoId, videoId)) return false;
+		seekToIfLoaded(positionMs);
+		return true;
+	}
+
 	public boolean isFullscreen() {
-		return playerView.isFs();
+		return controller.isFullscreen();
 	}
 
 	public void enterFullscreen() {
@@ -262,19 +331,128 @@ public class LitePlayer {
 		controller.exitFullscreen();
 	}
 
+	public void syncRotation(final boolean autoRotate, final int orientation) {
+		controller.syncRotation(autoRotate, orientation);
+	}
+
+	public void enterPictureInPicture() {
+		playerView.enterPiP();
+	}
+
+	public boolean isSuspendableWatchSession() {
+		return playerView.getVisibility() == View.VISIBLE;
+	}
+
+	public void enterInAppMiniPlayer() {
+		inAppMiniPlayer = true;
+		playerView.enterInAppMiniPlayer();
+		controller.enterMiniPlayer();
+	}
+
+	public void exitInAppMiniPlayer() {
+		inAppMiniPlayer = false;
+		playerView.exitInAppMiniPlayer();
+		controller.exitMiniPlayer();
+	}
+
+	public void restoreInAppMiniPlayerUiIfNeeded() {
+		if (!inAppMiniPlayer) return;
+		playerView.show();
+		playerView.enterInAppMiniPlayer();
+		controller.enterMiniPlayer();
+	}
+
+	public void suspendInAppMiniPlayerUiIfNeeded() {
+		if (!inAppMiniPlayer) return;
+		playerView.hide();
+	}
+
+	public void stopAndCloseFromMiniPlayer() {
+		hide();
+	}
+
+	public void setMiniPlayerCallbacks(@Nullable final Runnable onRestore, @Nullable final Runnable onClose) {
+		onMiniPlayerRestore = onRestore;
+		onMiniPlayerClose = onClose;
+		playerView.setMiniPlayerCallbacks(
+						onRestore != null ? this::dispatchMiniPlayerRestore : null,
+						onClose != null ? this::dispatchMiniPlayerClose : null);
+	}
+
+	public boolean shouldAutoEnterPictureInPicture() {
+		return playerView.getVisibility() == View.VISIBLE;
+	}
+
 	public void onPictureInPictureModeChanged(final boolean isInPiP) {
 		controller.onPictureInPictureModeChanged(isInPiP);
+		if (wasInPictureInPicture && !isInPiP && inAppMiniPlayer && onMiniPlayerRestore != null) {
+			dispatchMiniPlayerRestore();
+		}
+		wasInPictureInPicture = isInPiP;
 	}
 
 	public void setHeight(int height) {
 		playerView.post(() -> playerView.setHeight(height));
 	}
 
+	@Nullable
+	public String getLoadedVideoId() {
+		return loadedVideoId;
+	}
+
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		return controller.getLoopMode();
+	}
+
+	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+		controller.setLoopMode(mode);
+	}
+
 	public void release() {
+		cancelCurrentExtraction();
 		if (cf != null) cf.cancel(true);
+		loadedVideoId = null;
+		wasInPictureInPicture = false;
+		onMiniPlayerRestore = null;
+		onMiniPlayerClose = null;
+		activity.runOnUiThread(() -> playerView.setMiniPlayerCallbacks(null, null));
+		inAppMiniPlayer = false;
 		engine.release();
 	}
 
-	private record ExtractionResult(VideoDetails vi, StreamDetails si) {
+	private void dispatchMiniPlayerRestore() {
+		if (onMiniPlayerRestore != null) onMiniPlayerRestore.run();
+	}
+
+	private void dispatchMiniPlayerClose() {
+		final Runnable onClose = onMiniPlayerClose;
+		if (onClose == null) return;
+		stopAndCloseFromMiniPlayer();
+		onClose.run();
+	}
+
+	void invalidatePlaybackCacheIfSourceOpenFailure(@NonNull final PlaybackException error) {
+		if (loadedVideoId == null) return;
+		if (!isPlaybackSourceOpenFailure(error)) return;
+		extractor.invalidatePlaybackCacheByVideoId(loadedVideoId);
+	}
+
+	static boolean isPlaybackSourceOpenFailure(@Nullable final Throwable throwable) {
+		Throwable current = throwable;
+		while (current != null) {
+			if (current instanceof HttpDataSource.HttpDataSourceException httpException
+							&& httpException.type == HttpDataSource.HttpDataSourceException.TYPE_OPEN) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
+	}
+
+	private void cancelCurrentExtraction() {
+		if (extractionSession == null) return;
+		extractionSession.cancel();
+		extractionSession = null;
 	}
 }

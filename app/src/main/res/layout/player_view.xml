@@ -54,9 +54,9 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingVertical="4dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="16dp">
+                android:paddingVertical="2dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="10dp">
 
                 <TextView
                     android:id="@+id/tv_title"
@@ -72,39 +72,82 @@
                     android:textStyle="bold" />
 
                 <ImageButton
+                    android:id="@+id/btn_queue"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/queue"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
+                    android:src="@drawable/ic_queue" />
+
+                <ImageButton
                     android:id="@+id/btn_segments"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/segments"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_segment" />
 
                 <ImageButton
                     android:id="@+id/btn_subtitles"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/subtitles"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_subtitles_off" />
 
                 <ImageButton
                     android:id="@+id/btn_loop"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/action_repeat"
+                    android:contentDescription="@string/playback_end_next"
                     android:padding="4dp"
-                    android:src="@drawable/ic_repeat_off" />
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
+                    android:src="@drawable/ic_playback_end_next" />
 
                 <ImageButton
                     android:id="@+id/btn_more"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_more" />
             </LinearLayout>
 
@@ -121,16 +164,19 @@
 
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="-2dp">
+
                     <androidx.media3.ui.DefaultTimeBar
                         android:id="@+id/exo_progress"
                         android:layout_width="match_parent"
                         android:layout_height="20dp"
                         app:bar_height="2dp"
+                        app:buffered_color="@android:color/white"
                         app:played_color="@color/yt_red"
-                        app:unplayed_color="#99FFFFFF"
                         app:scrubber_color="@color/yt_red"
-                        app:buffered_color="@android:color/white" />
+                        app:unplayed_color="#99FFFFFF" />
+
                     <com.hhst.youtubelite.player.sponsor.SponsorOverlayView
                         android:id="@+id/sponsor_overlay"
                         android:layout_width="match_parent"
@@ -140,7 +186,7 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="36dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingHorizontal="12dp">
@@ -175,36 +221,49 @@
                     <TextView
                         android:id="@+id/btn_speed"
                         android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
+                        android:layout_height="28dp"
+                        android:minWidth="46dp"
+                        android:minHeight="28dp"
+                        android:maxHeight="28dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="50dp"
-                        android:paddingHorizontal="8dp"
+                        android:paddingStart="7dp"
+                        android:paddingEnd="7dp"
                         android:text="1.0x"
                         android:textColor="@android:color/white"
                         android:textSize="12sp"
+                        android:alpha="0.92"
                         tools:ignore="HardcodedText" />
 
                     <TextView
                         android:id="@+id/btn_quality"
                         android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
+                        android:layout_height="28dp"
+                        android:minWidth="46dp"
+                        android:minHeight="28dp"
+                        android:maxHeight="28dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="50dp"
-                        android:paddingHorizontal="8dp"
+                        android:paddingStart="7dp"
+                        android:paddingEnd="7dp"
                         android:text="@string/player_quality_auto"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:alpha="0.92" />
 
                     <ImageButton
                         android:id="@+id/btn_fullscreen"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:minWidth="32dp"
+                        android:minHeight="32dp"
+                        android:maxWidth="32dp"
+                        android:maxHeight="32dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/action_fullscreen"
-                        android:padding="8dp"
+                        android:padding="4dp"
                         android:scaleType="fitCenter"
+                        android:alpha="0.92"
                         android:src="@drawable/ic_fullscreen" />
                 </LinearLayout>
             </LinearLayout>
@@ -237,7 +296,7 @@
             android:id="@+id/play_pause_container"
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:layout_marginHorizontal="32dp"
+            android:layout_marginHorizontal="20dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btn_next"
             app:layout_constraintStart_toEndOf="@+id/btn_prev"
@@ -302,6 +361,117 @@
         android:padding="12dp"
         android:src="@drawable/ic_unlock"
         android:visibility="gone" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mini_controller_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="0dp"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        app:cardBackgroundColor="#66000000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeColor="#12FFFFFF"
+        app:strokeWidth="1dp" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_queue"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/queue"
+        android:padding="12dp"
+        android:src="@drawable/ic_queue"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_close"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/close"
+        android:padding="12dp"
+        android:src="@drawable/ic_close"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_restore"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/action_restore_watch"
+        android:padding="10dp"
+        android:src="@drawable/ic_fullscreen"
+        android:translationY="0dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/mini_bottom_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:translationY="-4dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btn_mini_prev"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_previous"
+            android:padding="5dp"
+            android:src="@drawable/ic_previous" />
+
+        <Space
+            android:id="@+id/mini_controls_space_start"
+            android:layout_width="18dp"
+            android:layout_height="1dp" />
+
+        <FrameLayout
+            android:layout_width="34dp"
+            android:layout_height="34dp">
+
+            <ImageButton
+                android:id="@+id/btn_mini_play"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_play"
+                android:padding="5dp"
+                android:src="@drawable/ic_play" />
+
+            <ImageButton
+                android:id="@+id/btn_mini_pause"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_pause"
+                android:padding="5dp"
+                android:src="@drawable/ic_pause" />
+        </FrameLayout>
+
+        <Space
+            android:id="@+id/mini_controls_space_end"
+            android:layout_width="18dp"
+            android:layout_height="1dp" />
+
+        <ImageButton
+            android:id="@+id/btn_mini_next"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_next"
+            android:padding="5dp"
+            android:src="@drawable/ic_next" />
+    </LinearLayout>
 
 </FrameLayout>
 

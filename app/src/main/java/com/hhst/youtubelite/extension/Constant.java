@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.extension;
 
 import static com.hhst.youtubelite.Constant.ENABLE_BACKGROUND_PLAY;
+import static com.hhst.youtubelite.Constant.ENABLE_IN_APP_MINI_PLAYER;
 import static com.hhst.youtubelite.Constant.ENABLE_PIP;
 import static com.hhst.youtubelite.Constant.REMEMBER_LAST_POSITION;
 import static com.hhst.youtubelite.Constant.REMEMBER_RESIZE_MODE;
@@ -27,6 +28,7 @@ public class Constant {
 					Map.entry(REMEMBER_QUALITY, true),
 					Map.entry(ENABLE_BACKGROUND_PLAY, true),
 					Map.entry(ENABLE_PIP, true),
+					Map.entry(ENABLE_IN_APP_MINI_PLAYER, true),
 					Map.entry(REMEMBER_RESIZE_MODE, false),
 					Map.entry(REMEMBER_PLAYBACK_SPEED, false),
 					Map.entry(ENABLE_PLAYER_GESTURES, true)

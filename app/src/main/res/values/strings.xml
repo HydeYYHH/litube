@@ -5,6 +5,22 @@
     <string name="video">Video</string>
     <string name="cancel">Cancel</string>
     <string name="download">Download</string>
+    <string name="queue">Queue</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="queue_item_added">Added to queue</string>
+    <string name="queue_item_unavailable">Couldn\'t get current video info. Queue item was not added.</string>
+    <string name="queue_enabled">Use queue for playback</string>
+    <string name="queue_enabled_on">Queue playback enabled</string>
+    <string name="queue_enabled_off">Queue playback disabled</string>
+    <string name="clear_queue">Clear queue</string>
+    <string name="clear_queue_confirmation">Clear all queue items?</string>
+    <string name="remove_queue_item">Remove queue item</string>
+    <string name="remove_queue_item_confirmation">Remove this queue item?</string>
+    <string name="no_queue_items">No queue items</string>
+    <string name="queue_unknown_author">Unknown author</string>
+    <string name="queue_now_playing">Now playing</string>
+    <string name="queue_download_unavailable">No playlist or queue items available to download</string>
+    <string name="downloading_queue_count">Downloading %1$d queue items…</string>
     <string name="menu_downloads">Downloads</string>
     <string name="video_quality">Video Quality</string>
     <string name="confirm">Confirm</string>
@@ -46,6 +62,7 @@
     <string name="player_time_separator"> / </string>
     <string name="action_repeat">Repeat</string>
     <string name="action_fullscreen">Fullscreen</string>
+    <string name="action_restore_watch">Return to video</string>
     <string name="hint_volume">Volume %1$d%%</string>
     <string name="hint_brightness">Brightness %1$d%%</string>
     <string name="hint_seek_plus">+%1$ds</string>
@@ -57,6 +74,10 @@
     <string name="debug_info_copied">Debug info copied to clipboard</string>
     <string name="repeat_on">Loop On</string>
     <string name="repeat_off">Loop Off</string>
+    <string name="playback_end_next">Play next</string>
+    <string name="playback_end_loop">Loop video</string>
+    <string name="playback_end_pause">Pause at end</string>
+    <string name="playback_end_playlist_random">Playlist shuffle</string>
     <string name="subtitles">Captions</string>
     <string name="subtitles_on">Captions on</string>
     <string name="subtitles_off">Captions off</string>
@@ -64,6 +85,7 @@
     <string name="jumped_to_segment">Jumped to: %1$s</string>
     <string name="jump">Jump</string>
     <string name="remember_resize_mode">Remember resize mode</string>
+    <string name="in_app_mini_player">In-app mini-player</string>
     <string name="bitrate">Bitrate</string>
     <string name="dropped_frames">Dropped Frames</string>
     <string name="resolution">Resolution</string>
@@ -146,6 +168,9 @@
     <string name="download_progress_simple">%1$s MB</string>
     <string name="download_status_with_type">%1$s • %2$s</string>
     <string name="filename">Filename</string>
+    <string name="preparing_download">Preparing download…</string>
+    <string name="downloading_file">Downloading: %1$s</string>
+    <string name="downloads_running">%1$d downloads in progress</string>
     <string name="reset_extension_title">Reset extensions</string>
     <string name="reset_extension_message">Reset all extension settings to default?</string>
 </resources>
