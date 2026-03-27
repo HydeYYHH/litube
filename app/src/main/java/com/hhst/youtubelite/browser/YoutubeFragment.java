@@ -73,6 +73,7 @@ public final class YoutubeFragment extends Fragment {
 	}
 
 	public void loadUrl(@Nullable final String url) {
+		this.url = url;
 		if (webview != null && url != null && !Objects.equals(webview.getUrl(), url))
 			webview.loadUrl(url);
 	}

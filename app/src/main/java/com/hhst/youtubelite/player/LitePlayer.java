@@ -339,7 +339,7 @@ public class LitePlayer {
 		playerView.enterPiP();
 	}
 
-	public boolean isSuspendableWatchSession() {
+	public boolean canSuspendWatch() {
 		return playerView.getVisibility() == View.VISIBLE;
 	}
 

@@ -414,9 +414,9 @@ public final class MainActivity extends AppCompatActivity {
 	}
 
 	private void triggerQueueDownload() {
-		final String playbackUrl = tabManager != null ? tabManager.getPlaybackSessionUrl() : null;
-		if (playbackUrl != null && playbackUrl.contains("list=")) {
-			triggerPlaylistDownload(playbackUrl);
+		final String watchUrl = tabManager != null ? tabManager.getWatchUrl() : null;
+		if (watchUrl != null && watchUrl.contains("list=")) {
+			triggerPlaylistDownload(watchUrl);
 			return;
 		}
 		final List<QueueItem> items = queueRepository.getItems();
@@ -590,7 +590,7 @@ public final class MainActivity extends AppCompatActivity {
 			public void onPlayRequested(@NonNull final QueueItem item) {
 				dialog.dismiss();
 				if (item.getUrl() != null) {
-					tabManager.playInPlaybackSession(item.getUrl());
+					tabManager.playInWatch(item.getUrl());
 				}
 			}
 

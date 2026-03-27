@@ -363,18 +363,18 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void isSuspendableWatchSession_returnsTrueWhenLoadedAndPlayerViewIsShown() {
+	public void canSuspendWatch_returnsTrueWhenLoadedAndPlayerViewIsShown() {
 		when(playerView.isShown()).thenReturn(true);
 
-		assertTrue(player.isSuspendableWatchSession());
+		assertTrue(player.canSuspendWatch());
 	}
 
 	@Test
-	public void isSuspendableWatchSession_returnsTrueWhenPlayerViewIsVisibleEvenIfVideoStillLoading() throws Exception {
+	public void canSuspendWatch_returnsTrueWhenPlayerViewIsVisibleEvenIfVideoStillLoading() throws Exception {
 		setField(player, "loadedVideoId", null);
 		when(playerView.getVisibility()).thenReturn(View.VISIBLE);
 
-		assertTrue(player.isSuspendableWatchSession());
+		assertTrue(player.canSuspendWatch());
 	}
 
 	@Test
@@ -470,7 +470,7 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void restoreInAppMiniPlayerUiIfNeeded_reappliesMiniPlayerModeWhenSessionActive() {
+	public void restoreInAppMiniPlayerUiIfNeeded_reappliesMiniPlayerModeWhenActive() {
 		player.enterInAppMiniPlayer();
 		clearInvocations(playerView, controller);
 
@@ -493,7 +493,7 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void suspendInAppMiniPlayerUiIfNeeded_hidesViewWithoutExitingMiniPlayerSession() {
+	public void suspendInAppMiniPlayerUiIfNeeded_hidesViewWithoutExitingMiniPlayer() {
 		player.enterInAppMiniPlayer();
 		clearInvocations(playerView, controller);
 
@@ -639,7 +639,7 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void onPictureInPictureModeChanged_exitsToWatchWhenMiniPlayerSessionExists() {
+	public void onPictureInPictureModeChanged_exitsToWatchWhenMiniPlayerIsActive() {
 		final Runnable onRestore = mock(Runnable.class);
 		player.setMiniPlayerCallbacks(onRestore, null);
 		player.enterInAppMiniPlayer();
@@ -653,7 +653,7 @@ public class LitePlayerTest {
 	}
 
 	@Test
-	public void onPictureInPictureModeChanged_doesNotExitToWatchWithoutPriorPipSession() {
+	public void onPictureInPictureModeChanged_doesNotExitToWatchWithoutPriorPip() {
 		final Runnable onRestore = mock(Runnable.class);
 		player.setMiniPlayerCallbacks(onRestore, null);
 		player.enterInAppMiniPlayer();

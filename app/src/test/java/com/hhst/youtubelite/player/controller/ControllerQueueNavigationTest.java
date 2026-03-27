@@ -11,38 +11,42 @@ import org.junit.Test;
 public class ControllerQueueNavigationTest {
 	@Test
 	public void shouldEnablePrevious_reflectsQueueBoundaries() {
-		assertTrue(Controller.shouldEnablePrevious(QueueNav.INACTIVE));
+		assertFalse(Controller.shouldEnablePrevious(QueueNav.INACTIVE));
 		assertTrue(Controller.shouldEnablePrevious(QueueNav.ACTIVE_WITH_PREVIOUS));
 		assertFalse(Controller.shouldEnablePrevious(QueueNav.ACTIVE_WITHOUT_PREVIOUS));
 		assertFalse(Controller.shouldEnablePrevious(QueueNav.ACTIVE_WITHOUT_PREVIOUS_OR_NEXT));
+		assertTrue(Controller.shouldEnablePrevious(QueueNav.INACTIVE.withPrev(true)));
 	}
 
 	@Test
 	public void shouldEnableNext_reflectsQueueBoundaries() {
-		assertTrue(Controller.shouldEnableNext(QueueNav.INACTIVE));
+		assertFalse(Controller.shouldEnableNext(QueueNav.INACTIVE));
 		assertTrue(Controller.shouldEnableNext(QueueNav.ACTIVE_WITH_PREVIOUS));
 		assertTrue(Controller.shouldEnableNext(QueueNav.ACTIVE_WITHOUT_PREVIOUS));
 		assertFalse(Controller.shouldEnableNext(QueueNav.ACTIVE_WITHOUT_PREVIOUS_OR_NEXT));
+		assertTrue(Controller.shouldEnableNext(QueueNav.INACTIVE.withNext(true)));
 	}
 
 	@Test
 	public void previousButtonAlpha_usesDisabledAlphaWhenPreviousIsBlocked() {
-		assertEquals(1.0f, Controller.previousButtonAlpha(QueueNav.INACTIVE), 0.0f);
+		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.previousButtonAlpha(QueueNav.INACTIVE), 0.0f);
 		assertEquals(1.0f, Controller.previousButtonAlpha(QueueNav.ACTIVE_WITH_PREVIOUS), 0.0f);
 		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.previousButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS), 0.0f);
 		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.previousButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS_OR_NEXT), 0.0f);
+		assertEquals(1.0f, Controller.previousButtonAlpha(QueueNav.INACTIVE.withPrev(true)), 0.0f);
 	}
 
 	@Test
 	public void nextButtonAlpha_usesDisabledAlphaWhenNextIsBlocked() {
-		assertEquals(1.0f, Controller.nextButtonAlpha(QueueNav.INACTIVE), 0.0f);
+		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.nextButtonAlpha(QueueNav.INACTIVE), 0.0f);
 		assertEquals(1.0f, Controller.nextButtonAlpha(QueueNav.ACTIVE_WITH_PREVIOUS), 0.0f);
 		assertEquals(1.0f, Controller.nextButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS), 0.0f);
 		assertEquals(Controller.DISABLED_BUTTON_ALPHA, Controller.nextButtonAlpha(QueueNav.ACTIVE_WITHOUT_PREVIOUS_OR_NEXT), 0.0f);
+		assertEquals(1.0f, Controller.nextButtonAlpha(QueueNav.INACTIVE.withNext(true)), 0.0f);
 	}
 
 	@Test
-	public void shouldEnablePrevious_keepsWatchPrevEnabled() {
+	public void shouldEnablePrevious_keepsFallbackEnabled() {
 		final QueueNav availability = watch();
 
 		assertTrue(Controller.shouldEnablePrevious(availability));

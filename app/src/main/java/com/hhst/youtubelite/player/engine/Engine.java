@@ -408,41 +408,58 @@ public class Engine {
 
 	public void skipToNext() {
 		final QueueNav availability = getQueueNavigationAvailability();
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
 		if (shouldUseQueueForNext(availability)) {
 			navigateWithinQueue(1);
 			return;
 		}
-		if (shouldUseWebPlaylistForNext(availability)) {
+		if (shouldUsePlaylistForNext(localQueueEnabled, hasPlaylist)) {
 			skipByPlaylistOffset(1, null);
 		}
 	}
 
 	public void skipToPrevious() {
 		final QueueNav availability = getQueueNavigationAvailability();
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean inQueue = queueRepository.containsVideo(vid);
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		final boolean canGoBack = tabManager.canGoBackInWatch();
 		if (shouldUseQueueForPrevious(availability)) {
 			navigateWithinQueue(-1);
 			return;
 		}
-		if (shouldUseWebPlaylistForPrevious(availability)) {
-			skipByPlaylistOffset(-1, this::navigatePrevWatch);
+		if (shouldUsePlaylistForPrevious(localQueueEnabled, hasPlaylist)) {
+			tabManager.evaluateJavascriptForWatch(
+					buildPlaylistNavigationScript(-1),
+					value -> {
+						if (didNavigate(value)) return;
+						if (shouldFallbackToBackAfterPlaylistMiss(value)) {
+							navigateBack();
+						}
+					});
 			return;
 		}
-		navigatePrevWatch();
+		if (shouldUseBackForPrevious(localQueueEnabled, inQueue, hasPlaylist, canGoBack)) {
+			navigateBack();
+		}
 	}
 
 	public void playRandomPlaylistItem() {
 		final QueueNav availability = getQueueNavigationAvailability();
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
 		if (shouldUseQueueForShuffle(availability)) {
 			navigateRandomQueueItem();
 			return;
 		}
-		if (shouldUseWebPlaylistForShuffle(availability)) {
-			this.tabManager.evaluateJavascriptForPlayback(buildRandomPlaylistNavigationScript(), null);
+		if (shouldUsePlaylistForShuffle(localQueueEnabled, hasPlaylist)) {
+			this.tabManager.evaluateJavascriptForWatch(buildRandomPlaylistNavigationScript(), null);
 		}
 	}
 
 	private void skipByPlaylistOffset(final int playlistOffset, @Nullable final Runnable miss) {
-		this.tabManager.evaluateJavascriptForPlayback(
+		this.tabManager.evaluateJavascriptForWatch(
 						buildPlaylistNavigationScript(playlistOffset),
 						miss == null ? null : value -> {
 							// JS returns a quoted token.
@@ -454,30 +471,36 @@ public class Engine {
 		if (!queueRepository.isEnabled()) return;
 		final QueueItem item = queueRepository.findRelative(vid, offset);
 		if (item == null || item.getUrl() == null) return;
-		tabManager.playInPlaybackSession(item.getUrl());
+		tabManager.playInWatch(item.getUrl());
 	}
 
 	private void navigateRandomQueueItem() {
 		if (!queueRepository.isEnabled()) return;
 		final QueueItem item = queueRepository.findRandom(vid);
 		if (item == null || item.getUrl() == null) return;
-		tabManager.playInPlaybackSession(item.getUrl());
+		tabManager.playInWatch(item.getUrl());
 	}
 
-	private void navigatePrevWatch() {
-		tabManager.playPrevWatch();
+	private void navigateBack() {
+		tabManager.goBackInWatch();
 	}
 
 	@NonNull
 	public QueueNav getQueueNavigationAvailability() {
+		final boolean queueEnabled = queueRepository.isEnabled();
 		final boolean inQueue = queueRepository.containsVideo(vid);
-		return resolveQueueNavigationAvailability(
-						queueRepository.isEnabled(),
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		final boolean canGoBack = tabManager.canGoBackInWatch();
+		final QueueNav availability = resolveQueueNavigationAvailability(
+						queueEnabled,
 						queueRepository.hasItems(),
 						inQueue,
 						inQueue && queueRepository.findRelative(vid, -1) == null,
-						inQueue && queueRepository.findRelative(vid, 1) == null)
-						.withPrev(tabManager.hasPrevWatch());
+						inQueue && queueRepository.findRelative(vid, 1) == null);
+		return availability
+						.withNext(queueEnabled ? availability.next() : shouldUsePlaylistForNext(false, hasPlaylist))
+						.withPrev(shouldUseBackForPrevious(queueEnabled, inQueue, hasPlaylist, canGoBack)
+								|| shouldUsePlaylistForPrevious(queueEnabled, hasPlaylist));
 	}
 
 	@NonNull
@@ -506,16 +529,36 @@ public class Engine {
 		return availability.usesQueueForPrevious();
 	}
 
-	static boolean shouldUseWebPlaylistForNext(@NonNull final QueueNav availability) {
-		return !availability.queue();
+	static boolean shouldUsePlaylistForNext(final boolean localQueueEnabled,
+	                                        final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
 	}
 
-	static boolean shouldUseWebPlaylistForShuffle(@NonNull final QueueNav availability) {
-		return !availability.queue();
+	static boolean shouldUsePlaylistForShuffle(final boolean localQueueEnabled,
+	                                           final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
 	}
 
-	static boolean shouldUseWebPlaylistForPrevious(@NonNull final QueueNav availability) {
-		return !availability.queue();
+	static boolean shouldUsePlaylistForPrevious(final boolean localQueueEnabled,
+	                                            final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
+	}
+
+	static boolean shouldUseBackForPrevious(final boolean localQueueEnabled,
+	                                        final boolean inQueue,
+	                                        final boolean hasPlaylistContext,
+	                                        final boolean canGoBack) {
+		if (!canGoBack) return false;
+		if (localQueueEnabled) {
+			return !inQueue && !hasPlaylistContext;
+		}
+		return !hasPlaylistContext;
+	}
+
+	static boolean shouldFallbackToBackAfterPlaylistMiss(@Nullable final String value) {
+		return "\"missing-playlist\"".equals(value)
+				|| "\"missing-current-video-id\"".equals(value)
+				|| "\"missing-current-video\"".equals(value);
 	}
 
 	static boolean didNavigate(@Nullable final String value) {

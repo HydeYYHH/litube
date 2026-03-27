@@ -25,7 +25,7 @@ public class PlaybackServiceTest {
 	@Test
 	public void playbackActions_includeSkipToPreviousWhenAvailabilityAllowsIt() {
 		assertTrue(hasAction(
-				PlaybackService.playbackActionsFor(QueueNav.INACTIVE),
+				PlaybackService.playbackActionsFor(QueueNav.INACTIVE.withPrev(true)),
 				PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS));
 		assertTrue(hasAction(
 				PlaybackService.playbackActionsFor(QueueNav.ACTIVE_WITH_PREVIOUS),
@@ -42,7 +42,7 @@ public class PlaybackServiceTest {
 	@Test
 	public void playbackActions_includeSkipToNextWhenAvailabilityAllowsIt() {
 		assertTrue(hasAction(
-				PlaybackService.playbackActionsFor(QueueNav.INACTIVE),
+				PlaybackService.playbackActionsFor(QueueNav.INACTIVE.withNext(true)),
 				PlaybackStateCompat.ACTION_SKIP_TO_NEXT));
 		assertTrue(hasAction(
 				PlaybackService.playbackActionsFor(QueueNav.ACTIVE_WITH_PREVIOUS),
@@ -53,7 +53,7 @@ public class PlaybackServiceTest {
 	}
 
 	@Test
-	public void playbackActions_includeSkipToPreviousWhenWatchPrevExists() {
+	public void playbackActions_includeSkipToPreviousWhenFallbackExists() {
 		final long actions = PlaybackService.playbackActionsFor(watch());
 
 		assertTrue(hasAction(actions, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS));

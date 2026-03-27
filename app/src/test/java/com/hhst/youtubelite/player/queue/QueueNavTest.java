@@ -24,6 +24,8 @@ public class QueueNavTest {
 	public void availability_isInactiveWhenQueueIsDisabledOrEmpty() {
 		assertEquals(QueueNav.INACTIVE, QueueNav.from(false, true, true, false, false));
 		assertEquals(QueueNav.INACTIVE, QueueNav.from(true, false, false, false, false));
+		assertFalse(QueueNav.INACTIVE.isNextActionEnabled());
+		assertTrue(QueueNav.INACTIVE.withNext(true).isNextActionEnabled());
 	}
 
 	@Test
@@ -65,11 +67,11 @@ public class QueueNavTest {
 	}
 
 	@Test
-	public void availability_keepsPreviousEnabledWhenWatchPrevExists() {
+	public void availability_keepsPreviousEnabledWhenFallbackExists() {
 		final QueueNav availability = watch();
 
 		assertFalse(availability.usesQueueForPrevious());
-		assertTrue(availability.hasPrevWatch());
+		assertTrue(availability.hasPreviousFallback());
 		assertTrue(availability.isPreviousActionEnabled());
 	}
 

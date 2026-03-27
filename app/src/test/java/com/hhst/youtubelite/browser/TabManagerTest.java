@@ -69,17 +69,7 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void shouldReplaceSuspendedWatch_returnsTrueWhenOpeningWatchWithExistingMiniPlayerSession() {
-		assertTrue(TabManager.shouldReplaceSuspendedWatch(true, Constant.PAGE_WATCH));
-	}
-
-	@Test
-	public void shouldReplaceSuspendedWatch_returnsFalseWhenThereIsNoSuspendedSession() {
-		assertFalse(TabManager.shouldReplaceSuspendedWatch(false, Constant.PAGE_WATCH));
-	}
-
-	@Test
-	public void shouldSuspendCurrentWatchOnBack_returnsTrueForWatchSession() {
+	public void shouldSuspendCurrentWatchOnBack_returnsTrueForWatch() {
 		assertTrue(TabManager.shouldSuspendCurrentWatchOnBack(
 						Constant.PAGE_WATCH,
 						true,
@@ -87,7 +77,7 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void shouldSuspendCurrentWatchOnBack_returnsFalseWhenSessionIsNotSuspendable() {
+	public void shouldSuspendCurrentWatchOnBack_returnsFalseWhenWatchCannotSuspend() {
 		assertFalse(TabManager.shouldSuspendCurrentWatchOnBack(
 						Constant.PAGE_WATCH,
 						true,
@@ -103,7 +93,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
@@ -123,7 +113,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
@@ -145,7 +135,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(false);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
@@ -164,7 +154,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
 
@@ -180,7 +170,7 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void closeMiniPlayer_clearsSuspendedWatchSession() throws Exception {
+	public void closeMiniPlayer_clearsSuspendedWatch() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -188,7 +178,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
 
@@ -202,26 +192,51 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void openTab_newWatchWhileMiniPlayerExistsStopsOldSessionBeforeOpeningNewWatch() throws Exception {
+	public void openTab_newWatchWhileMiniPlayerExistsReusesSuspendedWatchTab() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
 		final YoutubeFragment home = createFragment(Constant.HOME_URL, Constant.PAGE_HOME);
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
+		final YoutubeWebview webview = mock(YoutubeWebview.class);
+		setField(watch, "webview", webview);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 		tabManager.openTab("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
 
 		tabManager.openTab("https://m.youtube.com/watch?v=new", Constant.PAGE_WATCH);
 
-		verify(player).hide();
+		verify(player).exitInAppMiniPlayer();
+		verify(player).setMiniPlayerCallbacks(null, null);
+		verify(player, never()).hide();
+		verify(webview).loadUrl("https://m.youtube.com/watch?v=new");
+		assertSame(watch, getCurrentTab(tabManager));
 		assertNull(getSuspendedWatch(tabManager));
 	}
 
 	@Test
-	public void hidePlayer_doesNotHideWhenMiniPlayerSessionIsActive() throws Exception {
+	public void openTab_newWatchReusesExistingHiddenWatchTab() throws Exception {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		final TabManager tabManager = createTabManager(player, extensionManager);
+		final YoutubeFragment home = createFragment(Constant.HOME_URL, Constant.PAGE_HOME);
+		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
+		final YoutubeFragment channel = createFragment("https://m.youtube.com/channel/test", UrlUtils.PAGE_CHANNEL);
+		final YoutubeWebview webview = mock(YoutubeWebview.class);
+		setField(watch, "webview", webview);
+		seedTabs(tabManager, home, watch, channel);
+
+		tabManager.openTab("https://m.youtube.com/watch?v=new", Constant.PAGE_WATCH);
+
+		verify(webview).loadUrl("https://m.youtube.com/watch?v=new");
+		assertSame(watch, getCurrentTab(tabManager));
+		assertEquals("https://m.youtube.com/watch?v=new", watch.getUrl());
+	}
+
+	@Test
+	public void hidePlayer_doesNotHideWhenMiniPlayerIsActive() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -239,7 +254,7 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void evaluateJavascriptForPlayback_targetsSuspendedWatchWebViewWhenMiniPlayerSessionExists() throws Exception {
+	public void evaluateJavascriptForWatch_targetsSuspendedWatchWebViewWhenMiniPlayerIsActive() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -252,14 +267,14 @@ public class TabManagerTest {
 		seedTabs(tabManager, current);
 		setField(tabManager, "suspendedWatchFragment", suspendedWatch);
 
-		tabManager.evaluateJavascriptForPlayback("nextVideo()", null);
+		tabManager.evaluateJavascriptForWatch("nextVideo()", null);
 
 		verify(suspendedWatchWebView).evaluateJavascript(anyString(), any());
 		verify(currentWebView, never()).evaluateJavascript(anyString(), any());
 	}
 
 	@Test
-	public void evaluateJavascriptForPlayback_fallsBackToCurrentWebViewWhenNoSuspendedWatchSession() throws Exception {
+	public void evaluateJavascriptForWatch_fallsBackToCurrentWebViewWhenNoSuspendedWatchExists() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -268,13 +283,13 @@ public class TabManagerTest {
 		setField(current, "webview", currentWebView);
 		seedTabs(tabManager, current);
 
-		tabManager.evaluateJavascriptForPlayback("previousVideo()", null);
+		tabManager.evaluateJavascriptForWatch("previousVideo()", null);
 
 		verify(currentWebView).evaluateJavascript(anyString(), any());
 	}
 
 	@Test
-	public void playInPlaybackSession_targetsSuspendedWatchAndStartsPlayback() throws Exception {
+	public void playInWatch_targetsSuspendedWatchAndStartsPlayback() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final QueueWarmer warmer = mock(QueueWarmer.class);
@@ -286,7 +301,7 @@ public class TabManagerTest {
 		seedTabs(tabManager, current);
 		setField(tabManager, "suspendedWatchFragment", suspendedWatch);
 
-		tabManager.playInPlaybackSession("https://m.youtube.com/watch?v=new");
+		tabManager.playInWatch("https://m.youtube.com/watch?v=new");
 
 		verify(warmer).prioritizeUrl("https://m.youtube.com/watch?v=new");
 		verify(player).play("https://m.youtube.com/watch?v=new");
@@ -294,34 +309,34 @@ public class TabManagerTest {
 	}
 
 	@Test
-	public void playPrevWatch_skipsNonWatchHistoryAndReusesPlaybackSession() throws Exception {
+	public void goBackInWatch_usesWatchWebviewBack() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
-		final QueueWarmer warmer = mock(QueueWarmer.class);
-		final TabManager tabManager = createTabManager(player, extensionManager, warmer);
+		final TabManager tabManager = createTabManager(player, extensionManager);
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=now", Constant.PAGE_WATCH);
 		final YoutubeWebview webview = mock(YoutubeWebview.class);
-		final WebBackForwardList hist = mock(WebBackForwardList.class);
-		final WebHistoryItem results = mock(WebHistoryItem.class);
-		final WebHistoryItem old = mock(WebHistoryItem.class);
 		setField(watch, "webview", webview);
 		seedTabs(tabManager, watch);
-		when(hist.getCurrentIndex()).thenReturn(2);
-		when(hist.getItemAtIndex(1)).thenReturn(results);
-		when(hist.getItemAtIndex(0)).thenReturn(old);
-		when(results.getUrl()).thenReturn("https://m.youtube.com/results?search_query=test");
-		when(old.getUrl()).thenReturn("https://m.youtube.com/watch?v=old");
-		when(webview.copyBackForwardList()).thenReturn(hist);
+		when(webview.canGoBack()).thenReturn(true);
 
-		assertTrue(tabManager.playPrevWatch());
+		assertTrue(tabManager.goBackInWatch());
 
-		verify(warmer).prioritizeUrl("https://m.youtube.com/watch?v=old");
-		verify(player).play("https://m.youtube.com/watch?v=old");
-		verify(webview).loadUrl("https://m.youtube.com/watch?v=old");
+		verify(webview).goBack();
 	}
 
 	@Test
-	public void evaluateJavascriptForPlayback_skipsExecutionWhenNoWatchSessionExists() throws Exception {
+	public void watchHasPlaylist_checksWatchUrl() throws Exception {
+		final LitePlayer player = mock(LitePlayer.class);
+		final ExtensionManager extensionManager = mock(ExtensionManager.class);
+		final TabManager tabManager = createTabManager(player, extensionManager);
+		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=now&list=PL123", Constant.PAGE_WATCH);
+		seedTabs(tabManager, watch);
+
+		assertTrue(tabManager.watchHasPlaylist());
+	}
+
+	@Test
+	public void evaluateJavascriptForWatch_skipsExecutionWhenNoWatchExists() throws Exception {
 		final LitePlayer player = mock(LitePlayer.class);
 		final ExtensionManager extensionManager = mock(ExtensionManager.class);
 		final TabManager tabManager = createTabManager(player, extensionManager);
@@ -330,7 +345,7 @@ public class TabManagerTest {
 		setField(current, "webview", currentWebView);
 		seedTabs(tabManager, current);
 
-		tabManager.evaluateJavascriptForPlayback("nextVideo()", null);
+		tabManager.evaluateJavascriptForWatch("nextVideo()", null);
 
 		verify(currentWebView, never()).evaluateJavascript(anyString(), any());
 	}
@@ -344,7 +359,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 
 		assertTrue(tabManager.goBack());
@@ -364,7 +379,7 @@ public class TabManagerTest {
 		final YoutubeFragment watch = createFragment("https://m.youtube.com/watch?v=old", Constant.PAGE_WATCH);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		seedTabs(tabManager, home, watch);
 
 		assertTrue(tabManager.goBack());
@@ -387,7 +402,7 @@ public class TabManagerTest {
 		final WebHistoryItem previousItem = mock(WebHistoryItem.class);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		when(history.getCurrentIndex()).thenReturn(1);
 		when(history.getItemAtIndex(0)).thenReturn(previousItem);
 		when(previousItem.getUrl()).thenReturn("https://m.youtube.com/results?search_query=test");
@@ -414,7 +429,7 @@ public class TabManagerTest {
 		final YoutubeWebview webview = mock(YoutubeWebview.class);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		when(staleSnapshot.getCurrentIndex()).thenReturn(1);
 		when(staleSnapshot.getItemAtIndex(0)).thenReturn(stalePreviousItem);
 		when(stalePreviousItem.getUrl()).thenReturn("https://m.youtube.com/results?search_query=stale");
@@ -447,7 +462,7 @@ public class TabManagerTest {
 		final YoutubeWebview webview = mock(YoutubeWebview.class);
 
 		when(extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER)).thenReturn(true);
-		when(player.isSuspendableWatchSession()).thenReturn(true);
+		when(player.canSuspendWatch()).thenReturn(true);
 		when(liveHistory.getCurrentIndex()).thenReturn(1);
 		when(liveHistory.getItemAtIndex(0)).thenReturn(livePreviousItem);
 		when(livePreviousItem.getUrl()).thenReturn(Constant.HOME_URL);
@@ -496,17 +511,13 @@ public class TabManagerTest {
 			@NonNull
 			@Override
 			protected YoutubeFragment createFragment(@NonNull final String url, @NonNull final String tag) {
-				try {
-					return FRAGMENTS.computeIfAbsent(url + "|" + tag, key -> {
-						try {
-							return TabManagerTest.createFragment(url, tag);
-						} catch (final Exception e) {
-							throw new RuntimeException(e);
-						}
-					});
-				} catch (final RuntimeException e) {
-					throw e;
-				}
+				return FRAGMENTS.computeIfAbsent(url + "|" + tag, key -> {
+					try {
+						return TabManagerTest.createFragment(url, tag);
+					} catch (final Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
 			}
 		};
 	}

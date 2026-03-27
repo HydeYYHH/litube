@@ -88,14 +88,14 @@ public class MainActivityPipTest {
 	}
 
 	@Test
-	public void shouldRestoreMiniPlayerOnResume_onlyWhenMiniPlayerSessionExists() {
+	public void shouldRestoreMiniPlayerOnResume_onlyWhenMiniPlayerIsActive() {
 		assertTrue(MainActivity.shouldRestoreMiniPlayerOnResume(true, false));
 		assertFalse(MainActivity.shouldRestoreMiniPlayerOnResume(false, false));
 		assertFalse(MainActivity.shouldRestoreMiniPlayerOnResume(true, true));
 	}
 
 	@Test
-	public void shouldSuspendMiniPlayerOnStop_onlyWhenLeavingActivityWithMiniPlayerSession() {
+	public void shouldSuspendMiniPlayerOnStop_onlyWhenLeavingActivityWithMiniPlayer() {
 		assertTrue(MainActivity.shouldSuspendMiniPlayerOnStop(true, false, false));
 		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(false, false, false));
 		assertFalse(MainActivity.shouldSuspendMiniPlayerOnStop(true, true, false));
