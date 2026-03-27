@@ -476,7 +476,9 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	private void updateMiniPlayerCornerClipping() {
-		setClipToOutline(inAppMiniPlayer);
+		final boolean shouldClipMiniPlayerCorners =
+						inAppMiniPlayer && !activity.isInPictureInPictureMode();
+		setClipToOutline(shouldClipMiniPlayerCorners);
 		invalidateOutline();
 	}
 
@@ -758,6 +760,7 @@ public class LitePlayerView extends PlayerView {
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), false);
 		updatePlayerLayout(false);
 		setResizeMode(inAppMiniPlayer ? AspectRatioFrameLayout.RESIZE_MODE_FIT : defaultResizeMode);
+		updateMiniPlayerCornerClipping();
 		updateFullscreenButton(false);
 	}
 
@@ -772,6 +775,7 @@ public class LitePlayerView extends PlayerView {
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
 		updatePlayerLayout(true);
 		setResizeMode(defaultResizeMode);
+		updateMiniPlayerCornerClipping();
 		updateFullscreenButton(true);
 	}
 
@@ -782,6 +786,7 @@ public class LitePlayerView extends PlayerView {
 		}
 		updatePlayerLayout(true);
 		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
+		updateMiniPlayerCornerClipping();
 	}
 
 	private void updateFullscreenButton(final boolean fullscreen) {
