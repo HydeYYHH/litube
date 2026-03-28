@@ -385,10 +385,28 @@ try {
             backoff()(run);
         });
 
+        const getHistoryNavigationTarget = (url) => {
+            if (typeof url !== 'string') return null;
+            const historyUrl = stripWatchList(url);
+            try {
+                const nextUrl = new URL(historyUrl, location.href).toString();
+                const nextPageClass = getPageClass(nextUrl);
+                return { historyUrl, nextUrl, nextPageClass };
+            } catch (error) {
+                return { historyUrl, nextUrl: historyUrl, nextPageClass: null };
+            }
+        };
+
         // Override pushState to trigger player visibility changes
         const originalPushState = history.pushState;
         history.pushState = function (data, title, url) {
-            originalPushState.call(this, data, title, typeof url === 'string' ? stripWatchList(url) : url);
+            const pageClass = getPageClass(location.href);
+            const target = getHistoryNavigationTarget(url);
+            if (target?.nextPageClass && target.nextPageClass !== pageClass) {
+                lite.openTab(target.nextUrl, target.nextPageClass);
+                return;
+            }
+            originalPushState.call(this, data, title, target ? target.historyUrl : url);
             handlePlayerVisibility();
             backoff()(run);
         };
@@ -396,7 +414,13 @@ try {
         // Override replaceState to trigger player visibility changes
         const originalReplaceState = history.replaceState;
         history.replaceState = function (data, title, url) {
-            originalReplaceState.call(this, data, title, typeof url === 'string' ? stripWatchList(url) : url);
+            const pageClass = getPageClass(location.href);
+            const target = getHistoryNavigationTarget(url);
+            if (target?.nextPageClass && target.nextPageClass !== pageClass) {
+                lite.openTab(target.nextUrl, target.nextPageClass);
+                return;
+            }
+            originalReplaceState.call(this, data, title, target ? target.historyUrl : url);
             handlePlayerVisibility();
             backoff()(run);
         };

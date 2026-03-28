@@ -111,7 +111,7 @@ public class TabManager {
 		final String homeTag = Constant.PAGE_HOME;
 		final FragmentTransaction ft = getFm().beginTransaction();
 		final boolean suspendCurrentWatch = shouldSuspendCurrentWatch(
-						tab != null ? tab.getMTag() : null,
+						getFragmentPageClass(tab),
 						tag,
 						extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER),
 						player.get().canSuspendWatch());
@@ -203,7 +203,11 @@ public class TabManager {
 	public void evaluateJavascriptForWatch(@NonNull final String script,
 	                                       @Nullable final ValueCallback<String> callback) {
 		final YoutubeWebview webview = resolveWatchWebview();
-		if (webview != null) webview.evaluateJavascript(script, callback);
+		if (webview != null) {
+			webview.evaluateJavascript(script, callback);
+			return;
+		}
+		if (callback != null) callback.onReceiveValue(null);
 	}
 
 	public void playInWatch(@NonNull final String url) {
@@ -242,11 +246,6 @@ public class TabManager {
 		return isWatchTab(tab) && tab != null ? tab.getUrl() : null;
 	}
 
-	public void loadUrl(@NonNull final String url) {
-		final YoutubeWebview webview = getWebview();
-		if (webview != null) webview.loadUrl(url);
-	}
-
 	@Nullable
 	private YoutubeWebview resolveWatchWebview() {
 		if (isWatchTab(suspendedWatchFragment)) {
@@ -262,12 +261,17 @@ public class TabManager {
 	}
 
 	private boolean isWatchTab(@Nullable final YoutubeFragment fragment) {
-		if (fragment == null) return false;
-		if (Constant.PAGE_WATCH.equals(fragment.getMTag())) {
-			return true;
-		}
+		return Constant.PAGE_WATCH.equals(getFragmentPageClass(fragment));
+	}
+
+	@Nullable
+	private String getFragmentPageClass(@Nullable final YoutubeFragment fragment) {
+		if (fragment == null) return null;
 		final String url = fragment.getUrl();
-		return url != null && Constant.PAGE_WATCH.equals(UrlUtils.getPageClass(url));
+		if (url != null) {
+			return UrlUtils.getPageClass(url);
+		}
+		return fragment.getMTag();
 	}
 
 	private boolean openWatchTab(@NonNull final String url) {
@@ -311,7 +315,7 @@ public class TabManager {
 		final Page prev = prev(tab);
 		final boolean hasBackStack = tabs.size() > 1;
 		if (shouldSuspendCurrentWatchOnBack(
-						tab.getMTag(),
+						getFragmentPageClass(tab),
 						extensionManager.isEnabled(Constant.ENABLE_IN_APP_MINI_PLAYER),
 						player.get().canSuspendWatch())) {
 			// Watch back folds first.
@@ -357,7 +361,7 @@ public class TabManager {
 
 	private void enterMiniPlayer() {
 		final LitePlayer litePlayer = player.get();
-		litePlayer.setMiniPlayerCallbacks(this::restoreSuspendedWatch, this::onMiniPlayerClosed);
+		litePlayer.setMiniPlayerCallbacks(this::restoreSuspendedWatch, this::clearSuspendedWatch);
 		litePlayer.enterInAppMiniPlayer();
 	}
 
@@ -377,13 +381,8 @@ public class TabManager {
 		});
 	}
 
-	private void onMiniPlayerClosed() {
-		clearSuspendedWatch(false);
-	}
-
-	private void clearSuspendedWatch(final boolean stopPlayback) {
+	private void clearSuspendedWatch() {
 		final LitePlayer litePlayer = player.get();
-		if (stopPlayback) litePlayer.hide();
 		if (suspendedWatchFragment != null) {
 			final FragmentTransaction ft = getFm().beginTransaction();
 			ft.remove(suspendedWatchFragment);
