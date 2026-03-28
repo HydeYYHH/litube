@@ -279,7 +279,9 @@ public class Controller {
 			@Override
 			public void onPlaybackStateChanged(int playbackState) {
 				refreshPlaybackButtons();
-				if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
+				if (playbackState == Player.STATE_ENDED && getLoopMode() == PlayerLoopMode.PAUSE_AT_END) {
+					setControlsVisible(true);
+				} else if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
 					hideControlsAutomatically();
 				} else if (playbackState == Player.STATE_BUFFERING && isControlsVisible()) {
 					setControlsVisible(true);
