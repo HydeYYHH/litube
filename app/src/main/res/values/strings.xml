@@ -42,6 +42,7 @@
     <string name="hide_shorts">Hide Shorts</string>
     <string name="action_pause">Pause</string>
     <string name="action_play">Play</string>
+    <string name="action_replay">Replay</string>
     <string name="action_previous">Skip to previous</string>
     <string name="action_next">Skip to next</string>
     <string name="general">General</string>

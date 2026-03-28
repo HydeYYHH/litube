@@ -24,6 +24,7 @@
     <string name="hide_shorts">隱藏 Shorts</string>
     <string name="action_pause">暫停</string>
     <string name="action_play">播放</string>
+    <string name="action_replay">重新播放</string>
     <string name="action_previous">上一個</string>
     <string name="action_next">下一個</string>
     <string name="general">通用</string>

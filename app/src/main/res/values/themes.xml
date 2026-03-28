@@ -56,6 +56,15 @@
         <item name="cornerSizeBottomRight">0dp</item>
     </style>
 
+    <style name="Widget.YoutubeLite.DialogButton" parent="Widget.Material3.Button">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.YoutubeLite.DialogButton</item>
+    </style>
+
+    <style name="ShapeAppearance.YoutubeLite.DialogButton" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">6dp</item>
+    </style>
+
     <style name="Theme.Transparent" parent="Theme.YoutubeLite">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>

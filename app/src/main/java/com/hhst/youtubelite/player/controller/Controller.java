@@ -127,7 +127,7 @@ public class Controller {
 			setupHintOverlay();
 			setupListeners();
 			setupButtonListeners();
-			updatePlayPauseButtons(engine.isPlaying());
+			refreshPlaybackButtons();
 			refreshQueueNavigationAvailability(engine.getQueueNavigationAvailability());
 			playerView.showController();
 		});
@@ -202,9 +202,33 @@ public class Controller {
 		return extensionManager;
 	}
 
-	private void updatePlayPauseButtons(boolean isPlaying) {
-		updatePlayPauseVisibility(R.id.btn_play, R.id.btn_pause, isPlaying);
-		updatePlayPauseVisibility(R.id.btn_mini_play, R.id.btn_mini_pause, isPlaying);
+	private void refreshPlaybackButtons() {
+		updateCenterPlaybackButtons(resolveCenterPrimaryAction());
+		updatePlayPauseVisibility(R.id.btn_mini_play, R.id.btn_mini_pause, engine.isPlaying());
+	}
+
+	@NonNull
+	private PlaybackPrimaryAction resolveCenterPrimaryAction() {
+		return PlaybackPrimaryAction.resolve(
+						engine.isPlaying(),
+						engine.getPlaybackState(),
+						getLoopMode(),
+						stateMachine.isInMiniPlayer());
+	}
+
+	private void updateCenterPlaybackButtons(@NonNull final PlaybackPrimaryAction action) {
+		final ImageButton play = playerView.findViewById(R.id.btn_play);
+		final View pause = playerView.findViewById(R.id.btn_pause);
+		if (play != null) {
+			if (!action.showsPauseButton()) {
+				play.setImageResource(action.iconRes());
+				play.setContentDescription(activity.getString(action.contentDescriptionRes()));
+			}
+			play.setVisibility(action.showsPauseButton() ? View.GONE : View.VISIBLE);
+		}
+		if (pause != null) {
+			pause.setVisibility(action.showsPauseButton() ? View.VISIBLE : View.GONE);
+		}
 	}
 
 	private void setupHintOverlay() {
@@ -247,13 +271,14 @@ public class Controller {
 		engine.addListener(new Player.Listener() {
 			@Override
 			public void onIsPlayingChanged(boolean isPlaying) {
-				updatePlayPauseButtons(isPlaying);
+				refreshPlaybackButtons();
 				playerView.setKeepScreenOn(isPlaying);
 				if (isControlsVisible()) hideControlsAutomatically();
 			}
 
 			@Override
 			public void onPlaybackStateChanged(int playbackState) {
+				refreshPlaybackButtons();
 				if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
 					hideControlsAutomatically();
 				} else if (playbackState == Player.STATE_BUFFERING && isControlsVisible()) {
@@ -298,7 +323,14 @@ public class Controller {
 	}
 
 	private void setupPlaybackButtons() {
-		setClicks(new int[]{R.id.btn_play, R.id.btn_mini_play}, v -> {
+		setClick(R.id.btn_play, v -> {
+			if (resolveCenterPrimaryAction().restartsCurrentItem()) {
+				engine.seekTo(0);
+			}
+			engine.play();
+			setControlsVisible(true);
+		});
+		setClick(R.id.btn_mini_play, v -> {
 			engine.play();
 			setControlsVisible(true);
 		});
@@ -363,6 +395,7 @@ public class Controller {
 		} else {
 			engine.setLoopMode(mode);
 		}
+		refreshPlaybackButtons();
 	}
 
 	@NonNull
@@ -859,6 +892,7 @@ public class Controller {
 		if (stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) {
 			hideHint();
 		}
+		refreshPlaybackButtons();
 		setControlsVisible(controlsVisible);
 	}
 
@@ -1078,5 +1112,56 @@ public class Controller {
 
 
 
+}
+
+enum PlaybackPrimaryAction {
+	PLAY(R.drawable.ic_play, R.string.action_play, false, false),
+	PAUSE(R.drawable.ic_pause, R.string.action_pause, true, false),
+	REPLAY(R.drawable.ic_replay, R.string.action_replay, false, true);
+
+	private final int iconRes;
+	private final int contentDescriptionRes;
+	private final boolean showsPauseButton;
+	private final boolean restartsCurrentItem;
+
+	PlaybackPrimaryAction(final int iconRes,
+	                      final int contentDescriptionRes,
+	                      final boolean showsPauseButton,
+	                      final boolean restartsCurrentItem) {
+		this.iconRes = iconRes;
+		this.contentDescriptionRes = contentDescriptionRes;
+		this.showsPauseButton = showsPauseButton;
+		this.restartsCurrentItem = restartsCurrentItem;
+	}
+
+	@NonNull
+	static PlaybackPrimaryAction resolve(final boolean isPlaying,
+	                                     final int playbackState,
+	                                     @NonNull final PlayerLoopMode loopMode,
+	                                     final boolean inMiniPlayer) {
+		if (isPlaying) return PAUSE;
+		if (!inMiniPlayer
+						&& playbackState == Player.STATE_ENDED
+						&& loopMode == PlayerLoopMode.PAUSE_AT_END) {
+			return REPLAY;
+		}
+		return PLAY;
+	}
+
+	int iconRes() {
+		return iconRes;
+	}
+
+	int contentDescriptionRes() {
+		return contentDescriptionRes;
+	}
+
+	boolean showsPauseButton() {
+		return showsPauseButton;
+	}
+
+	boolean restartsCurrentItem() {
+		return restartsCurrentItem;
+	}
 }
 
