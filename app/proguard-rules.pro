@@ -18,6 +18,12 @@
 -keep class com.hhst.youtubelite.downloader.core.history.** { *; }
 -keep enum com.hhst.youtubelite.downloader.core.history.** { *; }
 
+# Keep extractor models for JSON serialization
+-keep class com.hhst.youtubelite.extractor.** { *; }
+-keep enum com.hhst.youtubelite.extractor.** { *; }
+-keep class com.hhst.youtubelite.extractor.exception.** { *; }
+-keep enum com.hhst.youtubelite.extractor.exception.** { *; }
+
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
@@ -80,5 +86,9 @@
 -keep interface com.squareup.okhttp3.** { *; }
 
 ## Rules for NewPipeExtractor
--keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
 -dontwarn com.google.re2j.**
+-keep class org.schabi.newpipe.extractor.** { *; }
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.mozilla.classfile.** { *; }
+-dontwarn org.mozilla.javascript.**
+-dontwarn org.mozilla.classfile.**
