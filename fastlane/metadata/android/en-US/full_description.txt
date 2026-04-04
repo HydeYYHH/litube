@@ -2,6 +2,8 @@ Litube is an advanced webview wrapper for YouTube.
 
 <b>Features</b>
 * <b>Ad-free playback</b>
+* <b>Mini-player support</b>
+* <b>Local queue support</b>
 * <b>Background & Picture-in-Picture support</b>
 * <b>Built-in video downloader</b>
 * <b>Live stream chat support, etc.</b>
