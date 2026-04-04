@@ -2,6 +2,8 @@ package com.hhst.youtubelite.player.common;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 
 import com.google.gson.Gson;
 import com.hhst.youtubelite.Constant;
@@ -20,6 +22,9 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * Preference accessors for player behavior.
+ */
 @Getter
 @Singleton
 public final class PlayerPreferences {
@@ -47,58 +52,72 @@ public final class PlayerPreferences {
 	private final MMKV mmkv;
 	@NonNull
 	private final Gson gson;
+	@NonNull
+	private final MutableLiveData<PlayerLoopMode> loopModeState;
 
 	@Inject
-	public PlayerPreferences(@NonNull final ExtensionManager extensionManager, @NonNull final MMKV mmkv, @NonNull final Gson gson) {
+	public PlayerPreferences(@NonNull ExtensionManager extensionManager, @NonNull MMKV mmkv, @NonNull Gson gson) {
 		this.extensionManager = extensionManager;
 		this.mmkv = mmkv;
 		this.gson = gson;
+		this.loopModeState = new MutableLiveData<>(readLoopMode());
 	}
 
 	public float getSpeed() {
-		final boolean enable = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_PLAYBACK_SPEED);
-		if (!enable) return DEFAULT_SPEED;
+		boolean enabled = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_PLAYBACK_SPEED);
+		if (!enabled) return DEFAULT_SPEED;
 		return mmkv.getFloat(KEY_PLAYBACK_SPEED, DEFAULT_SPEED);
 	}
 
-	public void setSpeed(final float speed) {
-		final boolean enable = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_PLAYBACK_SPEED);
-		if (!enable) return;
+	public void setSpeed(float speed) {
+		boolean enabled = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_PLAYBACK_SPEED);
+		if (!enabled) return;
 		mmkv.encode(KEY_PLAYBACK_SPEED, speed);
 	}
 
 	@NonNull
 	public String getQuality() {
-		final boolean enable = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_QUALITY);
-		if (!enable) return DEFAULT_QUALITY;
+		boolean enabled = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_QUALITY);
+		if (!enabled) return DEFAULT_QUALITY;
 		return mmkv.decodeString(KEY_VIDEO_QUALITY, DEFAULT_QUALITY);
 	}
 
-	public void setQuality(@NonNull final String quality) {
-		final boolean enable = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_QUALITY);
-		if (!enable) return;
+	public void setQuality(@NonNull String quality) {
+		boolean enabled = extensionManager.isEnabled(com.hhst.youtubelite.extension.Constant.REMEMBER_QUALITY);
+		if (!enabled) return;
 		mmkv.encode(KEY_VIDEO_QUALITY, quality);
 	}
 
 	@NonNull
 	public PlayerLoopMode getLoopMode() {
-		final int persistedMode = mmkv.decodeInt(KEY_LOOP_MODE, Integer.MIN_VALUE);
+		return readLoopMode();
+	}
+
+	public void setLoopMode(@NonNull PlayerLoopMode mode) {
+		mmkv.encode(KEY_LOOP_MODE, mode.persistedValue());
+		mmkv.encode(KEY_LOOP_ENABLED, mode == PlayerLoopMode.LOOP_ONE);
+		loopModeState.postValue(mode);
+	}
+
+	@NonNull
+	public LiveData<PlayerLoopMode> getLoopModeState() {
+		return loopModeState;
+	}
+
+	@NonNull
+	private PlayerLoopMode readLoopMode() {
+		int persistedMode = mmkv.decodeInt(KEY_LOOP_MODE, Integer.MIN_VALUE);
 		if (persistedMode != Integer.MIN_VALUE) {
 			return PlayerLoopMode.fromPersistedValue(persistedMode);
 		}
 		return mmkv.decodeBool(KEY_LOOP_ENABLED, false) ? PlayerLoopMode.LOOP_ONE : PlayerLoopMode.PLAYLIST_NEXT;
 	}
 
-	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
-		mmkv.encode(KEY_LOOP_MODE, mode.persistedValue());
-		mmkv.encode(KEY_LOOP_ENABLED, mode == PlayerLoopMode.LOOP_ONE);
-	}
-
 	public boolean isSubtitleEnabled() {
 		return mmkv.decodeBool(KEY_SUBTITLE_ENABLED, false);
 	}
 
-	public void setSubtitleEnabled(final boolean enabled) {
+	public void setSubtitleEnabled(boolean enabled) {
 		mmkv.encode(KEY_SUBTITLE_ENABLED, enabled);
 	}
 
@@ -107,29 +126,29 @@ public final class PlayerPreferences {
 		return mmkv.decodeString(KEY_SUBTITLE_LANGUAGE, null);
 	}
 
-	public void setSubtitleLanguage(@Nullable final String language) {
+	public void setSubtitleLanguage(@Nullable String language) {
 		mmkv.encode(KEY_SUBTITLE_LANGUAGE, language);
 	}
 
 	public int getResizeMode() {
-		final boolean enable = extensionManager.isEnabled(Constant.REMEMBER_RESIZE_MODE);
-		if (!enable) return 0;
+		boolean enabled = extensionManager.isEnabled(Constant.REMEMBER_RESIZE_MODE);
+		if (!enabled) return 0;
 		return mmkv.decodeInt(KEY_RESIZE_MODE, 0);
 	}
 
-	public void setResizeMode(final int mode) {
-		final boolean enable = extensionManager.isEnabled(Constant.REMEMBER_RESIZE_MODE);
-		if (!enable) return;
+	public void setResizeMode(int mode) {
+		boolean enabled = extensionManager.isEnabled(Constant.REMEMBER_RESIZE_MODE);
+		if (!enabled) return;
 		mmkv.encode(KEY_RESIZE_MODE, mode);
 	}
 
-	public long getResumePosition(@Nullable final String videoId) {
-		final boolean enable = extensionManager.isEnabled(Constant.REMEMBER_LAST_POSITION);
-		if (!enable || videoId == null) return 0;
-		final String key = PREFIX_PROGRESS + videoId;
-		final String json = mmkv.decodeString(key, null);
+	public long getResumePosition(@Nullable String videoId) {
+		boolean enabled = extensionManager.isEnabled(Constant.REMEMBER_LAST_POSITION);
+		if (!enabled || videoId == null) return 0;
+		String key = PREFIX_PROGRESS + videoId;
+		String json = mmkv.decodeString(key, null);
 		if (json == null) return 0;
-		final Progress progress = gson.fromJson(json, Progress.class);
+		Progress progress = gson.fromJson(json, Progress.class);
 		if (System.currentTimeMillis() - progress.timestamp > EXPIRATION_DAYS_3) {
 			mmkv.removeValueForKey(key);
 			return 0;
@@ -137,11 +156,11 @@ public final class PlayerPreferences {
 		return progress.position;
 	}
 
-	public void persistProgress(@Nullable final String videoId, final long position, final long duration, TimeUnit unit) {
-		final boolean enable = extensionManager.isEnabled(Constant.REMEMBER_LAST_POSITION);
-		if (!enable || videoId == null) return;
-		final String key = PREFIX_PROGRESS + videoId;
-		final String json = gson.toJson(new Progress(position, unit.toMillis(duration), System.currentTimeMillis()));
+	public void persistProgress(@Nullable String videoId, long position, long duration, TimeUnit unit) {
+		boolean enabled = extensionManager.isEnabled(Constant.REMEMBER_LAST_POSITION);
+		if (!enabled || videoId == null) return;
+		String key = PREFIX_PROGRESS + videoId;
+		String json = gson.toJson(new Progress(position, unit.toMillis(duration), System.currentTimeMillis()));
 		mmkv.encode(key, json);
 	}
 
@@ -153,23 +172,26 @@ public final class PlayerPreferences {
 						mmkv.decodeFloat(KEY_MINI_PLAYER_TRANSLATION_Y_DP, DEFAULT_MINI_PLAYER_TRANSLATION_DP));
 	}
 
-	public void persistMiniPlayerLayoutState(final int widthDp,
-	                                         final float translationXDp,
-	                                         final float translationYDp) {
+	public void persistMiniPlayerLayoutState(int widthDp,
+	                                         final float translationX,
+	                                         final float translationY) {
 		mmkv.encode(KEY_MINI_PLAYER_WIDTH_DP, widthDp);
-		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_X_DP, translationXDp);
-		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_Y_DP, translationYDp);
+		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_X_DP, translationX);
+		mmkv.encode(KEY_MINI_PLAYER_TRANSLATION_Y_DP, translationY);
 	}
 
 	@NonNull
 	public Set<String> getSponsorBlockCategories() {
-		final Set<String> cats = new HashSet<>();
-		if (extensionManager.isEnabled(Constant.SKIP_SPONSORS)) cats.add("sponsor");
-		if (extensionManager.isEnabled(Constant.SKIP_SELF_PROMO)) cats.add("selfpromo");
-		if (extensionManager.isEnabled(Constant.SKIP_POI_HIGHLIGHT)) cats.add("poi_highlight");
-		return cats;
+		Set<String> categories = new HashSet<>();
+		if (extensionManager.isEnabled(Constant.SKIP_SPONSORS)) categories.add("sponsor");
+		if (extensionManager.isEnabled(Constant.SKIP_SELF_PROMO)) categories.add("selfpromo");
+		if (extensionManager.isEnabled(Constant.SKIP_POI_HIGHLIGHT)) categories.add("poi_highlight");
+		return categories;
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	@Data
 	@AllArgsConstructor
 	@NoArgsConstructor
@@ -179,6 +201,9 @@ public final class PlayerPreferences {
 		private long timestamp;
 	}
 
-	public record MiniPlayerLayoutState(int widthDp, float translationXDp, float translationYDp) {
+/**
+ * Value object for app logic.
+ */
+	public record MiniPlayerLayoutState(int widthDp, float translationX, float translationY) {
 	}
 }

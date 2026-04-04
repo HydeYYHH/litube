@@ -4,59 +4,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.Locale;
-import java.util.Set;
 
-import okhttp3.HttpUrl;
-
+/**
+ * Helpers for WebView resource handling and MIME checks.
+ */
 public final class WebResourceUtils {
-
-	public static final long WEBVIEW_CACHE_MAX_AGE_SECONDS = 60L * 60L * 24L * 365L;
-	public static final String ORIGINAL_CACHE_CONTROL_HEADER = "X-Litube-Cache-Control";
-
-	private static final Set<String> DEFAULT_CACHE_EXTENSIONS = Set.of(
-					"html",
-					"htm",
-					"js",
-					"ico",
-					"css",
-					"png",
-					"jpg",
-					"jpeg",
-					"gif",
-					"bmp",
-					"ttf",
-					"woff",
-					"woff2",
-					"otf",
-					"eot",
-					"svg",
-					"xml",
-					"swf",
-					"txt",
-					"text",
-					"conf",
-					"webp");
 
 	private WebResourceUtils() {
 	}
 
-	public static boolean shouldForceCache(@Nullable final HttpUrl httpUrl) {
-		return httpUrl != null && shouldForceCache(httpUrl.encodedPath());
-	}
-
-	public static boolean shouldForceCache(@Nullable final String path) {
-		if (path == null || path.isEmpty()) return false;
-		final int lastSlash = path.lastIndexOf('/');
-		final String filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
-		final int dot = filename.lastIndexOf('.');
-		if (dot < 0 || dot == filename.length() - 1) return false;
-		final String extension = filename.substring(dot + 1).toLowerCase(Locale.US);
-		return DEFAULT_CACHE_EXTENSIONS.contains(extension);
-	}
-
 	@NonNull
-	public static String guessMimeType(@Nullable final String url) {
-		final String path = url == null ? "" : url.toLowerCase(Locale.US);
+	public static String guessMimeType(@Nullable String url) {
+		String path = url == null ? "" : url.toLowerCase(Locale.US);
 		if (path.endsWith(".html") || path.endsWith(".htm")) return "text/html";
 		if (path.endsWith(".js")) return "application/javascript";
 		if (path.endsWith(".css")) return "text/css";

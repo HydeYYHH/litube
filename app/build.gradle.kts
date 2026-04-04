@@ -21,8 +21,8 @@ android {
         applicationId = "com.hhst.litube"
         minSdk = 26
         targetSdk = 36
-        versionCode = 202
-        versionName = "2.0.2"
+        versionCode = 210
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -59,6 +59,9 @@ android {
     }
 
     packaging {
+        resources {
+            excludes += "META-INF/services/javax.script.ScriptEngineFactory"
+        }
         jniLibs {
             useLegacyPackaging = true
         }
@@ -66,6 +69,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.lifecycle.process)
+    implementation(libs.lifecycle.livedata)
+    implementation(libs.lifecycle.viewmodel)
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
@@ -82,6 +88,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.dash)
+    implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.okhttp)

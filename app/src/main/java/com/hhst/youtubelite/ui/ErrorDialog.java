@@ -9,11 +9,11 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -21,6 +21,9 @@ import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * Dialog that shows structured error details.
+ */
 public final class ErrorDialog {
 
 	private static final String TAG = "ErrorDialog";
@@ -111,7 +114,7 @@ public final class ErrorDialog {
 			String sb = "App Version: " + version + "\n" + "Date: " + date + "\n" + "Error Message: " + title + "\n" + "Stack Trace:\n" + stack;
 
 			DeviceUtils.copyToClipboard(context, DEBUG_INFO_LABEL, sb);
-			Toast.makeText(context, R.string.debug_info_copied, Toast.LENGTH_SHORT).show();
+			ToastUtils.show(context, R.string.debug_info_copied);
 		} catch (Exception e) {
 			Log.e(TAG, "Failed to copy debug info", e);
 		}

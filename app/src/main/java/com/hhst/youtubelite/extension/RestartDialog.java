@@ -6,6 +6,9 @@ import android.content.Intent;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hhst.youtubelite.R;
 
+/**
+ * Component that handles app logic.
+ */
 public class RestartDialog {
 
 	public static void show(Context context) {

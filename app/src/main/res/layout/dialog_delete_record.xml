@@ -3,17 +3,17 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:paddingStart="20dp"
-    android:paddingEnd="24dp"
     android:paddingTop="8dp"
+    android:paddingEnd="24dp"
     android:paddingBottom="8dp">
 
     <com.google.android.material.checkbox.MaterialCheckBox
         android:id="@+id/checkbox_delete_file"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/delete_local_file"
-        android:textAppearance="?attr/textAppearanceBodyLarge"
+        android:gravity="center_vertical"
         android:minHeight="48dp"
-        android:gravity="center_vertical" />
+        android:text="@string/delete_local_file"
+        android:textAppearance="?attr/textAppearanceBodyLarge" />
 
 </FrameLayout>

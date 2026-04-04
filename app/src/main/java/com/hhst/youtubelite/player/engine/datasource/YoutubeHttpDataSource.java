@@ -14,13 +14,13 @@ import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebStreamingUrl;
 
 import android.net.Uri;
+import android.util.Log;
 import android.webkit.CookieManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
 import androidx.media3.common.PlaybackException;
-import androidx.media3.common.util.Log;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.util.Util;
 import androidx.media3.datasource.BaseDataSource;
@@ -56,12 +56,10 @@ import java.util.zip.GZIPInputStream;
 @UnstableApi
 public final class YoutubeHttpDataSource extends BaseDataSource implements HttpDataSource {
 
-	private static final String TAG = YoutubeHttpDataSource.class.getSimpleName();
+	private static final String TAG = "YTLPlayback";
 	private static final int MAX_REDIRECTS = 20;
 	private static final int HTTP_STATUS_TEMPORARY_REDIRECT = 307;
 	private static final int HTTP_STATUS_PERMANENT_REDIRECT = 308;
-	private static final String RN_PARAMETER = "&rn=";
-	private static final String YOUTUBE_BASE_URL = "https://m.youtube.com";
 	private static final byte[] POST_BODY = new byte[]{0x78, 0};
 	private final boolean allowCrossProtocolRedirects;
 	private final boolean rangeParameterEnabled;
@@ -86,7 +84,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	private long bytesRead;
 	private long requestNumber;
 
-	private YoutubeHttpDataSource(final int connectTimeoutMillis, final int readTimeoutMillis, final boolean allowCrossProtocolRedirects, final boolean rangeParameterEnabled, final boolean rnParameterEnabled, @Nullable final RequestProperties defaultRequestProperties, final boolean keepPostFor302Redirects, final String userAgent) {
+	private YoutubeHttpDataSource(int connectTimeoutMillis, int readTimeoutMillis, boolean allowCrossProtocolRedirects, boolean rangeParameterEnabled, boolean rnParameterEnabled, @Nullable RequestProperties defaultRequestProperties, boolean keepPostFor302Redirects, String userAgent) {
 		super(true);
 		this.connectTimeoutMillis = connectTimeoutMillis;
 		this.readTimeoutMillis = readTimeoutMillis;
@@ -100,33 +98,17 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		this.requestNumber = 0;
 	}
 
-	private static void maybeTerminateInputStream() {
-	}
-
-	private static boolean isCompressed(final HttpURLConnection connection) {
-		final String contentEncoding = connection.getHeaderField("Content-Encoding");
+	private static boolean isCompressed(HttpURLConnection connection) {
+		String contentEncoding = connection.getHeaderField("Content-Encoding");
 		return "gzip".equalsIgnoreCase(contentEncoding);
 	}
 
-	@Nullable
-	private static String buildRangeParameter(final long position, final long length) {
-		if (position == 0 && length == C.LENGTH_UNSET) return null;
-		final StringBuilder rangeValue = new StringBuilder();
-		rangeValue.append("&range=");
-		rangeValue.append(position);
-		rangeValue.append("-");
-		if (length != C.LENGTH_UNSET) rangeValue.append(position + length - 1);
-		return rangeValue.toString();
-	}
-
-	private static boolean isRedirectResponse(int httpMethod, int responseCode) {
-		if (httpMethod != DataSpec.HTTP_METHOD_GET && httpMethod != DataSpec.HTTP_METHOD_HEAD)
-			return false;
-		return responseCode == HttpURLConnection.HTTP_MULT_CHOICE || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_SEE_OTHER || responseCode == HTTP_STATUS_TEMPORARY_REDIRECT || responseCode == HTTP_STATUS_PERMANENT_REDIRECT;
-	}
-
-	private static boolean isPostRedirectResponse(int responseCode) {
-		return responseCode == HttpURLConnection.HTTP_MULT_CHOICE || responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_SEE_OTHER;
+	@NonNull
+	private static String summarize(@NonNull byte[] data) {
+		if (data.length == 0) return "<empty>";
+		int size = Math.min(data.length, 160);
+		String text = new String(data, 0, size);
+		return data.length > size ? text + "..." : text;
 	}
 
 	@Override
@@ -148,14 +130,14 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	@Override
-	public void setRequestProperty(@NonNull final String name, @NonNull final String value) {
+	public void setRequestProperty(@NonNull String name, @NonNull String value) {
 		Preconditions.checkNotNull(name);
 		Preconditions.checkNotNull(value);
 		requestProperties.set(name, value);
 	}
 
 	@Override
-	public void clearRequestProperty(@NonNull final String name) {
+	public void clearRequestProperty(@NonNull String name) {
 		Preconditions.checkNotNull(name);
 		requestProperties.remove(name);
 	}
@@ -166,28 +148,39 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	@Override
-	public long open(@NonNull final DataSpec dataSpecParameter) throws HttpDataSourceException {
+	public long open(@NonNull DataSpec dataSpecParameter) throws HttpDataSourceException {
 		this.dataSpec = dataSpecParameter;
 		bytesRead = 0;
 		bytesToRead = 0;
 		transferInitializing(dataSpecParameter);
+		Log.d(TAG, "open uri=" + dataSpecParameter.uri
+						+ " method=" + dataSpecParameter.httpMethod
+						+ " position=" + dataSpecParameter.position
+						+ " length=" + dataSpecParameter.length
+						+ " rangeParam=" + rangeParameterEnabled
+						+ " rnParam=" + rnParameterEnabled);
 
-		final HttpURLConnection httpURLConnection;
-		final String responseMessage;
+		HttpURLConnection httpURLConnection;
+		String responseMessage;
 		try {
 			this.connection = makeConnection(dataSpec);
 			httpURLConnection = this.connection;
 			responseCode = httpURLConnection.getResponseCode();
 			responseMessage = httpURLConnection.getResponseMessage();
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			closeConnectionQuietly();
+			Log.e(TAG, "open failed uri=" + dataSpecParameter.uri, e);
 			throw HttpDataSourceException.createForIOException(e, dataSpec, HttpDataSourceException.TYPE_OPEN);
 		}
+
+		Log.d(TAG, "response code=" + responseCode
+						+ " message=" + responseMessage
+						+ " url=" + httpURLConnection.getURL());
 
 		if (responseCode < 200 || responseCode > 299) {
 			final Map<String, List<String>> headers = httpURLConnection.getHeaderFields();
 			if (responseCode == 416) {
-				final long documentSize = HttpUtil.getDocumentSize(httpURLConnection.getHeaderField(HttpHeaders.CONTENT_RANGE));
+				long documentSize = HttpUtil.getDocumentSize(httpURLConnection.getHeaderField(HttpHeaders.CONTENT_RANGE));
 				if (dataSpecParameter.position == documentSize) {
 					opened = true;
 					transferStarted(dataSpecParameter);
@@ -195,25 +188,29 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 				}
 			}
 
-			final InputStream errorStream = httpURLConnection.getErrorStream();
-			final byte[] errorResponseBody = errorStream != null ? StreamIOUtils.readInputStreamToBytes(errorStream) : Util.EMPTY_BYTE_ARRAY;
+			InputStream errorStream = httpURLConnection.getErrorStream();
+			byte[] errorResponseBody = errorStream != null ? StreamIOUtils.readInputStreamToBytes(errorStream) : Util.EMPTY_BYTE_ARRAY;
+			Log.w(TAG, "non-2xx response code=" + responseCode
+							+ " url=" + httpURLConnection.getURL()
+							+ " location=" + httpURLConnection.getHeaderField(HttpHeaders.LOCATION)
+							+ " errorBody=" + summarize(errorResponseBody));
 
 			closeConnectionQuietly();
-			final IOException cause = responseCode == 416 ? new DataSourceException(PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE) : null;
+			IOException cause = responseCode == 416 ? new DataSourceException(PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE) : null;
 			throw new InvalidResponseCodeException(responseCode, responseMessage, cause, headers, dataSpec, errorResponseBody);
 		}
 
 
-		final long bytesToSkip;
+		long bytesToSkip;
 		if (!rangeParameterEnabled)
 			bytesToSkip = responseCode == 200 && dataSpecParameter.position != 0 ? dataSpecParameter.position : 0;
 		else bytesToSkip = 0;
 
-		final boolean isCompressed = isCompressed(httpURLConnection);
+		boolean isCompressed = isCompressed(httpURLConnection);
 		if (!isCompressed) {
 			if (dataSpecParameter.length != C.LENGTH_UNSET) bytesToRead = dataSpecParameter.length;
 			else {
-				final long contentLength = HttpUtil.getContentLength(httpURLConnection.getHeaderField(HttpHeaders.CONTENT_LENGTH), httpURLConnection.getHeaderField(HttpHeaders.CONTENT_RANGE));
+				long contentLength = HttpUtil.getContentLength(httpURLConnection.getHeaderField(HttpHeaders.CONTENT_LENGTH), httpURLConnection.getHeaderField(HttpHeaders.CONTENT_RANGE));
 				bytesToRead = contentLength != C.LENGTH_UNSET ? (contentLength - bytesToSkip) : C.LENGTH_UNSET;
 			}
 		} else bytesToRead = dataSpecParameter.length;
@@ -221,7 +218,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		try {
 			inputStream = httpURLConnection.getInputStream();
 			if (isCompressed) inputStream = new GZIPInputStream(inputStream);
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			closeConnectionQuietly();
 			throw new HttpDataSourceException(e, dataSpec, PlaybackException.ERROR_CODE_IO_UNSPECIFIED, HttpDataSourceException.TYPE_OPEN);
 		}
@@ -231,7 +228,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 		try {
 			skipFully(bytesToSkip, dataSpec);
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			closeConnectionQuietly();
 			if (e instanceof HttpDataSourceException) throw (HttpDataSourceException) e;
 			throw new HttpDataSourceException(e, dataSpec, PlaybackException.ERROR_CODE_IO_UNSPECIFIED, HttpDataSourceException.TYPE_OPEN);
@@ -241,10 +238,10 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	@Override
-	public int read(@NonNull final byte[] buffer, final int offset, final int length) throws HttpDataSourceException {
+	public int read(@NonNull byte[] buffer, int offset, int length) throws HttpDataSourceException {
 		try {
 			return readInternal(buffer, offset, length);
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			throw HttpDataSourceException.createForIOException(e, Util.castNonNull(dataSpec), HttpDataSourceException.TYPE_READ);
 		}
 	}
@@ -252,14 +249,11 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	@Override
 	public void close() throws HttpDataSourceException {
 		try {
-			final InputStream connectionInputStream = this.inputStream;
-			if (connectionInputStream != null) {
-				// bytesRemaining calculation removed as it's no longer needed
-				maybeTerminateInputStream();
-
+			InputStream input = this.inputStream;
+			if (input != null) {
 				try {
-					connectionInputStream.close();
-				} catch (final IOException e) {
+					input.close();
+				} catch (IOException e) {
 					throw new HttpDataSourceException(e, Util.castNonNull(dataSpec), PlaybackException.ERROR_CODE_IO_UNSPECIFIED, HttpDataSourceException.TYPE_CLOSE);
 				}
 			}
@@ -274,31 +268,40 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	@NonNull
-	private HttpURLConnection makeConnection(@NonNull final DataSpec dataSpecToUse) throws IOException {
+	private HttpURLConnection makeConnection(@NonNull DataSpec dataSpecToUse) throws IOException {
 		URL url = new URL(dataSpecToUse.uri.toString());
 		@HttpMethod int httpMethod = dataSpecToUse.httpMethod;
-		@Nullable byte[] httpBody = dataSpecToUse.httpBody;
-		final long position = dataSpecToUse.position;
-		final long length = dataSpecToUse.length;
-		final boolean allowGzip = dataSpecToUse.isFlagSet(DataSpec.FLAG_ALLOW_GZIP);
+		long position = dataSpecToUse.position;
+		long length = dataSpecToUse.length;
+		boolean allowGzip = dataSpecToUse.isFlagSet(DataSpec.FLAG_ALLOW_GZIP);
 
 		if (!allowCrossProtocolRedirects && !keepPostFor302Redirects)
-			return makeConnection(url, httpMethod, httpBody, position, length, allowGzip, true, dataSpecToUse.httpRequestHeaders);
+			return makeConnection(url, position, length, allowGzip, true, dataSpecToUse.httpRequestHeaders);
 
+		// Follow redirects manually so POST and range handling stay intact.
 		int redirectCount = 0;
 		while (redirectCount++ <= MAX_REDIRECTS) {
-			final HttpURLConnection connection = makeConnection(url, httpMethod, httpBody, position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
-			final int code = connection.getResponseCode();
-			final String location = connection.getHeaderField(HttpHeaders.LOCATION);
+			HttpURLConnection connection = makeConnection(url, position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
+			int code = connection.getResponseCode();
+			String location = connection.getHeaderField(HttpHeaders.LOCATION);
 
-			if (isRedirectResponse(httpMethod, code)) {
+			if ((httpMethod == DataSpec.HTTP_METHOD_GET || httpMethod == DataSpec.HTTP_METHOD_HEAD)
+							&& (code == HttpURLConnection.HTTP_MULT_CHOICE
+							|| code == HttpURLConnection.HTTP_MOVED_PERM
+							|| code == HttpURLConnection.HTTP_MOVED_TEMP
+							|| code == HttpURLConnection.HTTP_SEE_OTHER
+							|| code == HTTP_STATUS_TEMPORARY_REDIRECT
+							|| code == HTTP_STATUS_PERMANENT_REDIRECT)) {
 				connection.disconnect();
 				url = handleRedirect(url, location, dataSpecToUse);
-			} else if (httpMethod == DataSpec.HTTP_METHOD_POST && isPostRedirectResponse(code)) {
+			} else if (httpMethod == DataSpec.HTTP_METHOD_POST
+							&& (code == HttpURLConnection.HTTP_MULT_CHOICE
+							|| code == HttpURLConnection.HTTP_MOVED_PERM
+							|| code == HttpURLConnection.HTTP_MOVED_TEMP
+							|| code == HttpURLConnection.HTTP_SEE_OTHER)) {
 				connection.disconnect();
 				if (!(keepPostFor302Redirects && code == HttpURLConnection.HTTP_MOVED_TEMP)) {
 					httpMethod = DataSpec.HTTP_METHOD_GET;
-					httpBody = null;
 				}
 				url = handleRedirect(url, location, dataSpecToUse);
 			} else return connection;
@@ -308,107 +311,101 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	}
 
 	@NonNull
-	private HttpURLConnection makeConnection(@NonNull final URL url, @HttpMethod final int ignoredHttpMethod, @Nullable final byte[] ignoredHttpBody, final long position, final long length, final boolean allowGzip, final boolean followRedirects, final Map<String, String> requestParameters) throws IOException {
-
+	private HttpURLConnection makeConnection(@NonNull URL url, long position, long length, boolean allowGzip, boolean followRedirects, final Map<String, String> requestParameters) throws IOException {
 		String requestUrl = url.toString();
 
-		final boolean isVideoPlaybackUrl = url.getPath().startsWith("/videoplayback");
-		if (isVideoPlaybackUrl && rnParameterEnabled && !requestUrl.contains(RN_PARAMETER)) {
-			requestUrl += RN_PARAMETER + requestNumber;
+		boolean isVideoPlaybackUrl = url.getPath().startsWith("/videoplayback");
+		if (isVideoPlaybackUrl && rnParameterEnabled && !requestUrl.contains("&rn=")) {
+			requestUrl += "&rn=" + requestNumber;
 			++requestNumber;
 		}
 
-		if (rangeParameterEnabled && isVideoPlaybackUrl) {
-			final String rangeParameterBuilt = buildRangeParameter(position, length);
-			if (rangeParameterBuilt != null) requestUrl += rangeParameterBuilt;
+		if (rangeParameterEnabled && isVideoPlaybackUrl && (position != 0 || length != C.LENGTH_UNSET)) {
+			requestUrl += "&range=" + position + (length != C.LENGTH_UNSET ? "-" + (position + length - 1) : "-");
 		}
+		Log.d(TAG, "connect url=" + requestUrl
+						+ " followRedirects=" + followRedirects
+						+ " isVideoPlayback=" + isVideoPlaybackUrl
+						+ " headers=" + requestParameters.size());
 
-		final HttpURLConnection httpURLConnection = openConnection(new URL(requestUrl));
-		httpURLConnection.setConnectTimeout(connectTimeoutMillis);
-		httpURLConnection.setReadTimeout(readTimeoutMillis);
+		HttpURLConnection conn = (HttpURLConnection) new URL(requestUrl).openConnection();
+		conn.setConnectTimeout(connectTimeoutMillis);
+		conn.setReadTimeout(readTimeoutMillis);
 
-		final Map<String, String> requestHeaders = new HashMap<>();
+		Map<String, String> requestHeaders = new HashMap<>();
 		if (defaultRequestProperties != null)
 			requestHeaders.putAll(defaultRequestProperties.getSnapshot());
 		requestHeaders.putAll(requestProperties.getSnapshot());
 		requestHeaders.putAll(requestParameters);
 
-		final String cookies = CookieManager.getInstance().getCookie(requestUrl);
+		String cookies = CookieManager.getInstance().getCookie(requestUrl);
 		if (cookies != null && !cookies.isEmpty())
 			requestHeaders.put(HttpHeaders.COOKIE, cookies);
 
 		for (final Map.Entry<String, String> property : requestHeaders.entrySet())
-			httpURLConnection.setRequestProperty(property.getKey(), property.getValue());
+			conn.setRequestProperty(property.getKey(), property.getValue());
 
 		if (!rangeParameterEnabled) {
-			final String rangeHeader = HttpUtil.buildRangeRequestHeader(position, length);
-			if (rangeHeader != null) httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
+			String rangeHeader = HttpUtil.buildRangeRequestHeader(position, length);
+			if (rangeHeader != null) conn.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
 		}
-
 
 		if (isWebStreamingUrl(requestUrl) || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
-			httpURLConnection.setRequestProperty(HttpHeaders.ORIGIN, YOUTUBE_BASE_URL);
-			httpURLConnection.setRequestProperty(HttpHeaders.REFERER, YOUTUBE_BASE_URL);
-			httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
-			httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_MODE, "cors");
-			httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_SITE, "cross-site");
+			conn.setRequestProperty(HttpHeaders.ORIGIN, "https://www.youtube.com");
+			conn.setRequestProperty(HttpHeaders.REFERER, "https://www.youtube.com");
+			conn.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
+			conn.setRequestProperty(HttpHeaders.SEC_FETCH_MODE, "cors");
+			conn.setRequestProperty(HttpHeaders.SEC_FETCH_SITE, "cross-site");
 		}
 
-		httpURLConnection.setRequestProperty(HttpHeaders.TE, "trailers");
-		httpURLConnection.setRequestProperty(HttpHeaders.ACCEPT, "*/*");
+		conn.setRequestProperty(HttpHeaders.TE, "trailers");
+		conn.setRequestProperty(HttpHeaders.ACCEPT, "*/*");
 
-		final boolean isAndroidStreamingUrl = isAndroidStreamingUrl(requestUrl);
-		final boolean isIosStreamingUrl = isIosStreamingUrl(requestUrl);
+		boolean isAndroidStreamingUrl = isAndroidStreamingUrl(requestUrl);
+		boolean isIosStreamingUrl = isIosStreamingUrl(requestUrl);
 		if (isAndroidStreamingUrl)
-			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getAndroidUserAgent(null));
+			conn.setRequestProperty(HttpHeaders.USER_AGENT, getAndroidUserAgent(null));
 		else if (isIosStreamingUrl)
-			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, getIosUserAgent(null));
+			conn.setRequestProperty(HttpHeaders.USER_AGENT, getIosUserAgent(null));
 		else
-			httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, userAgent);
+			conn.setRequestProperty(HttpHeaders.USER_AGENT, userAgent);
 
-		httpURLConnection.setRequestProperty(HttpHeaders.ACCEPT_ENCODING, allowGzip ? "gzip" : "identity");
-		httpURLConnection.setInstanceFollowRedirects(followRedirects);
-
+		conn.setRequestProperty(HttpHeaders.ACCEPT_ENCODING, allowGzip ? "gzip" : "identity");
+		conn.setInstanceFollowRedirects(followRedirects);
 		if (isVideoPlaybackUrl) {
-			httpURLConnection.setRequestMethod("POST");
-			httpURLConnection.setDoOutput(true);
-			httpURLConnection.setFixedLengthStreamingMode(POST_BODY.length);
-
-			try (final OutputStream os = httpURLConnection.getOutputStream()) {
+			conn.setRequestMethod("POST");
+			conn.setDoOutput(true);
+			conn.setFixedLengthStreamingMode(POST_BODY.length);
+			try (OutputStream os = conn.getOutputStream()) {
 				os.write(POST_BODY);
 			}
 		} else {
-			httpURLConnection.setRequestMethod("GET");
-			httpURLConnection.connect();
+			conn.setRequestMethod("GET");
+			conn.connect();
 		}
-
-		return httpURLConnection;
-	}
-
-	private HttpURLConnection openConnection(@NonNull final URL url) throws IOException {
-		return (HttpURLConnection) url.openConnection();
+		return conn;
 	}
 
 	@NonNull
-	private URL handleRedirect(final URL originalUrl, @Nullable final String location, final DataSpec dataSpecToHandleRedirect) throws HttpDataSourceException {
+	private URL handleRedirect(URL originalUrl, @Nullable String location, DataSpec dataSpecToHandleRedirect) throws HttpDataSourceException {
 		if (location == null)
 			throw new HttpDataSourceException("Null location redirect", dataSpecToHandleRedirect, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, HttpDataSourceException.TYPE_OPEN);
 
 		try {
 			return new URL(originalUrl, location);
-		} catch (final MalformedURLException e) {
+		} catch (MalformedURLException e) {
 			throw new HttpDataSourceException(e, dataSpecToHandleRedirect, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, HttpDataSourceException.TYPE_OPEN);
 		}
 	}
 
-	private void skipFully(final long bytesToSkip, final DataSpec dataSpec) throws IOException {
+	private void skipFully(long bytesToSkip, DataSpec dataSpec) throws IOException {
 		if (bytesToSkip == 0) return;
-		final byte[] skipBuffer = new byte[4096];
+		byte[] skipBuffer = new byte[4096];
 		long bytesSkipped = 0;
 		while (bytesSkipped < bytesToSkip) {
-			final int readLength = (int) Math.min(bytesToSkip - bytesSkipped, skipBuffer.length);
+			int readLength = (int) Math.min(bytesToSkip - bytesSkipped, skipBuffer.length);
 			if (inputStream == null) throw new IOException("InputStream is null");
-			final int read = inputStream.read(skipBuffer, 0, readLength);
+			int read = inputStream.read(skipBuffer, 0, readLength);
 			if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException();
 			if (read == -1)
 				throw new HttpDataSourceException(dataSpec, PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE, HttpDataSourceException.TYPE_OPEN);
@@ -417,19 +414,19 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		}
 	}
 
-	private int readInternal(final byte[] buffer, final int offset, final int readLength) throws IOException {
+	private int readInternal(final byte[] buffer, int offset, int readLength) throws IOException {
 		if (readLength == 0) return 0;
 		if (bytesToRead != C.LENGTH_UNSET) {
-			final long bytesRemaining = bytesToRead - bytesRead;
+			long bytesRemaining = bytesToRead - bytesRead;
 			if (bytesRemaining == 0) return C.RESULT_END_OF_INPUT;
-			final int bytesToReadInt = (int) Math.min(readLength, bytesRemaining);
-			final int read = Util.castNonNull(inputStream).read(buffer, offset, bytesToReadInt);
+			int bytesToReadInt = (int) Math.min(readLength, bytesRemaining);
+			int read = Util.castNonNull(inputStream).read(buffer, offset, bytesToReadInt);
 			if (read == -1) return C.RESULT_END_OF_INPUT;
 			bytesRead += read;
 			bytesTransferred(read);
 			return read;
 		}
-		final int read = Util.castNonNull(inputStream).read(buffer, offset, readLength);
+		int read = Util.castNonNull(inputStream).read(buffer, offset, readLength);
 		if (read == -1) return C.RESULT_END_OF_INPUT;
 		bytesRead += read;
 		bytesTransferred(read);
@@ -440,13 +437,16 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		if (connection != null) {
 			try {
 				connection.disconnect();
-			} catch (final Exception e) {
+			} catch (Exception e) {
 				Log.e(TAG, "Unexpected error while disconnecting", e);
 			}
 			connection = null;
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	public static final class Factory implements HttpDataSource.Factory {
 
 		private final RequestProperties defaultRequestProperties;
@@ -459,7 +459,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		private int connectTimeoutMs;
 		private int readTimeoutMs;
 
-		public Factory(final String userAgent) {
+		public Factory(String userAgent) {
 			this.userAgent = userAgent;
 			defaultRequestProperties = new RequestProperties();
 			connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MILLIS;
@@ -472,27 +472,27 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
 		@NonNull
 		@Override
-		public Factory setDefaultRequestProperties(@NonNull final Map<String, String> defaultRequestPropertiesMap) {
+		public Factory setDefaultRequestProperties(@NonNull Map<String, String> defaultRequestPropertiesMap) {
 			defaultRequestProperties.clearAndSet(defaultRequestPropertiesMap);
 			return this;
 		}
 
-		public Factory setConnectTimeoutMs(final int connectTimeoutMsValue) {
+		public Factory setConnectTimeoutMs(int connectTimeoutMsValue) {
 			connectTimeoutMs = connectTimeoutMsValue;
 			return this;
 		}
 
-		public Factory setReadTimeoutMs(final int readTimeoutMsValue) {
+		public Factory setReadTimeoutMs(int readTimeoutMsValue) {
 			readTimeoutMs = readTimeoutMsValue;
 			return this;
 		}
 
-		public Factory setRangeParameterEnabled(final boolean rangeParameterEnabled) {
+		public Factory setRangeParameterEnabled(boolean rangeParameterEnabled) {
 			this.rangeParameterEnabled = rangeParameterEnabled;
 			return this;
 		}
 
-		public Factory setRnParameterEnabled(final boolean rnParameterEnabled) {
+		public Factory setRnParameterEnabled(boolean rnParameterEnabled) {
 			this.rnParameterEnabled = rnParameterEnabled;
 			return this;
 		}

@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Stream helpers for reading asset and script content.
+ */
 public final class StreamIOUtils {
 
 	/**
@@ -20,10 +23,10 @@ public final class StreamIOUtils {
 	 * @return The string content, or null if an error occurred.
 	 */
 	@Nullable
-	public static String readInputStream(@NonNull final InputStream inputStream) {
+	public static String readInputStream(@NonNull InputStream inputStream) {
 		try (inputStream) {
 			return IOUtils.toString(inputStream, StandardCharsets.UTF_8);
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			Log.e("StreamIOUtils", "Error reading input stream", e);
 			return null;
 		}
@@ -36,10 +39,10 @@ public final class StreamIOUtils {
 	 * @return The byte array content, or an empty array if an error occurred.
 	 */
 	@NonNull
-	public static byte[] readInputStreamToBytes(@NonNull final InputStream inputStream) {
+	public static byte[] readInputStreamToBytes(@NonNull InputStream inputStream) {
 		try (inputStream) {
 			return IOUtils.toByteArray(inputStream);
-		} catch (final IOException e) {
+		} catch (IOException e) {
 			Log.e("StreamIOUtils", "Error reading input stream to bytes", e);
 			return new byte[0];
 		}

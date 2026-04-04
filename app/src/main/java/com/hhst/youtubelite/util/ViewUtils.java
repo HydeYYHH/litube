@@ -12,26 +12,25 @@ public final class ViewUtils {
 
 	private static final float ALPHA_VISIBLE = 1.0f;
 	private static final float ALPHA_INVISIBLE = 0.0f;
-	private static final int ANIMATION_DURATION_MS = 100;
 
 	/**
 	 * Converts DP to pixels.
 	 */
-	public static int dpToPx(@NonNull final Context context, final float dp) {
+	public static int dpToPx(@NonNull Context context, float dp) {
 		return (int) (dp * context.getResources().getDisplayMetrics().density);
 	}
 
 	/**
 	 * Gets the screen width in pixels.
 	 */
-	public static int getScreenWidth(@NonNull final Context context) {
+	public static int getScreenWidth(@NonNull Context context) {
 		return context.getResources().getDisplayMetrics().widthPixels;
 	}
 
 	/**
 	 * Animates a view's alpha.
 	 */
-	public static void animateViewAlpha(@NonNull final View v, final float alpha, final int visibilityIfGone) {
+	public static void animateViewAlpha(@NonNull View v, float alpha, int visibilityIfGone) {
 		if (Float.compare(alpha, ALPHA_VISIBLE) == 0) {
 			v.animate().cancel();
 			v.setAlpha(ALPHA_VISIBLE);
@@ -41,7 +40,7 @@ public final class ViewUtils {
 			v.setVisibility(visibilityIfGone);
 		} else {
 			v.setVisibility(View.VISIBLE);
-			v.animate().alpha(alpha).setDuration(ANIMATION_DURATION_MS).withEndAction(() -> {
+			v.animate().alpha(alpha).setDuration(100L).withEndAction(() -> {
 				if (Float.compare(alpha, ALPHA_INVISIBLE) == 0) {
 					v.setVisibility(visibilityIfGone);
 				}
@@ -55,7 +54,7 @@ public final class ViewUtils {
 	 * @param view       The view to apply the visibility to.
 	 * @param fullscreen True to enter fullscreen, false to exit.
 	 */
-	public static void setFullscreen(@NonNull final View view, final boolean fullscreen) {
+	public static void setFullscreen(@NonNull View view, boolean fullscreen) {
 		if (fullscreen) {
 			view.setSystemUiVisibility(
 							View.SYSTEM_UI_FLAG_LOW_PROFILE

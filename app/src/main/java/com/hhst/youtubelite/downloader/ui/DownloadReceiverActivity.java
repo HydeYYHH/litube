@@ -9,6 +9,9 @@ import androidx.media3.common.util.UnstableApi;
 
 import com.hhst.youtubelite.ui.MainActivity;
 
+/**
+ * Component that handles app logic.
+ */
 @UnstableApi
 public class DownloadReceiverActivity extends AppCompatActivity {
 	@Override

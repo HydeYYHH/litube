@@ -8,6 +8,9 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+/**
+ * Manager that stores extension toggles and restores defaults.
+ */
 @Singleton
 public class ExtensionManager {
 

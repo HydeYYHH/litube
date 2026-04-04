@@ -13,12 +13,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.queue.QueueItem;
-import com.squareup.picasso.Picasso;
+import com.hhst.youtubelite.util.ImageUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
+/**
+ * Adapter that binds queue items into the bottom sheet list.
+ */
 public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHolder> {
 	@NonNull
 	private final List<QueueItem> items = new ArrayList<>();
@@ -27,47 +29,33 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 	@Nullable
 	private String playingId;
 
-	public QueueAdapter(@NonNull final Actions actions) {
+	public QueueAdapter(@NonNull Actions actions) {
 		this.actions = actions;
 	}
 
-	public void replaceItems(@NonNull final List<QueueItem> newItems, @Nullable final String playingId) {
+	public void replaceItems(@NonNull List<QueueItem> newItems, @Nullable String playingId) {
 		items.clear();
-		for (final QueueItem item : newItems) {
+		for (QueueItem item : newItems) {
 			items.add(item.copy());
 		}
 		this.playingId = playingId;
 		notifySafe(this::notifyDataSetChanged);
 	}
 
-	public int playingPos() {
-		return find(items, playingId);
-	}
-
-	public boolean moveItem(final int from, final int to) {
-		if (!isValidIndex(from) || !isValidIndex(to) || from == to) {
+	public boolean moveItem(int from, int to) {
+		if (from < 0 || from >= items.size() || to < 0 || to >= items.size() || from == to) {
 			return false;
 		}
-		final QueueItem moved = items.remove(from);
+		QueueItem moved = items.remove(from);
 		items.add(to, moved);
 		notifySafe(() -> notifyItemMoved(from, to));
 		return true;
 	}
 
-	@Nullable
-	public QueueItem removeItem(final int position) {
-		if (!isValidIndex(position)) {
-			return null;
-		}
-		final QueueItem removed = items.remove(position);
-		notifySafe(() -> notifyItemRemoved(position));
-		return removed.copy();
-	}
-
 	@NonNull
 	public List<QueueItem> snapshotItems() {
-		final List<QueueItem> snapshot = new ArrayList<>(items.size());
-		for (final QueueItem item : items) {
+		List<QueueItem> snapshot = new ArrayList<>(items.size());
+		for (QueueItem item : items) {
 			snapshot.add(item.copy());
 		}
 		return snapshot;
@@ -75,14 +63,14 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 
 	@NonNull
 	@Override
-	public ViewHolder onCreateViewHolder(@NonNull final ViewGroup parent, final int viewType) {
-		final View itemView = LayoutInflater.from(parent.getContext())
-				.inflate(R.layout.item_queue_entry, parent, false);
+	public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+		View itemView = LayoutInflater.from(parent.getContext())
+						.inflate(R.layout.item_queue_entry, parent, false);
 		return new ViewHolder(itemView);
 	}
 
 	@Override
-	public void onBindViewHolder(@NonNull final ViewHolder holder, final int position) {
+	public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 		holder.bind(items.get(position), playingId, actions);
 	}
 
@@ -91,41 +79,26 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 		return items.size();
 	}
 
-	static boolean isPlaying(@Nullable final String itemId,
-	                         @Nullable final String videoId) {
-		return itemId != null && Objects.equals(itemId, videoId);
-	}
-
-	static int find(@NonNull final List<QueueItem> items, @Nullable final String videoId) {
-		if (videoId == null) {
-			return -1;
-		}
-		for (int i = 0; i < items.size(); i++) {
-			if (Objects.equals(videoId, items.get(i).getVideoId())) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	private boolean isValidIndex(final int index) {
-		return index >= 0 && index < items.size();
-	}
-
-	private void notifySafe(@NonNull final Runnable task) {
+	private void notifySafe(@NonNull Runnable task) {
 		try {
 			task.run();
-		} catch (final NullPointerException ignored) {
+		} catch (NullPointerException ignored) {
 			// The JVM unit-test stub for RecyclerView.Adapter has no observer list until attached.
 		}
 	}
 
+/**
+ * Contract for app logic.
+ */
 	public interface Actions {
 		void onPlayRequested(@NonNull QueueItem item);
 
 		void onDeleteRequested(@NonNull QueueItem item);
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	static final class ViewHolder extends RecyclerView.ViewHolder {
 		@NonNull
 		private final ImageView thumbnailView;
@@ -138,7 +111,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 		@NonNull
 		private final ImageButton deleteButton;
 
-		ViewHolder(@NonNull final View itemView) {
+		ViewHolder(@NonNull View itemView) {
 			super(itemView);
 			thumbnailView = itemView.findViewById(R.id.queue_item_thumbnail);
 			titleView = itemView.findViewById(R.id.queue_item_title);
@@ -147,25 +120,17 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 			deleteButton = itemView.findViewById(R.id.queue_item_delete);
 		}
 
-		void bind(@NonNull final QueueItem item,
-		          @Nullable final String playingId,
-		          @NonNull final Actions actions) {
+		void bind(@NonNull QueueItem item,
+		          @Nullable String playingId,
+		          @NonNull Actions actions) {
 			titleView.setText(item.getTitle() == null || item.getTitle().isBlank()
-					? item.getUrl()
-					: item.getTitle());
+							? item.getVideoUrl()
+							: item.getTitle());
 			authorView.setText(item.getAuthor() == null || item.getAuthor().isBlank()
-					? itemView.getContext().getString(R.string.queue_unknown_author)
-					: item.getAuthor());
-			if (item.getThumbnailUrl() != null && !item.getThumbnailUrl().isBlank()) {
-				Picasso.get()
-						.load(item.getThumbnailUrl())
-						.placeholder(R.drawable.ic_broken_image)
-						.error(R.drawable.ic_broken_image)
-						.into(thumbnailView);
-			} else {
-				thumbnailView.setImageResource(R.drawable.ic_broken_image);
-			}
-			final boolean playing = isPlaying(item.getVideoId(), playingId);
+							? itemView.getContext().getString(R.string.queue_unknown_author)
+							: item.getAuthor());
+			ImageUtils.loadThumb(thumbnailView, item.getThumbnailUrl());
+			boolean playing = item.getVideoId() != null && item.getVideoId().equals(playingId);
 			itemView.setActivated(playing);
 			itemView.setAlpha(1.0f);
 			playingBadgeView.setVisibility(playing ? View.VISIBLE : View.GONE);

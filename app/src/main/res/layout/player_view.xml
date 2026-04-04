@@ -11,8 +11,8 @@
         android:id="@+id/custom_subtitle_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="visible"
-        android:elevation="0dp"/>
+        android:elevation="0dp"
+        android:visibility="visible" />
 
     <TextView
         android:id="@+id/hint_text"
@@ -75,15 +75,15 @@
                     android:id="@+id/btn_queue"
                     android:layout_width="32dp"
                     android:layout_height="32dp"
-                    android:minWidth="32dp"
-                    android:minHeight="32dp"
-                    android:maxWidth="32dp"
-                    android:maxHeight="32dp"
+                    android:alpha="0.92"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/queue"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
                     android:padding="4dp"
                     android:scaleType="fitCenter"
-                    android:alpha="0.92"
                     android:src="@drawable/ic_queue" />
 
                 <ImageButton
@@ -91,15 +91,15 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="-2dp"
-                    android:minWidth="32dp"
-                    android:minHeight="32dp"
-                    android:maxWidth="32dp"
-                    android:maxHeight="32dp"
+                    android:alpha="0.92"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/segments"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
                     android:padding="4dp"
                     android:scaleType="fitCenter"
-                    android:alpha="0.92"
                     android:src="@drawable/ic_segment" />
 
                 <ImageButton
@@ -107,15 +107,15 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="-2dp"
-                    android:minWidth="32dp"
-                    android:minHeight="32dp"
-                    android:maxWidth="32dp"
-                    android:maxHeight="32dp"
+                    android:alpha="0.92"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/subtitles"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
                     android:padding="4dp"
                     android:scaleType="fitCenter"
-                    android:alpha="0.92"
                     android:src="@drawable/ic_subtitles_off" />
 
                 <ImageButton
@@ -123,15 +123,15 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="-2dp"
-                    android:minWidth="32dp"
-                    android:minHeight="32dp"
-                    android:maxWidth="32dp"
-                    android:maxHeight="32dp"
+                    android:alpha="0.92"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/playback_end_next"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
                     android:padding="4dp"
                     android:scaleType="fitCenter"
-                    android:alpha="0.92"
                     android:src="@drawable/ic_playback_end_next" />
 
                 <ImageButton
@@ -139,15 +139,15 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="-2dp"
-                    android:minWidth="32dp"
-                    android:minHeight="32dp"
-                    android:maxWidth="32dp"
-                    android:maxHeight="32dp"
+                    android:alpha="0.92"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
                     android:padding="4dp"
                     android:scaleType="fitCenter"
-                    android:alpha="0.92"
                     android:src="@drawable/ic_more" />
             </LinearLayout>
 
@@ -222,48 +222,48 @@
                         android:id="@+id/btn_speed"
                         android:layout_width="wrap_content"
                         android:layout_height="28dp"
-                        android:minWidth="46dp"
-                        android:minHeight="28dp"
-                        android:maxHeight="28dp"
+                        android:alpha="0.92"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
+                        android:maxHeight="28dp"
+                        android:minWidth="46dp"
+                        android:minHeight="28dp"
                         android:paddingStart="7dp"
                         android:paddingEnd="7dp"
                         android:text="1.0x"
                         android:textColor="@android:color/white"
                         android:textSize="12sp"
-                        android:alpha="0.92"
                         tools:ignore="HardcodedText" />
 
                     <TextView
                         android:id="@+id/btn_quality"
                         android:layout_width="wrap_content"
                         android:layout_height="28dp"
-                        android:minWidth="46dp"
-                        android:minHeight="28dp"
-                        android:maxHeight="28dp"
+                        android:alpha="0.92"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
+                        android:maxHeight="28dp"
+                        android:minWidth="46dp"
+                        android:minHeight="28dp"
                         android:paddingStart="7dp"
                         android:paddingEnd="7dp"
                         android:text="@string/player_quality_auto"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp"
-                        android:alpha="0.92" />
+                        android:textSize="12sp" />
 
                     <ImageButton
                         android:id="@+id/btn_fullscreen"
                         android:layout_width="32dp"
                         android:layout_height="32dp"
-                        android:minWidth="32dp"
-                        android:minHeight="32dp"
-                        android:maxWidth="32dp"
-                        android:maxHeight="32dp"
+                        android:alpha="0.92"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/action_fullscreen"
+                        android:maxWidth="32dp"
+                        android:maxHeight="32dp"
+                        android:minWidth="32dp"
+                        android:minHeight="32dp"
                         android:padding="4dp"
                         android:scaleType="fitCenter"
-                        android:alpha="0.92"
                         android:src="@drawable/ic_fullscreen" />
                 </LinearLayout>
             </LinearLayout>

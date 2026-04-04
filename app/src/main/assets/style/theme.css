@@ -1,3 +1,35 @@
 html {
     -webkit-tap-highlight-color:transparent;
  }
+
+:root {
+    --safe-area-inset-bottom: 0px !important;
+}
+
+body {
+    padding-bottom: 0px !important;
+    margin-bottom: 0px !important;
+}
+
+ytm-pivot-bar-renderer {
+    height: 48px !important;
+    padding-bottom: 0px !important;
+    bottom: 0px !important;
+    margin-bottom: 0px !important;
+    min-height: 48px !important;
+}
+
+a {
+    text-decoration: none !important;
+}
+
+a.yt-simple-endpoint {
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+ytm-mobile-topbar-renderer#header-bar header.mobile-topbar-header.cbox.cairo-settings-topbar {
+    background-color: inherit !important;
+    color: inherit !important;
+    border-color: inherit !important;
+}

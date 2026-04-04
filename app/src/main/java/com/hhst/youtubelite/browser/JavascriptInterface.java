@@ -1,9 +1,12 @@
 package com.hhst.youtubelite.browser;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -11,9 +14,15 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
+import com.hhst.youtubelite.downloader.ui.PlaylistDownloadDialog;
+import com.hhst.youtubelite.downloader.ui.PlaylistDownloadItem;
 import com.hhst.youtubelite.extension.ExtensionDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
@@ -21,25 +30,26 @@ import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.queue.QueueItem;
 import com.hhst.youtubelite.player.queue.QueueRepository;
-import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.ui.AboutActivity;
-import com.hhst.youtubelite.R;
-
-import android.widget.Toast;
+import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.ui.MediaItemMenuDialog;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+/**
+ * Component that handles app logic.
+ */
 @UnstableApi
 public final class JavascriptInterface {
+	private static final String TAG = "JavascriptInterface";
 	@NonNull
 	private final Context context;
 	@NonNull
-	private final YoutubeWebview webview;
+	private final YoutubeWebview webView;
 	@NonNull
 	private final YoutubeExtractor youtubeExtractor;
 	@NonNull
@@ -51,50 +61,152 @@ public final class JavascriptInterface {
 	@NonNull
 	private final QueueRepository queueRepository;
 	@NonNull
-	private final QueueWarmer queueWarmer;
-	@NonNull
 	private final Gson gson = new Gson();
 	@NonNull
 	private final Handler handler = new Handler(Looper.getMainLooper());
 
-	public JavascriptInterface(@NonNull final YoutubeWebview webview,
-	                           @NonNull final YoutubeExtractor youtubeExtractor,
-	                           @NonNull final LitePlayer player,
-	                           @NonNull final ExtensionManager extensionManager,
-	                           @NonNull final TabManager tabManager,
-	                           @NonNull final QueueRepository queueRepository,
-	                           @NonNull final QueueWarmer queueWarmer) {
-		this.context = webview.getContext();
-		this.webview = webview;
+	public JavascriptInterface(@NonNull YoutubeWebview webView, @NonNull YoutubeExtractor youtubeExtractor, @NonNull LitePlayer player, @NonNull ExtensionManager extensionManager, @NonNull TabManager tabManager, @NonNull QueueRepository queueRepository) {
+		this.context = webView.getContext();
+		this.webView = webView;
 		this.youtubeExtractor = youtubeExtractor;
 		this.player = player;
 		this.extensionManager = extensionManager;
 		this.tabManager = tabManager;
 		this.queueRepository = queueRepository;
-		this.queueWarmer = queueWarmer;
 	}
 
+	static boolean hasValidMediaItemPayload(@Nullable String payloadJson) {
+		return parseMediaItemMenuPayload(payloadJson) != null;
+	}
+
+	@Nullable
+	static MediaItemMenuPayload parseMediaItemMenuPayload(@Nullable String payloadJson) {
+		String normalized = normalizePayloadJson(payloadJson);
+		if (normalized == null) return null;
+		try {
+			return MediaItemMenuPayload.fromJson(normalized);
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+	}
+
+	@Nullable
+	private static String normalizePayloadJson(@Nullable String payloadJson) {
+		if (payloadJson == null) return null;
+		String trimmed = payloadJson.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	@Nullable
+	private static String getPayloadString(@Nullable JsonObject object, @NonNull String... keys) {
+		if (object == null) return null;
+		for (String key : keys) {
+			if (key == null || !object.has(key) || object.get(key) == null || object.get(key).isJsonNull())
+				continue;
+			try {
+				String value = object.get(key).getAsString();
+				if (value != null && !value.isBlank()) return value;
+			} catch (Exception ignored) {
+			}
+		}
+		return null;
+	}
+
+	private static long getPayloadLong(@Nullable JsonObject object, @NonNull String... keys) {
+		if (object == null) return 0L;
+		for (String key : keys) {
+			if (key == null || !object.has(key) || object.get(key) == null || object.get(key).isJsonNull())
+				continue;
+			try {
+				String raw = object.get(key).getAsString();
+				if (raw == null || raw.isBlank()) continue;
+				String trimmed = raw.trim();
+				if (trimmed.contains(":")) {
+					long seconds = 0L;
+					for (String part : trimmed.split(":")) {
+						seconds = seconds * 60L + Long.parseLong(part.trim());
+					}
+					return Math.max(0L, seconds);
+				}
+				return Math.max(0L, Long.parseLong(trimmed));
+			} catch (Exception ignored) {
+			}
+		}
+		return 0L;
+	}
 
 	@android.webkit.JavascriptInterface
 	public void finishRefresh() {
 		handler.post(() -> {
-			if (webview.getParent() instanceof SwipeRefreshLayout)
-				((SwipeRefreshLayout) webview.getParent()).setRefreshing(false);
+			if (webView.getParent() instanceof SwipeRefreshLayout)
+				((SwipeRefreshLayout) webView.getParent()).setRefreshing(false);
 		});
 	}
 
 	@android.webkit.JavascriptInterface
-	public void setRefreshLayoutEnabled(final boolean enabled) {
+	public void setRefreshLayoutEnabled(boolean enabled) {
 		handler.post(() -> {
-			if (webview.getParent() instanceof SwipeRefreshLayout)
-				((SwipeRefreshLayout) webview.getParent()).setEnabled(enabled);
+			if (webView.getParent() instanceof SwipeRefreshLayout)
+				((SwipeRefreshLayout) webView.getParent()).setEnabled(enabled);
 		});
 	}
 
 	@android.webkit.JavascriptInterface
-	public void download(@Nullable final String url) {
-		if (url != null)
-			handler.post(() -> new DownloadDialog(url, context, youtubeExtractor).show());
+	public void download(@Nullable String url) {
+		if (url != null) handler.post(() -> new DownloadDialog(url, context, youtubeExtractor).show());
+	}
+
+	@android.webkit.JavascriptInterface
+	public void downloadPlaylist(@Nullable String payloadJson) {
+		if (payloadJson == null || payloadJson.isBlank()) return;
+		JsonObject payload;
+		try {
+			payload = gson.fromJson(payloadJson, JsonObject.class);
+		} catch (Exception e) {
+			Log.e(TAG, "Failed to parse playlist payload", e);
+			return;
+		}
+		if (payload == null) return;
+		handler.post(() -> {
+			try {
+				JsonArray payloadItems = payload.has("items") && payload.get("items").isJsonArray() ? payload.getAsJsonArray("items") : null;
+				if (payloadItems == null || payloadItems.isEmpty()) {
+					ToastUtils.show(context, R.string.playlist_download_empty);
+					return;
+				}
+
+				List<PlaylistDownloadItem> dialogItems = new ArrayList<>();
+				int playlistIndex = 0;
+				for (JsonElement element : payloadItems) {
+					if (element == null || !element.isJsonObject()) continue;
+					JsonObject itemPayload = element.getAsJsonObject();
+					String videoId = getPayloadString(itemPayload, "videoId");
+					String videoUrl = getPayloadString(itemPayload, "videoUrl", "url");
+					if (videoId == null || videoId.isBlank() || videoUrl == null || videoUrl.isBlank())
+						continue;
+
+					PlaylistDownloadItem item = new PlaylistDownloadItem(playlistIndex++, videoId, videoUrl);
+					item.setTitle(getPayloadString(itemPayload, "title"));
+					item.setAuthor(getPayloadString(itemPayload, "author"));
+					item.setThumbnailUrl(getPayloadString(itemPayload, "thumbnailUrl", "thumbnail"));
+					item.setDurationSeconds(getPayloadLong(itemPayload, "durationSeconds", "duration"));
+					item.setAvailabilityStatus(PlaylistDownloadItem.AvailabilityStatus.READY);
+					item.setSelected(true);
+					dialogItems.add(item);
+				}
+
+				if (dialogItems.isEmpty()) {
+					ToastUtils.show(context, R.string.playlist_download_empty);
+					return;
+				}
+
+				String seededTitle = getPayloadString(payload, "title");
+				String playlistId = getPayloadString(payload, "playlistId");
+				new PlaylistDownloadDialog(seededTitle == null || seededTitle.isBlank() ? null : seededTitle, dialogItems, null, playlistId == null || playlistId.isBlank() ? null : playlistId, context, youtubeExtractor, null).show();
+			} catch (Exception e) {
+				Log.e(TAG, "Failed to open playlist download dialog", e);
+			}
+		});
 	}
 
 	@android.webkit.JavascriptInterface
@@ -104,69 +216,101 @@ public final class JavascriptInterface {
 
 	@android.webkit.JavascriptInterface
 	public void download() {
-		handler.post(() -> {
-			Intent intent = new Intent(context, DownloadActivity.class);
-			context.startActivity(intent);
-		});
+		handler.post(() -> context.startActivity(new Intent(context, DownloadActivity.class)));
 	}
 
 	@android.webkit.JavascriptInterface
 	public void about() {
-		handler.post(() -> {
-			Intent intent = new Intent(context, AboutActivity.class);
-			context.startActivity(intent);
-		});
+		handler.post(() -> context.startActivity(new Intent(context, AboutActivity.class)));
 	}
 
-
 	@android.webkit.JavascriptInterface
-	public void play(@Nullable final String url) {
+	public void play(@Nullable String url) {
 		if (url != null) handler.post(() -> player.play(url));
 	}
 
 	@android.webkit.JavascriptInterface
-	public void addToQueue(@Nullable final String itemJson) {
-		if (itemJson == null) return;
+	public void showHint(@Nullable String text, long durationMs) {
+		if (text == null) return;
 		handler.post(() -> {
-			try {
-				final QueueItem item = gson.fromJson(itemJson, QueueItem.class);
-				if (item == null || item.getUrl() == null) return;
-				final String vid = item.getVideoId();
-				if (vid == null || vid.isBlank()
-						|| item.getTitle() == null || item.getTitle().isBlank()
-						|| item.getAuthor() == null || item.getAuthor().isBlank()) {
-					Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show();
-					return;
-				}
-				item.setVideoId(vid);
-				queueRepository.add(item);
-				queueWarmer.warmItem(item);
-				player.refreshQueueNavigationAvailability();
-				Toast.makeText(context, R.string.queue_item_added, Toast.LENGTH_SHORT).show();
-			} catch (final Exception ignored) {
+			MainActivity activity = getMainActivity();
+			if (activity != null) {
+				activity.showHint(text, durationMs);
 			}
 		});
 	}
 
 	@android.webkit.JavascriptInterface
+	public void hideHint() {
+		handler.post(() -> {
+			MainActivity activity = getMainActivity();
+			if (activity != null) {
+				activity.hideHint();
+			}
+		});
+	}
+
+	@Nullable
+	private MainActivity getMainActivity() {
+		Context ctx = context;
+		while (ctx instanceof ContextWrapper wrapper) {
+			if (ctx instanceof MainActivity activity) {
+				return activity;
+			}
+			ctx = wrapper.getBaseContext();
+		}
+		return null;
+	}
+
+	@android.webkit.JavascriptInterface
+	public void addToQueue(@Nullable String itemJson) {
+		if (itemJson == null) return;
+		handler.post(() -> {
+			try {
+				final QueueItem item;
+				MediaItemMenuPayload mediaItemPayload = parseMediaItemMenuPayload(itemJson);
+				item = mediaItemPayload != null ? mediaItemPayload.toQueueItem() : gson.fromJson(itemJson, QueueItem.class);
+				if (item == null || item.getVideoUrl() == null) return;
+				String videoId = item.getVideoId();
+				if (videoId == null || videoId.isBlank() || item.getTitle() == null || item.getTitle().isBlank()) {
+					ToastUtils.show(context, R.string.queue_item_unavailable);
+					return;
+				}
+				item.setVideoId(videoId);
+				if (!queueRepository.isEnabled()) {
+					queueRepository.setEnabled(true);
+				}
+				queueRepository.add(item);
+				player.refreshQueueNav();
+				ToastUtils.show(context, R.string.queue_item_added);
+			} catch (Exception e) {
+				Log.e(TAG, "Failed to add queue item", e);
+			}
+		});
+	}
+
+	void launchMediaItemMenu(@NonNull MediaItemMenuPayload payload) {
+		if (context instanceof Activity activity && (activity.isFinishing() || activity.isDestroyed())) {
+			return;
+		}
+		new MediaItemMenuDialog(context, payload, youtubeExtractor, queueRepository, player).show();
+	}
+
+	@android.webkit.JavascriptInterface
+	public void showMediaItemMenu(@Nullable String payloadJson) {
+		MediaItemMenuPayload payload = parseMediaItemMenuPayload(payloadJson);
+		if (payload == null) return;
+		handler.post(() -> launchMediaItemMenu(payload));
+	}
+
+	@android.webkit.JavascriptInterface
 	public void showQueueItemUnavailable() {
-		handler.post(() -> Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show());
+		ToastUtils.show(context, R.string.queue_item_unavailable);
 	}
 
 	@android.webkit.JavascriptInterface
 	public boolean isQueueEnabled() {
 		return queueRepository.isEnabled();
-	}
-
-	@Nullable
-	private String extractVideoId(@Nullable final String url) {
-		if (url == null) return null;
-		final String extractedByParser = YoutubeExtractor.getVideoId(url);
-		if (extractedByParser != null && !extractedByParser.isBlank()) {
-			return extractedByParser;
-		}
-		final Matcher matcher = Pattern.compile("[?&]v=([\\w-]{6,})", Pattern.CASE_INSENSITIVE).matcher(url);
-		return matcher.find() ? matcher.group(1) : null;
 	}
 
 	@android.webkit.JavascriptInterface
@@ -175,22 +319,22 @@ public final class JavascriptInterface {
 	}
 
 	@android.webkit.JavascriptInterface
-	public void setPlayerHeight(final int height) {
+	public void setPlayerHeight(int height) {
 		handler.post(() -> player.setHeight(height));
 	}
 
 	@android.webkit.JavascriptInterface
-	public boolean seekLoadedVideo(@Nullable final String url, final long positionMs) {
+	public boolean seekLoadedVideo(@Nullable String url, long positionMs) {
 		return player.seekLoadedVideo(url, positionMs);
 	}
 
 	@android.webkit.JavascriptInterface
-	public void onPosterLongPress(@Nullable final String urlsJson) {
+	public void onPosterLongPress(@Nullable String urlsJson) {
 		if (urlsJson != null) {
 			handler.post(() -> {
-				final List<String> urls = gson.fromJson(urlsJson, new TypeToken<List<String>>() {
+				List<String> urls = gson.fromJson(urlsJson, new TypeToken<List<String>>() {
 				}.getType());
-				final Intent intent = new Intent(context, GalleryActivity.class);
+				Intent intent = new Intent(context, GalleryActivity.class);
 				intent.putStringArrayListExtra("thumbnails", new ArrayList<>(urls));
 				intent.putExtra("filename", DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
 				context.startActivity(intent);
@@ -205,8 +349,9 @@ public final class JavascriptInterface {
 	}
 
 	@android.webkit.JavascriptInterface
-	public void openTab(@Nullable final String url, @Nullable final String tag) {
-		if (url != null && tag != null) handler.post(() -> tabManager.openTab(url, tag));
+	public void openTab(@Nullable String url, @Nullable String tag) {
+		if (url == null || tag == null) return;
+		handler.post(() -> tabManager.openTab(url, tag));
 	}
 
 }

@@ -10,11 +10,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.webkit.WebStorage;
-import android.webkit.WebView;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -30,6 +27,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.cache.AppCacheCleaner;
+import com.hhst.youtubelite.util.ToastUtils;
 
 import org.apache.commons.io.FileUtils;
 
@@ -50,16 +49,20 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
+/**
+ * Screen that shows app info, cache actions, and update checks.
+ */
 @AndroidEntryPoint
 public class AboutActivity extends AppCompatActivity {
 	private static final String TAG = "AboutActivity";
-	private static final String GITHUB_RELEASE_API = "https://api.github.com/repos/HydeYYHH/litube/releases/latest";
 	@Inject
 	OkHttpClient client;
 	@Inject
 	Gson gson;
-	private TextView checkUpdateText;
-	private View checkUpdateLayout;
+	@Inject
+	AppCacheCleaner appCacheCleaner;
+	private TextView updateText;
+	private View updateLayout;
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -74,53 +77,60 @@ public class AboutActivity extends AppCompatActivity {
 		});
 
 		ImageView iconView = findViewById(R.id.app_icon);
-		TextView nameView = findViewById(R.id.app_name);
-		TextView versionView = findViewById(R.id.app_version);
-		TextView descriptionView = findViewById(R.id.app_description);
-		View sourceCodeLayout = findViewById(R.id.source_code_layout);
-		checkUpdateLayout = findViewById(R.id.check_update_layout);
-		checkUpdateText = findViewById(R.id.check_update_text);
-		View clearCacheLayout = findViewById(R.id.clear_cache_layout);
-		View exportLogLayout = findViewById(R.id.export_log_layout);
+		TextView name = findViewById(R.id.app_name);
+		TextView version = findViewById(R.id.app_version);
+		TextView desc = findViewById(R.id.app_description);
+		View sourceLayout = findViewById(R.id.source_code_layout);
+		updateLayout = findViewById(R.id.check_update_layout);
+		updateText = findViewById(R.id.check_update_text);
+		View clearLayout = findViewById(R.id.clear_cache_layout);
+		View exportLayout = findViewById(R.id.export_log_layout);
 
 		try {
 			PackageManager pm = getPackageManager();
-			PackageInfo pi = pm.getPackageInfo(getPackageName(), 0);
-			iconView.setImageDrawable(pi.applicationInfo.loadIcon(pm));
-			nameView.setText(R.string.app_name);
-			versionView.setText(getString(R.string.version, pi.versionName));
+			PackageInfo info = pm.getPackageInfo(getPackageName(), 0);
+			iconView.setImageDrawable(info.applicationInfo.loadIcon(pm));
+			name.setText(R.string.app_name);
+			version.setText(getString(R.string.version, info.versionName));
 		} catch (Exception e) {
 			Log.e(TAG, "Failed to load app info", e);
 		}
 
-		descriptionView.setText(R.string.app_description);
-		sourceCodeLayout.setOnClickListener(v -> {
+		desc.setText(R.string.app_description);
+		sourceLayout.setOnClickListener(v -> {
 			Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.source_link)));
 			startActivity(intent);
 		});
 
-		checkUpdateLayout.setOnClickListener(v -> checkForUpdates());
-		clearCacheLayout.setOnClickListener(v -> showClearCacheDialog());
-		exportLogLayout.setOnClickListener(v -> exportLogs());
+		updateLayout.setOnClickListener(v -> checkForUpdates());
+		clearLayout.setOnClickListener(v -> showClearCacheDialog());
+		exportLayout.setOnClickListener(v -> exportLogs());
 	}
 
 	private void showClearCacheDialog() {
-		new MaterialAlertDialogBuilder(this).setTitle(R.string.clear_cache).setMessage(R.string.clear_cache_confirmation).setPositiveButton(R.string.clear, (dialog, which) -> clearAppCache()).setNegativeButton(string.cancel, null).show();
+		new MaterialAlertDialogBuilder(this)
+						.setTitle(R.string.clear_cache)
+						.setMessage(R.string.clear_cache_confirmation)
+						.setPositiveButton(R.string.clear, (dialog, which) -> clearAppCache())
+						.setNegativeButton(string.cancel, null)
+						.show();
 	}
 
 	private void checkForUpdates() {
-		checkUpdateLayout.setEnabled(false);
-		checkUpdateText.setText(R.string.checking_for_updates);
+		updateLayout.setEnabled(false);
+		updateText.setText(R.string.checking_for_updates);
 
-		Request request = new Request.Builder().url(GITHUB_RELEASE_API).build();
+		Request request = new Request.Builder()
+						.url("https://api.github.com/repos/HydeYYHH/litube/releases/latest")
+						.build();
 
 		client.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(@NonNull Call call, @NonNull IOException e) {
 				runOnUiThread(() -> {
-					checkUpdateLayout.setEnabled(true);
-					checkUpdateText.setText(R.string.check_for_updates);
-					Toast.makeText(AboutActivity.this, R.string.failed_to_check_for_updates, Toast.LENGTH_SHORT).show();
+					updateLayout.setEnabled(true);
+					updateText.setText(R.string.check_for_updates);
+					ToastUtils.show(AboutActivity.this, R.string.failed_to_check_for_updates);
 				});
 			}
 
@@ -138,26 +148,26 @@ public class AboutActivity extends AppCompatActivity {
 					String version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
 					if (isNewerVersion(version, latest)) {
 						runOnUiThread(() -> {
-							checkUpdateLayout.setEnabled(true);
-							checkUpdateText.setText(getString(R.string.update_available, latest));
-							checkUpdateLayout.setOnClickListener(v -> {
+							updateLayout.setEnabled(true);
+							updateText.setText(getString(R.string.update_available, latest));
+							updateLayout.setOnClickListener(v -> {
 								Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
 								startActivity(intent);
 							});
 						});
 					} else {
 						runOnUiThread(() -> {
-							checkUpdateLayout.setEnabled(true);
-							checkUpdateText.setText(R.string.check_for_updates);
-							Toast.makeText(AboutActivity.this, R.string.no_updates_available, Toast.LENGTH_SHORT).show();
+							updateLayout.setEnabled(true);
+							updateText.setText(R.string.check_for_updates);
+							ToastUtils.show(AboutActivity.this, R.string.no_updates_available);
 						});
 					}
 				} catch (Exception e) {
 					Log.e(TAG, "Update check error", e);
 					runOnUiThread(() -> {
-						checkUpdateLayout.setEnabled(true);
-						checkUpdateText.setText(R.string.check_for_updates);
-						Toast.makeText(AboutActivity.this, R.string.failed_to_check_for_updates, Toast.LENGTH_SHORT).show();
+						updateLayout.setEnabled(true);
+						updateText.setText(R.string.check_for_updates);
+						ToastUtils.show(AboutActivity.this, R.string.failed_to_check_for_updates);
 					});
 				}
 			}
@@ -167,36 +177,15 @@ public class AboutActivity extends AppCompatActivity {
 	private void clearAppCache() {
 		new Thread(() -> {
 			try {
-				// Clear WebView cache
-				runOnUiThread(() -> {
-					WebView webView = new WebView(AboutActivity.this);
-					webView.clearCache(true);
-					WebStorage.getInstance().deleteAllData();
-				});
-
-				// Clear app cache directories
-				deleteDir(getCacheDir());
-				deleteDir(getExternalCacheDir());
-
-				runOnUiThread(() -> Toast.makeText(AboutActivity.this, R.string.cache_cleared, Toast.LENGTH_SHORT).show());
+				appCacheCleaner.clear(AboutActivity.this);
+				ToastUtils.show(AboutActivity.this, R.string.cache_cleared);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				Log.e(TAG, "Cache clear interrupted", e);
 			} catch (Exception e) {
 				Log.e(TAG, "Failed to clear cache", e);
 			}
 		}).start();
-	}
-
-	private boolean deleteDir(File dir) {
-		if (dir != null && dir.isDirectory()) {
-			String[] children = dir.list();
-			if (children != null) {
-				for (String child : children) {
-					boolean success = deleteDir(new File(dir, child));
-					if (!success) return false;
-				}
-			}
-			return dir.delete();
-		} else if (dir != null && dir.isFile()) return dir.delete();
-		else return false;
 	}
 
 	private void exportLogs() {
@@ -228,24 +217,24 @@ public class AboutActivity extends AppCompatActivity {
 
 			} catch (Exception e) {
 				Log.e(TAG, "Log export error", e);
-				runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_export_log, Toast.LENGTH_SHORT).show());
+				ToastUtils.show(this, R.string.failed_to_export_log);
 			}
 		}).start();
 	}
 
-	private boolean isNewerVersion(String current, String latest) {
-		if (current == null || latest == null) return false;
+	private boolean isNewerVersion(String cur, String latest) {
+		if (cur == null || latest == null) return false;
 
-		// Remove 'v' prefix if exists
-		String c = current.startsWith("v") ? current.substring(1) : current;
+		// Strip the optional v prefix before comparing versions.
+		String c = cur.startsWith("v") ? cur.substring(1) : cur;
 		String l = latest.startsWith("v") ? latest.substring(1) : latest;
 
-		String[] currentParts = c.split("\\.");
+		String[] curParts = c.split("\\.");
 		String[] latestParts = l.split("\\.");
-		int length = Math.max(currentParts.length, latestParts.length);
+		int length = Math.max(curParts.length, latestParts.length);
 
 		for (int i = 0; i < length; i++) {
-			int cPart = i < currentParts.length ? Integer.parseInt(currentParts[i].replaceAll("\\D", "")) : 0;
+			int cPart = i < curParts.length ? Integer.parseInt(curParts[i].replaceAll("\\D", "")) : 0;
 			int lPart = i < latestParts.length ? Integer.parseInt(latestParts[i].replaceAll("\\D", "")) : 0;
 			if (lPart > cPart) return true;
 			if (lPart < cPart) return false;

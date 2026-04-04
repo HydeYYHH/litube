@@ -16,6 +16,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
+/**
+ * Progress bar that tracks page loading state.
+ */
 public final class LoadingProgressBar extends View {
 
 	private static final float INITIAL_PROGRESS = 6F;
@@ -29,31 +32,31 @@ public final class LoadingProgressBar extends View {
 	private final Matrix fillMatrix = new Matrix();
 	private final Matrix shimmerMatrix = new Matrix();
 	@Nullable
-	private LinearGradient fillGradient;	private final Runnable frameRunner = this::runFrame;
+	private LinearGradient fillGradient;
 	@Nullable
 	private LinearGradient shimmerGradient;
-	private float displayedProgress;
+	private float displayedProgress;	private final Runnable frameRunner = this::runFrame;
 	private float reportedProgress;
 	private float shimmerOffsetPx;
 	private float shimmerCycleWidthPx;
 	private long lastFrameTimeMs;
 	private boolean frameScheduled;
 	private boolean finishing;
-	public LoadingProgressBar(@NonNull final Context context) {
+	public LoadingProgressBar(@NonNull Context context) {
 		this(context, null);
 	}
 
-	public LoadingProgressBar(@NonNull final Context context, @Nullable final AttributeSet attrs) {
+	public LoadingProgressBar(@NonNull Context context, @Nullable AttributeSet attrs) {
 		this(context, attrs, 0);
 	}
 
-	public LoadingProgressBar(@NonNull final Context context, @Nullable final AttributeSet attrs, final int defStyleAttr) {
+	public LoadingProgressBar(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
 		init();
 	}
 
 	private void init() {
-		final int trackColor = ColorUtils.setAlphaComponent(Color.parseColor("#CCCCCC"), 88);
+		int trackColor = ColorUtils.setAlphaComponent(Color.parseColor("#CCCCCC"), 88);
 		trackPaint.setStyle(Paint.Style.FILL);
 		trackPaint.setColor(trackColor);
 		fillPaint.setStyle(Paint.Style.FILL);
@@ -77,8 +80,8 @@ public final class LoadingProgressBar extends View {
 		scheduleNextFrame();
 	}
 
-	public void setLoadingProgress(final int progress) {
-		final float clampedProgress = Math.max(0F, Math.min(progress, 100F));
+	public void setLoadingProgress(int progress) {
+		float clampedProgress = Math.max(0F, Math.min(progress, 100F));
 		if (clampedProgress >= 100F) {
 			finishLoading();
 			return;
@@ -105,18 +108,40 @@ public final class LoadingProgressBar extends View {
 		frameScheduled = false;
 		if (!isAttachedToWindow()) return;
 
-		final long now = SystemClock.uptimeMillis();
-		final float deltaSeconds = lastFrameTimeMs == 0L
+		long now = SystemClock.uptimeMillis();
+		float deltaSeconds = lastFrameTimeMs == 0L
 						? 0.016F
 						: Math.min(0.05F, (now - lastFrameTimeMs) / 1000F);
 		lastFrameTimeMs = now;
 
-		final float targetProgress = finishing
-						? 100F
-						: computeTargetProgress(deltaSeconds);
-		final float gap = Math.max(0F, targetProgress - displayedProgress);
+		final float targetProgress;
+		if (finishing) {
+			targetProgress = 100F;
+		} else {
+			final float trickleCeiling;
+			final float trickleVelocity;
+			if (reportedProgress < 15F) {
+				trickleCeiling = 22F;
+				trickleVelocity = 12F;
+			} else if (reportedProgress < 35F) {
+				trickleCeiling = 50F;
+				trickleVelocity = 7.8F;
+			} else if (reportedProgress < 65F) {
+				trickleCeiling = 78F;
+				trickleVelocity = 4.4F;
+			} else if (reportedProgress < 85F) {
+				trickleCeiling = 92F;
+				trickleVelocity = 2.2F;
+			} else {
+				trickleCeiling = MAX_VISIBLE_PROGRESS;
+				trickleVelocity = 0.75F;
+			}
+			float trickledProgress = displayedProgress + trickleVelocity * deltaSeconds;
+			targetProgress = Math.min(trickleCeiling, Math.max(reportedProgress, trickledProgress));
+		}
+		float gap = Math.max(0F, targetProgress - displayedProgress);
 		if (gap > 0F) {
-			final float step = Math.max(
+			float step = Math.max(
 							gap * Math.min(1F, deltaSeconds * (finishing ? 10F : 5.2F)),
 							deltaSeconds * (finishing ? 180F : 18F)
 			);
@@ -133,47 +158,22 @@ public final class LoadingProgressBar extends View {
 			invalidate();
 			lastFrameTimeMs = 0L;
 			animate().cancel();
-			animate().alpha(0F).setDuration(FADE_OUT_DURATION_MS).withEndAction(this::resetAfterFinish).start();
+			animate().alpha(0F).setDuration(FADE_OUT_DURATION_MS).withEndAction(() -> {
+				removeCallbacks(frameRunner);
+				frameScheduled = false;
+				finishing = false;
+				displayedProgress = 0F;
+				reportedProgress = 0F;
+				shimmerOffsetPx = 0F;
+				lastFrameTimeMs = 0L;
+				setVisibility(GONE);
+				setAlpha(1F);
+				invalidate();
+			}).start();
 			return;
 		}
 
 		if (getVisibility() == VISIBLE) scheduleNextFrame();
-	}
-
-	private float computeTargetProgress(final float deltaSeconds) {
-		final float trickleCeiling;
-		final float trickleVelocity;
-		if (reportedProgress < 15F) {
-			trickleCeiling = 22F;
-			trickleVelocity = 12F;
-		} else if (reportedProgress < 35F) {
-			trickleCeiling = 50F;
-			trickleVelocity = 7.8F;
-		} else if (reportedProgress < 65F) {
-			trickleCeiling = 78F;
-			trickleVelocity = 4.4F;
-		} else if (reportedProgress < 85F) {
-			trickleCeiling = 92F;
-			trickleVelocity = 2.2F;
-		} else {
-			trickleCeiling = MAX_VISIBLE_PROGRESS;
-			trickleVelocity = 0.75F;
-		}
-		final float trickledProgress = displayedProgress + trickleVelocity * deltaSeconds;
-		return Math.min(trickleCeiling, Math.max(reportedProgress, trickledProgress));
-	}
-
-	private void resetAfterFinish() {
-		removeCallbacks(frameRunner);
-		frameScheduled = false;
-		finishing = false;
-		displayedProgress = 0F;
-		reportedProgress = 0F;
-		shimmerOffsetPx = 0F;
-		lastFrameTimeMs = 0L;
-		setVisibility(GONE);
-		setAlpha(1F);
-		invalidate();
 	}
 
 	@Override
@@ -186,12 +186,12 @@ public final class LoadingProgressBar extends View {
 	}
 
 	@Override
-	protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh) {
+	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
 		super.onSizeChanged(w, h, oldw, oldh);
-		final float contentWidth = Math.max(1F, w - getPaddingLeft() - getPaddingRight());
-		final int startColor = Color.parseColor("#736EFE");
-		final int middleColor = ColorUtils.blendARGB(startColor, Color.WHITE, 0.14F);
-		final int endColor = Color.parseColor("#5EFCE8");
+		float contentWidth = Math.max(1F, w - getPaddingLeft() - getPaddingRight());
+		int startColor = Color.parseColor("#736EFE");
+		int middleColor = ColorUtils.blendARGB(startColor, Color.WHITE, 0.14F);
+		int endColor = Color.parseColor("#5EFCE8");
 		fillGradient = new LinearGradient(
 						0F,
 						0F,
@@ -204,7 +204,7 @@ public final class LoadingProgressBar extends View {
 		fillPaint.setShader(fillGradient);
 
 		shimmerCycleWidthPx = Math.max(dpToPx(56F), contentWidth / 4.2F);
-		final int shimmerColor = ColorUtils.setAlphaComponent(Color.WHITE, 92);
+		int shimmerColor = ColorUtils.setAlphaComponent(Color.WHITE, 92);
 		shimmerGradient = new LinearGradient(
 						0F,
 						0F,
@@ -232,19 +232,19 @@ public final class LoadingProgressBar extends View {
 	}
 
 	@Override
-	protected void onDraw(@NonNull final Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		super.onDraw(canvas);
-		final float left = getPaddingLeft();
-		final float top = getPaddingTop();
-		final float right = getWidth() - getPaddingRight();
-		final float bottom = getHeight() - getPaddingBottom();
+		float left = getPaddingLeft();
+		float top = getPaddingTop();
+		float right = getWidth() - getPaddingRight();
+		float bottom = getHeight() - getPaddingBottom();
 		if (right <= left || bottom <= top) return;
 
 		trackRect.set(left, top, right, bottom);
-		final float radius = trackRect.height() / 2F;
+		float radius = trackRect.height() / 2F;
 		canvas.drawRoundRect(trackRect, radius, radius, trackPaint);
 
-		final float progressRight = left + trackRect.width() * (displayedProgress / 100F);
+		float progressRight = left + trackRect.width() * (displayedProgress / 100F);
 		if (progressRight <= left) return;
 
 		canvas.save();
@@ -254,9 +254,11 @@ public final class LoadingProgressBar extends View {
 		canvas.restore();
 	}
 
-	private float dpToPx(final float dp) {
+	private float dpToPx(float dp) {
 		return dp * getResources().getDisplayMetrics().density;
 	}
+
+
 
 
 }

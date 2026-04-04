@@ -10,10 +10,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
+        android:textColor="?attr/colorOnSurface"
         android:textIsSelectable="true"
         android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="?attr/colorOnSurface"/>
+        android:textStyle="bold" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -24,9 +24,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textIsSelectable="true"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"/>
+            android:textSize="12sp" />
 
     </ScrollView>
 </LinearLayout>

@@ -1,7 +1,7 @@
 [versions]
 agp = "8.9.3"
 hilt = "2.57.2"
-commonsIo = "2.18.0"
+commonsIo = "2.21.0"
 desugar_jdk_libs_nio = "2.1.5"
 gson = "2.13.2"
 isoparser = "1.0.6"
@@ -11,21 +11,22 @@ espressoCore = "3.7.0"
 appcompat = "1.7.1"
 lombok = "1.18.38"
 material = "1.13.0"
-media3Exoplayer = "1.9.2"
+media3Exoplayer = "1.10.0"
 mockito = "5.8.0"
 #noinspection GradleDependency
 mmkv = "1.3.12"
-activity = "1.12.4"
+activity = "1.13.0"
 constraintlayout = "2.2.1"
 media = "1.7.1"
-newpipeextractor = "v0.25.2"
-photoview = "2.0.0"
+newpipeextractor = "v0.26.0-hyde2"
+photoview = "2.3.0"
 picasso = "2.8"
 swiperefreshlayout = "1.2.0"
 webkit = "1.15.0"
 okhttp = "5.3.2"
 okio = "3.16.4"
 recyclerview = "1.4.0"
+lifecycleProcess = "2.10.0"
 
 [libraries]
 commons-io = { module = "commons-io:commons-io", version.ref = "commonsIo" }
@@ -43,6 +44,7 @@ media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3Exoplay
 media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3Exoplayer" }
 media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3Exoplayer" }
 media3-exoplayer-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "media3Exoplayer" }
+media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3Exoplayer" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
@@ -51,7 +53,7 @@ mmkv = { module = "com.tencent:mmkv", version.ref = "mmkv" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 media = { module = "androidx.media:media", version.ref = "media" }
-newpipeextractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeextractor" }
+newpipeextractor = { module = "com.github.HydeYYHH:newpipeextractor", version.ref = "newpipeextractor" }
 photoview = { module = "com.github.chrisbanes:PhotoView", version.ref = "photoview" }
 picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
 swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
@@ -60,6 +62,9 @@ viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version = "1.
 recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
+lifecycle-livedata = { group = "androidx.lifecycle", name = "lifecycle-livedata", version.ref = "lifecycleProcess" }
+lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycleProcess" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

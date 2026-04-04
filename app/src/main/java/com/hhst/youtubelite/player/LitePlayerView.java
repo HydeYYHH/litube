@@ -6,13 +6,15 @@ import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Outline;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Rational;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageButton;
@@ -35,7 +37,7 @@ import androidx.media3.ui.SubtitleView;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.common.Constant;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
-import com.hhst.youtubelite.player.controller.ControllerMachine;
+import com.hhst.youtubelite.player.controller.ControllerState;
 import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.util.ViewUtils;
@@ -51,7 +53,7 @@ import dagger.hilt.android.scopes.ActivityScoped;
 import lombok.Getter;
 
 /**
- * Custom player view.
+ * Custom player view with mini-player, fullscreen, and PiP support.
  */
 @UnstableApi
 @AndroidEntryPoint
@@ -73,6 +75,10 @@ public class LitePlayerView extends PlayerView {
 					R.id.btn_mini_next,
 					R.id.btn_mini_restore
 	};
+	@NonNull
+	private final Rect miniPlayerTouchBounds = new Rect();
+	@NonNull
+	private final int[] miniPlayerLocationOnScreen = new int[2];
 	@Inject
 	SponsorBlockManager sponsor;
 	@Inject
@@ -86,7 +92,6 @@ public class LitePlayerView extends PlayerView {
 	private int playerWidth = 0;
 	private int playerHeight = 0;
 	private int normalHeight = 0;
-	// LitePlayer owns session state; the view mirrors only its current UI mode.
 	@Getter
 	private boolean inAppMiniPlayer = false;
 	@Nullable
@@ -97,10 +102,6 @@ public class LitePlayerView extends PlayerView {
 	private Runnable onMiniPlayerBackgroundTap;
 	private int miniPlayerRestoreResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT;
 	private boolean miniPlayerRestoreFullscreen;
-	@NonNull
-	private final Rect miniPlayerTouchBounds = new Rect();
-	@NonNull
-	private final int[] miniPlayerLocationOnScreen = new int[2];
 	private float miniPlayerTouchDownRawX;
 	private float miniPlayerTouchDownRawY;
 	private float miniPlayerStartTranslationX;
@@ -136,11 +137,18 @@ public class LitePlayerView extends PlayerView {
 		setControllerHideOnTouch(false);
 		setControllerAutoShow(false);
 		setControllerShowTimeoutMs(0);
+		setOutlineProvider(new ViewOutlineProvider() {
+			@Override
+			public void getOutline(View view, Outline outline) {
+				outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dpToPx(16));
+			}
+		});
+		setClipToOutline(false);
 		setResizeMode(prefs.getResizeMode());
-		final ConstraintLayout.LayoutParams params = (ConstraintLayout.LayoutParams) getLayoutParams();
+		ConstraintLayout.LayoutParams params = (ConstraintLayout.LayoutParams) getLayoutParams();
 		params.topMargin = ViewUtils.dpToPx(activity, Constant.TOP_MARGIN_DP);
 		params.width = ConstraintLayout.LayoutParams.MATCH_PARENT;
-		final int screenWidth = ViewUtils.getScreenWidth(activity);
+		int screenWidth = ViewUtils.getScreenWidth(activity);
 		params.height = (int) (screenWidth * 9 / 16.0);
 		setLayoutParams(params);
 
@@ -149,25 +157,26 @@ public class LitePlayerView extends PlayerView {
 				playerWidth = right - left;
 				playerHeight = bottom - top;
 			}
+			if (inAppMiniPlayer) invalidateOutline();
 		});
 	}
 
-	public void applyControllerState(@NonNull final ControllerMachine.State previousState,
-	                                 @NonNull final ControllerMachine.State newState,
-	                                 final int fsOrientation,
-	                                 final int defaultResizeMode) {
+	public void applyControllerState(@NonNull ControllerState.Mode previousState,
+	                                 @NonNull ControllerState.Mode newState,
+	                                 int fsOrientation,
+	                                 int defaultResizeMode) {
 		post(() -> {
 			switch (newState) {
 				case NORMAL, MINI_PLAYER -> applyNormalState(defaultResizeMode);
-				case FULLSCREEN_UNLOCKED, FULLSCREEN_LOCKED ->
+				case FULLSCREEN_UNLOCK, FULLSCREEN_LOCK ->
 								applyFullscreenState(previousState, fsOrientation, defaultResizeMode);
 				case PIP -> applyPictureInPictureState(previousState);
 			}
 		});
 	}
 
-	public void updatePlayerLayout(final boolean fullscreen) {
-		final ViewGroup.LayoutParams layoutParams = getLayoutParams();
+	public void updatePlayerLayout(boolean fullscreen) {
+		ViewGroup.LayoutParams layoutParams = getLayoutParams();
 		if (layoutParams instanceof ConstraintLayout.LayoutParams params) {
 			if (inAppMiniPlayer && !fullscreen) {
 				applyMiniPlayerLayout(params);
@@ -206,80 +215,83 @@ public class LitePlayerView extends PlayerView {
 	public void enterPiP() {
 		if (activity.isInPictureInPictureMode()) return;
 		if (!isFs && !inAppMiniPlayer) normalHeight = playerHeight;
-		updatePlayerLayout(true);
-		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-		final Rational aspectRatio = new Rational(16, 9);
-		final PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
+		Rational aspectRatio = new Rational(16, 9);
+		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
 						.setAspectRatio(aspectRatio);
-		final Rect sourceRectHint = new Rect();
+		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+			builder.setAutoEnterEnabled(true);
+		}
+		Rect sourceRectHint = new Rect();
 		if (getGlobalVisibleRect(sourceRectHint)) {
 			builder.setSourceRectHint(sourceRectHint);
 		}
-		final PictureInPictureParams params = builder.build();
+		PictureInPictureParams params = builder.build();
 		activity.enterPictureInPictureMode(params);
 	}
 
 	public void enterInAppMiniPlayer() {
 		if (inAppMiniPlayer) return;
-		final float startX = getX();
-		final float startY = getY();
-		final int startWidth = getWidth();
-		final int startHeight = getHeight();
+		float startX = getX();
+		float startY = getY();
+		int startWidth = getWidth();
+		int startHeight = getHeight();
 		stopMiniTransition();
 		miniPlayerRestoreResizeMode = getResizeMode();
 		miniPlayerRestoreFullscreen = isFs;
 		inAppMiniPlayer = true;
 		loadPersistedMiniPlayerLayoutState();
 		updatePlayerLayout(false);
+		updateMiniPlayerCornerClipping();
 		updateMiniPlayerInteractionHandlers();
 		animateMiniTransition(startX, startY, startWidth, startHeight);
 	}
 
 	public void exitInAppMiniPlayer() {
 		if (!inAppMiniPlayer) return;
-		final float startX = getX();
-		final float startY = getY();
-		final int startWidth = getWidth();
-		final int startHeight = getHeight();
+		float startX = getX();
+		float startY = getY();
+		int startWidth = getWidth();
+		int startHeight = getHeight();
 		stopMiniTransition();
 		inAppMiniPlayer = false;
 		resetMiniPlayerTouchTracking();
 		miniPlayerWidthOverrideDp = MiniPlayerLayout.NO_WIDTH_OVERRIDE_DP;
 		resetMiniPlayerTranslation();
 		updatePlayerLayout(miniPlayerRestoreFullscreen);
+		updateMiniPlayerCornerClipping();
 		setResizeMode(miniPlayerRestoreResizeMode);
 		updateMiniPlayerInteractionHandlers();
 		animateMiniTransition(startX, startY, startWidth, startHeight);
 	}
 
-	public void setMiniPlayerCallbacks(@Nullable final Runnable onRestore, @Nullable final Runnable onClose) {
+	public void setMiniPlayerCallbacks(@Nullable Runnable onRestore, @Nullable Runnable onClose) {
 		onMiniPlayerRestore = onRestore;
 		onMiniPlayerClose = onClose;
 		updateMiniPlayerInteractionHandlers();
 	}
 
-	public void setOnMiniPlayerBackgroundTap(@Nullable final Runnable onBackgroundTap) {
+	public void setOnMiniPlayerBackgroundTap(@Nullable Runnable onBackgroundTap) {
 		onMiniPlayerBackgroundTap = onBackgroundTap;
 	}
 
 	private void updateMiniPlayerInteractionHandlers() {
-		final ImageButton closeButton = findViewById(R.id.btn_mini_close);
-		final ImageButton restoreButton = findViewById(R.id.btn_mini_restore);
+		ImageButton closeButton = findViewById(R.id.btn_mini_close);
+		ImageButton restoreButton = findViewById(R.id.btn_mini_restore);
 		setMiniPlayerButtonAction(closeButton, inAppMiniPlayer ? onMiniPlayerClose : null);
 		setMiniPlayerButtonAction(restoreButton, inAppMiniPlayer ? onMiniPlayerRestore : null);
 	}
 
-	private void setMiniPlayerButtonAction(@Nullable final ImageButton button, @Nullable final Runnable action) {
+	private void setMiniPlayerButtonAction(@Nullable ImageButton button, @Nullable Runnable action) {
 		if (button == null) return;
 		button.setOnClickListener(action == null ? null : v -> action.run());
 	}
 
-	public boolean handleMiniPlayerTouch(@NonNull final MotionEvent event) {
+	public boolean handleMiniPlayerTouch(@NonNull MotionEvent event) {
 		if (!inAppMiniPlayer) return false;
-		final int action = event.getActionMasked();
+		int action = event.getActionMasked();
 		switch (action) {
 			case MotionEvent.ACTION_DOWN -> {
-				final View tapTarget = resolveMiniPlayerTapTarget(event);
+				View tapTarget = getMiniPlayerTapTarget(event);
 				captureMiniPlayerTouchStart(event);
 				miniPlayerPendingTapTarget = tapTarget;
 				return true;
@@ -298,8 +310,8 @@ public class LitePlayerView extends PlayerView {
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
-				final float deltaX = event.getRawX() - miniPlayerTouchDownRawX;
-				final float deltaY = event.getRawY() - miniPlayerTouchDownRawY;
+				float deltaX = event.getRawX() - miniPlayerTouchDownRawX;
+				float deltaY = event.getRawY() - miniPlayerTouchDownRawY;
 				if (!miniPlayerDragging && exceedsTouchSlop(deltaX, deltaY)) {
 					miniPlayerDragging = true;
 					clearMiniPlayerPendingTapTarget();
@@ -322,8 +334,8 @@ public class LitePlayerView extends PlayerView {
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
-				final View tap = miniPlayerPendingTapTarget;
-				final boolean wasDragging = miniPlayerDragging;
+				View tap = miniPlayerPendingTapTarget;
+				boolean wasDragging = miniPlayerDragging;
 				resetMiniPlayerTouchTracking();
 				if (wasDragging) {
 					snapMini();
@@ -342,7 +354,7 @@ public class LitePlayerView extends PlayerView {
 					return true;
 				}
 				if (!miniPlayerTouchCaptured) return false;
-				final boolean wasDragging = miniPlayerDragging;
+				boolean wasDragging = miniPlayerDragging;
 				resetMiniPlayerTouchTracking();
 				if (wasDragging) {
 					snapMini();
@@ -356,9 +368,9 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	@Override
-	public boolean dispatchTouchEvent(@NonNull final MotionEvent event) {
-		if (miniAnimating) {
-			return true;
+	public boolean dispatchTouchEvent(@NonNull MotionEvent event) {
+		if (miniAnimating && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+			stopMiniTransition();
 		}
 		if (inAppMiniPlayer && handleMiniPlayerTouch(event)) {
 			return true;
@@ -366,28 +378,28 @@ public class LitePlayerView extends PlayerView {
 		return super.dispatchTouchEvent(event);
 	}
 
-	private void animateMiniTransition(final float startX,
-	                                   final float startY,
-	                                   final int startWidth,
-	                                   final int startHeight) {
+	private void animateMiniTransition(float startX,
+	                                   float startY,
+	                                   int startWidth,
+	                                   int startHeight) {
 		if (startWidth <= 0 || startHeight <= 0 || !isAttachedToWindow()) return;
-		final int token = ++miniAnimToken;
+		int token = ++miniAnimToken;
 		miniAnimating = true;
 		getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
 			@Override
 			public boolean onPreDraw() {
-				final ViewTreeObserver observer = getViewTreeObserver();
+				ViewTreeObserver observer = getViewTreeObserver();
 				if (observer.isAlive()) observer.removeOnPreDrawListener(this);
 				if (token != miniAnimToken || !isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0) {
 					finishMiniTransition(token);
 					return true;
 				}
-				final float endX = getX();
-				final float endY = getY();
-				final int endWidth = getWidth();
-				final int endHeight = getHeight();
-				final float endTranslationX = getTranslationX();
-				final float endTranslationY = getTranslationY();
+				float endX = getX();
+				float endY = getY();
+				int endWidth = getWidth();
+				int endHeight = getHeight();
+				float endTranslationX = getTranslationX();
+				float endTranslationY = getTranslationY();
 				setPivotX(endWidth / 2.0f);
 				setPivotY(endHeight / 2.0f);
 				setScaleX(startWidth / (float) endWidth);
@@ -418,17 +430,17 @@ public class LitePlayerView extends PlayerView {
 		setScaleY(1.0f);
 	}
 
-	private void finishMiniTransition(final int token) {
+	private void finishMiniTransition(int token) {
 		if (token != miniAnimToken) return;
 		miniAnimating = false;
 		setScaleX(1.0f);
 		setScaleY(1.0f);
 	}
 
-	private void applyMiniPlayerLayout(@NonNull final ConstraintLayout.LayoutParams params) {
-		final MiniPlayerLayout.Spec spec = MiniPlayerLayout.computeSpec(
-						resolveScreenWidthDp(),
-						resolveBottomInsetDp(),
+	private void applyMiniPlayerLayout(@NonNull ConstraintLayout.LayoutParams params) {
+		MiniPlayerLayout.Spec spec = MiniPlayerLayout.computeSpec(
+						getScreenWidthDp(),
+						getBottomInsetDp(),
 						miniPlayerWidthOverrideDp);
 		params.width = ViewUtils.dpToPx(activity, spec.widthDp());
 		params.height = ViewUtils.dpToPx(activity, spec.heightDp());
@@ -445,7 +457,7 @@ public class LitePlayerView extends PlayerView {
 		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
 	}
 
-	private void applyStandardPlayerAnchors(@NonNull final ConstraintLayout.LayoutParams params) {
+	private void applyStandardPlayerAnchors(@NonNull ConstraintLayout.LayoutParams params) {
 		params.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
 		params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID;
 		params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID;
@@ -460,21 +472,28 @@ public class LitePlayerView extends PlayerView {
 		params.endToStart = ConstraintLayout.LayoutParams.UNSET;
 	}
 
-	private boolean exceedsTouchSlop(final float deltaX, final float deltaY) {
-		final int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+	private void updateMiniPlayerCornerClipping() {
+		boolean shouldClipMiniPlayerCorners =
+						inAppMiniPlayer && !activity.isInPictureInPictureMode();
+		setClipToOutline(shouldClipMiniPlayerCorners);
+		invalidateOutline();
+	}
+
+	private boolean exceedsTouchSlop(float deltaX, float deltaY) {
+		int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
 		return Math.abs(deltaX) > touchSlop || Math.abs(deltaY) > touchSlop;
 	}
 
 	@Nullable
-	private View resolveMiniPlayerTapTarget(@NonNull final MotionEvent event) {
-		return resolveMiniPlayerTapTarget(event, 0);
+	private View getMiniPlayerTapTarget(@NonNull MotionEvent event) {
+		return getMiniPlayerTapTarget(event, 0);
 	}
 
 	@Nullable
-	private View resolveMiniPlayerTapTarget(@NonNull final MotionEvent event, final int pointerIndex) {
+	private View getMiniPlayerTapTarget(@NonNull MotionEvent event, int pointerIndex) {
 		if (pointerIndex < 0 || pointerIndex >= event.getPointerCount()) return null;
 		for (int targetId : MINI_PLAYER_TAP_TARGET_IDS) {
-			final View target = findViewById(targetId);
+			View target = findViewById(targetId);
 			if (isPointInsideVisibleView(event, pointerIndex, target)) {
 				return target;
 			}
@@ -482,29 +501,30 @@ public class LitePlayerView extends PlayerView {
 		return null;
 	}
 
-	private boolean isPointInsideVisibleView(@NonNull final MotionEvent event,
-	                                         final int pointerIndex,
-	                                         @Nullable final View view) {
+	private boolean isPointInsideVisibleView(@NonNull MotionEvent event,
+	                                         int pointerIndex,
+	                                         @Nullable View view) {
 		if (view == null || view.getVisibility() != View.VISIBLE) return false;
 		if (pointerIndex < 0 || pointerIndex >= event.getPointerCount()) return false;
 		if (!view.getGlobalVisibleRect(miniPlayerTouchBounds)) return false;
 		getLocationOnScreen(miniPlayerLocationOnScreen);
-		final int pointerRawX = Math.round(miniPlayerLocationOnScreen[0] + event.getX(pointerIndex));
-		final int pointerRawY = Math.round(miniPlayerLocationOnScreen[1] + event.getY(pointerIndex));
+		int pointerRawX = Math.round(miniPlayerLocationOnScreen[0] + event.getX(pointerIndex));
+		int pointerRawY = Math.round(miniPlayerLocationOnScreen[1] + event.getY(pointerIndex));
 		return miniPlayerTouchBounds.contains(pointerRawX, pointerRawY);
 	}
 
-	private void startMiniPlayerResize(@NonNull final MotionEvent event) {
+	private void startMiniPlayerResize(@NonNull MotionEvent event) {
 		miniPlayerPinchStartDistancePx = calculatePointerDistancePx(event);
 		if (miniPlayerPinchStartDistancePx <= 0.0f) return;
 		miniPlayerResizing = true;
 		miniPlayerTouchCaptured = true;
 		miniPlayerDragging = false;
-		miniPlayerPinchStartWidthPx = resolveCurrentMiniPlayerWidthPx();
+		miniPlayerPinchStartWidthPx = getMiniPlayerWidthPx();
 	}
 
-	private void captureMiniPlayerTouchStart(@NonNull final MotionEvent event) {
+	private void captureMiniPlayerTouchStart(@NonNull MotionEvent event) {
 		animate().cancel();
+		miniAnimating = false;
 		miniPlayerTouchCaptured = true;
 		miniPlayerDragging = false;
 		miniPlayerResizing = false;
@@ -514,41 +534,41 @@ public class LitePlayerView extends PlayerView {
 		miniPlayerStartTranslationY = getTranslationY();
 	}
 
-	private void updateMiniPlayerSizeByPinch(@NonNull final MotionEvent event) {
+	private void updateMiniPlayerSizeByPinch(@NonNull MotionEvent event) {
 		if (!miniPlayerResizing || event.getPointerCount() < 2 || miniPlayerPinchStartDistancePx <= 0.0f) {
 			return;
 		}
-		final float currentDistancePx = calculatePointerDistancePx(event);
-		if (currentDistancePx <= 0.0f) return;
-		final float scale = currentDistancePx / miniPlayerPinchStartDistancePx;
-		final int targetWidthPx = Math.round(miniPlayerPinchStartWidthPx * scale);
+		float distancePx = calculatePointerDistancePx(event);
+		if (distancePx <= 0.0f) return;
+		float scale = distancePx / miniPlayerPinchStartDistancePx;
+		int targetWidthPx = Math.round(miniPlayerPinchStartWidthPx * scale);
 		applyMiniPlayerSizeOverridePx(targetWidthPx);
 	}
 
-	private float calculatePointerDistancePx(@NonNull final MotionEvent event) {
+	private float calculatePointerDistancePx(@NonNull MotionEvent event) {
 		if (event.getPointerCount() < 2) return 0.0f;
-		final float dx = event.getX(0) - event.getX(1);
-		final float dy = event.getY(0) - event.getY(1);
+		float dx = event.getX(0) - event.getX(1);
+		float dy = event.getY(0) - event.getY(1);
 		return (float) Math.hypot(dx, dy);
 	}
 
-	private int resolveCurrentMiniPlayerWidthPx() {
+	private int getMiniPlayerWidthPx() {
 		if (getWidth() > 0) return getWidth();
-		final ViewGroup.LayoutParams params = getLayoutParams();
+		ViewGroup.LayoutParams params = getLayoutParams();
 		if (params != null && params.width > 0) return params.width;
-		final MiniPlayerLayout.Spec spec = MiniPlayerLayout.computeSpec(
-						resolveScreenWidthDp(),
-						resolveBottomInsetDp(),
+		MiniPlayerLayout.Spec spec = MiniPlayerLayout.computeSpec(
+						getScreenWidthDp(),
+						getBottomInsetDp(),
 						miniPlayerWidthOverrideDp);
 		return ViewUtils.dpToPx(activity, spec.widthDp());
 	}
 
-	private void applyMiniPlayerSizeOverridePx(final int widthPx) {
+	private void applyMiniPlayerSizeOverridePx(int widthPx) {
 		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return;
-		final int targetWidthDp = Math.max(1, pxToDp(widthPx));
-		miniPlayerWidthOverrideDp = MiniPlayerLayout.clampWidthDp(resolveScreenWidthDp(), targetWidthDp);
-		final int nextWidthPx = ViewUtils.dpToPx(activity, miniPlayerWidthOverrideDp);
-		final int nextHeightPx = ViewUtils.dpToPx(activity, MiniPlayerLayout.computeHeightDp(miniPlayerWidthOverrideDp));
+		int targetWidthDp = Math.max(1, pxToDp(widthPx));
+		miniPlayerWidthOverrideDp = MiniPlayerLayout.clampWidthDp(getScreenWidthDp(), targetWidthDp);
+		int nextWidthPx = ViewUtils.dpToPx(activity, miniPlayerWidthOverrideDp);
+		int nextHeightPx = ViewUtils.dpToPx(activity, MiniPlayerLayout.computeHeightDp(miniPlayerWidthOverrideDp));
 		updateMiniPlayerControlSpacing(miniPlayerWidthOverrideDp);
 		if (params.width == nextWidthPx && params.height == nextHeightPx) return;
 		params.width = nextWidthPx;
@@ -562,16 +582,16 @@ public class LitePlayerView extends PlayerView {
 		snapMini();
 	}
 
-	private void updateMiniPlayerControlSpacing(final int currentWidthDp) {
-		final int minWidthDp = MiniPlayerLayout.minWidthDpForScreen(resolveScreenWidthDp());
-		final int startSpacingDp = MiniPlayerLayout.computeGapByCenterDistanceRatio(
-						currentWidthDp,
+	private void updateMiniPlayerControlSpacing(int widthDp) {
+		int minWidthDp = MiniPlayerLayout.minWidthDpForScreen(getScreenWidthDp());
+		int startSpacingDp = MiniPlayerLayout.computeGapByRatio(
+						widthDp,
 						minWidthDp,
 						MINI_CONTROL_DEFAULT_SPACE_DP,
 						MINI_SIDE_CONTROL_SIZE_DP,
 						MINI_CENTER_CONTROL_SIZE_DP);
-		final int endSpacingDp = MiniPlayerLayout.computeGapByCenterDistanceRatio(
-						currentWidthDp,
+		int endSpacingDp = MiniPlayerLayout.computeGapByRatio(
+						widthDp,
 						minWidthDp,
 						MINI_CONTROL_DEFAULT_SPACE_DP,
 						MINI_CENTER_CONTROL_SIZE_DP,
@@ -580,23 +600,24 @@ public class LitePlayerView extends PlayerView {
 		updateMiniControlSpaceWidth(R.id.mini_controls_space_end, ViewUtils.dpToPx(activity, endSpacingDp));
 	}
 
-	private void updateMiniControlSpaceWidth(final int spaceViewId, final int widthPx) {
-		final View space = findViewById(spaceViewId);
+	private void updateMiniControlSpaceWidth(int spaceViewId, int widthPx) {
+		View space = findViewById(spaceViewId);
 		if (space == null) return;
-		final ViewGroup.LayoutParams params = space.getLayoutParams();
+		ViewGroup.LayoutParams params = space.getLayoutParams();
 		if (params == null || params.width == widthPx) return;
 		params.width = widthPx;
 		space.setLayoutParams(params);
 	}
 
-	private boolean moveMini(final float x, final float y) {
+	private boolean moveMini(float x, float y) {
 		if (!(getParent() instanceof View parent)) return false;
 		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return false;
-		final int width = params.width > 0 ? params.width : getWidth();
-		final int height = params.height > 0 ? params.height : getHeight();
-		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) return false;
-		final int left = parent.getWidth() - params.rightMargin - width;
-		final int top = parent.getHeight() - params.bottomMargin - height;
+		int width = params.width > 0 ? params.width : getWidth();
+		int height = params.height > 0 ? params.height : getHeight();
+		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0)
+			return false;
+		int left = parent.getWidth() - params.rightMargin - width;
+		int top = parent.getHeight() - params.bottomMargin - height;
 		miniPlayerSavedTranslationX = MiniPlayerLayout.clampTranslation(x, left, width, parent.getWidth());
 		miniPlayerSavedTranslationY = MiniPlayerLayout.clampTranslation(y, top, height, parent.getHeight());
 		setTranslationX(miniPlayerSavedTranslationX);
@@ -607,13 +628,13 @@ public class LitePlayerView extends PlayerView {
 	private void snapMini() {
 		if (!(getParent() instanceof View parent)) return;
 		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return;
-		final int width = params.width > 0 ? params.width : getWidth();
-		final int height = params.height > 0 ? params.height : getHeight();
+		int width = params.width > 0 ? params.width : getWidth();
+		int height = params.height > 0 ? params.height : getHeight();
 		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) return;
-		final int left = parent.getWidth() - params.rightMargin - width;
-		final int top = parent.getHeight() - params.bottomMargin - height;
-		final float x = MiniPlayerLayout.snapX(getTranslationX(), left, width, parent.getWidth());
-		final float y = MiniPlayerLayout.clampTranslation(getTranslationY(), top, height, parent.getHeight());
+		int left = parent.getWidth() - params.rightMargin - width;
+		int top = parent.getHeight() - params.bottomMargin - height;
+		float x = MiniPlayerLayout.snapX(getTranslationX(), left, width, parent.getWidth());
+		float y = MiniPlayerLayout.clampTranslation(getTranslationY(), top, height, parent.getHeight());
 		miniPlayerSavedTranslationX = x;
 		miniPlayerSavedTranslationY = y;
 		animate().cancel();
@@ -633,14 +654,14 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	private void loadPersistedMiniPlayerLayoutState() {
-		final PlayerPreferences.MiniPlayerLayoutState state = prefs.getMiniPlayerLayoutState();
-		final int screenWidthDp = resolveScreenWidthDp();
-		final int defaultWidthDp = MiniPlayerLayout.minWidthDpForScreen(screenWidthDp);
+		PlayerPreferences.MiniPlayerLayoutState state = prefs.getMiniPlayerLayoutState();
+		int screenWidthDp = getScreenWidthDp();
+		int defaultWidthDp = MiniPlayerLayout.minWidthDpForScreen(screenWidthDp);
 		miniPlayerWidthOverrideDp = state.widthDp() > 0
 						? MiniPlayerLayout.clampWidthDp(screenWidthDp, state.widthDp())
 						: defaultWidthDp;
-		miniPlayerSavedTranslationX = dpToPx(state.translationXDp());
-		miniPlayerSavedTranslationY = dpToPx(state.translationYDp());
+		miniPlayerSavedTranslationX = dpToPx(state.translationX());
+		miniPlayerSavedTranslationY = dpToPx(state.translationY());
 		miniPlayerTranslationStashedForFullscreen = false;
 		clearViewTranslation();
 	}
@@ -690,13 +711,13 @@ public class LitePlayerView extends PlayerView {
 			return;
 		}
 		if (!(getLayoutParams() instanceof ConstraintLayout.LayoutParams params)) return;
-		final int width = params.width > 0 ? params.width : getWidth();
-		final int height = params.height > 0 ? params.height : getHeight();
+		int width = params.width > 0 ? params.width : getWidth();
+		int height = params.height > 0 ? params.height : getHeight();
 		if (width <= 0 || height <= 0 || parent.getWidth() <= 0 || parent.getHeight() <= 0) {
 			post(this::restoreMini);
 			return;
 		}
-		final int left = parent.getWidth() - params.rightMargin - width;
+		int left = parent.getWidth() - params.rightMargin - width;
 		miniPlayerSavedTranslationX = MiniPlayerLayout.snapX(miniPlayerSavedTranslationX, left, width, parent.getWidth());
 		if (!moveMini(miniPlayerSavedTranslationX, miniPlayerSavedTranslationY)) {
 			post(this::restoreMini);
@@ -705,81 +726,84 @@ public class LitePlayerView extends PlayerView {
 		persistMiniPlayerLayoutState();
 	}
 
-	private int resolveScreenWidthDp() {
-		final int screenWidthDp = getResources().getConfiguration().screenWidthDp;
+	private int getScreenWidthDp() {
+		int screenWidthDp = getResources().getConfiguration().screenWidthDp;
 		if (screenWidthDp != Configuration.SCREEN_WIDTH_DP_UNDEFINED) {
 			return screenWidthDp;
 		}
 		return pxToDp(ViewUtils.getScreenWidth(activity));
 	}
 
-	private int resolveBottomInsetDp() {
-		final WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
+	private int getBottomInsetDp() {
+		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
 		if (insets == null) return 0;
-		final Insets systemInsets = insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars());
+		Insets systemInsets = insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars());
 		return pxToDp(systemInsets.bottom);
 	}
 
-	private int pxToDp(final int px) {
+	private int pxToDp(int px) {
 		return Math.round(px / getResources().getDisplayMetrics().density);
 	}
 
-	private float pxToDp(final float px) {
+	private float pxToDp(float px) {
 		return px / getResources().getDisplayMetrics().density;
 	}
 
-	private float dpToPx(final float dp) {
+	private float dpToPx(float dp) {
 		return dp * getResources().getDisplayMetrics().density;
 	}
 
-	private void applyNormalState(final int defaultResizeMode) {
+	private void applyNormalState(int defaultResizeMode) {
 		isFs = false;
 		activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), false);
 		updatePlayerLayout(false);
 		setResizeMode(inAppMiniPlayer ? AspectRatioFrameLayout.RESIZE_MODE_FIT : defaultResizeMode);
+		updateMiniPlayerCornerClipping();
 		updateFullscreenButton(false);
 	}
 
-	private void applyFullscreenState(@NonNull final ControllerMachine.State previousState,
-	                                  final int fsOrientation,
-	                                  final int defaultResizeMode) {
+	private void applyFullscreenState(@NonNull ControllerState.Mode previousState,
+	                                  int fsOrientation,
+	                                  int defaultResizeMode) {
 		isFs = true;
-		if (previousState == ControllerMachine.State.NORMAL && !activity.isInPictureInPictureMode()) {
+		if (previousState == ControllerState.Mode.NORMAL && !activity.isInPictureInPictureMode()) {
 			normalHeight = playerHeight;
 		}
 		activity.setRequestedOrientation(fsOrientation);
 		ViewUtils.setFullscreen(activity.getWindow().getDecorView(), true);
 		updatePlayerLayout(true);
 		setResizeMode(defaultResizeMode);
+		updateMiniPlayerCornerClipping();
 		updateFullscreenButton(true);
 	}
 
-	private void applyPictureInPictureState(@NonNull final ControllerMachine.State previousState) {
+	private void applyPictureInPictureState(@NonNull ControllerState.Mode previousState) {
 		isFs = false;
-		if (previousState == ControllerMachine.State.NORMAL) {
+		if (previousState == ControllerState.Mode.NORMAL) {
 			normalHeight = playerHeight;
 		}
 		updatePlayerLayout(true);
 		setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
+		updateMiniPlayerCornerClipping();
 	}
 
-	private void updateFullscreenButton(final boolean fullscreen) {
-		final ImageButton fullscreenButton = findViewById(R.id.btn_fullscreen);
+	private void updateFullscreenButton(boolean fullscreen) {
+		ImageButton fullscreenButton = findViewById(R.id.btn_fullscreen);
 		if (fullscreenButton != null) {
 			fullscreenButton.setImageResource(
 							fullscreen ? R.drawable.ic_fullscreen_exit : R.drawable.ic_fullscreen);
 		}
 	}
 
-	public void cueing(@NonNull final CueGroup cueGroup) {
+	public void cueing(@NonNull CueGroup cueGroup) {
 		if (subtitleView == null) {
-			final SubtitleView defaultSubtitleView = getSubtitleView();
+			SubtitleView defaultSubtitleView = getSubtitleView();
 			if (defaultSubtitleView != null) defaultSubtitleView.setVisibility(View.GONE);
 			subtitleView = findViewById(R.id.custom_subtitle_view);
 		}
-		final List<Cue> cues = new ArrayList<>();
-		for (final Cue cue : cueGroup.cues)
+		List<Cue> cues = new ArrayList<>();
+		for (Cue cue : cueGroup.cues)
 			cues.add(cue.buildUpon()
 							.setLine(SUBTITLE_LINE_FRACTION, Cue.LINE_TYPE_FRACTION)
 							.setLineAnchor(Cue.ANCHOR_TYPE_END)
@@ -792,7 +816,7 @@ public class LitePlayerView extends PlayerView {
 	@Override
 	public void setResizeMode(int resizeMode) {
 		super.setResizeMode(resizeMode);
-		final View videoSurfaceView = getVideoSurfaceView();
+		View videoSurfaceView = getVideoSurfaceView();
 		if (videoSurfaceView instanceof AspectRatioFrameLayout frameLayout) {
 			frameLayout.setResizeMode(resizeMode);
 		}
@@ -807,24 +831,24 @@ public class LitePlayerView extends PlayerView {
 	}
 
 	public void setTitle(@Nullable String title) {
-		final TextView titleView = findViewById(R.id.tv_title);
+		TextView titleView = findViewById(R.id.tv_title);
 		titleView.setText(title);
 		titleView.setSelected(true);
 	}
 
 	public void updateSkipMarkers(long duration, TimeUnit unit) {
-		final List<long[]> segs = sponsor.getSegments();
-		final List<long[]> validSegs = new ArrayList<>();
-		for (final long[] seg : segs) if (seg != null && seg.length >= 2) validSegs.add(seg);
+		List<long[]> segs = sponsor.getSegments();
+		List<long[]> validSegs = new ArrayList<>();
+		for (long[] seg : segs) if (seg != null && seg.length >= 2) validSegs.add(seg);
 
-		final SponsorOverlayView layer = findViewById(R.id.sponsor_overlay);
+		SponsorOverlayView layer = findViewById(R.id.sponsor_overlay);
 		layer.setData(validSegs.isEmpty() ? null : validSegs, duration, unit);
 
-		final DefaultTimeBar bar = findViewById(R.id.exo_progress);
+		DefaultTimeBar bar = findViewById(R.id.exo_progress);
 		if (validSegs.isEmpty()) {
 			bar.setAdGroupTimesMs(null, null, 0);
 		} else {
-			final long[] times = new long[validSegs.size() * 2];
+			long[] times = new long[validSegs.size() * 2];
 			for (int i = 0; i < validSegs.size(); i++) {
 				times[i * 2] = validSegs.get(i)[0];
 				times[i * 2 + 1] = validSegs.get(i)[1];
@@ -835,7 +859,7 @@ public class LitePlayerView extends PlayerView {
 
 	public void setHeight(int height) {
 		if (activity.isInPictureInPictureMode() || isFs || height <= 0) return;
-		final int deviceHeight = ViewUtils.dpToPx(activity, height);
+		int deviceHeight = ViewUtils.dpToPx(activity, height);
 		if (getLayoutParams().height == deviceHeight) return;
 		getLayoutParams().height = deviceHeight;
 		if (!isFs) normalHeight = deviceHeight;

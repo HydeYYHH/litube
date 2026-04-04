@@ -16,9 +16,9 @@ public final class StringUtils {
 	 * Parses the first occurrence of a number in a string.
 	 * Useful for extracting height from resolution strings like "1080p".
 	 */
-	public static int parseHeight(@Nullable final String res) {
+	public static int parseHeight(@Nullable String res) {
 		if (res == null) return 0;
-		final Matcher matcher = DIGIT_PATTERN.matcher(res);
+		Matcher matcher = DIGIT_PATTERN.matcher(res);
 		return matcher.find() ? Integer.parseInt(matcher.group()) : 0;
 	}
 }

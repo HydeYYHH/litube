@@ -2,6 +2,9 @@ package com.hhst.youtubelite.player.common;
 
 import androidx.media3.common.Player;
 
+/**
+ * Enumeration of playback end behaviors.
+ */
 public enum PlayerLoopMode {
 	PLAYLIST_NEXT(0, Player.REPEAT_MODE_OFF),
 	LOOP_ONE(1, Player.REPEAT_MODE_ONE),
@@ -11,9 +14,16 @@ public enum PlayerLoopMode {
 	private final int persistedValue;
 	private final int repeatMode;
 
-	PlayerLoopMode(final int persistedValue, final int repeatMode) {
+	PlayerLoopMode(int persistedValue, int repeatMode) {
 		this.persistedValue = persistedValue;
 		this.repeatMode = repeatMode;
+	}
+
+	public static PlayerLoopMode fromPersistedValue(int persistedValue) {
+		for (PlayerLoopMode mode : values()) {
+			if (mode.persistedValue == persistedValue) return mode;
+		}
+		return PLAYLIST_NEXT;
 	}
 
 	public int persistedValue() {
@@ -39,12 +49,5 @@ public enum PlayerLoopMode {
 			case PAUSE_AT_END -> PLAYLIST_RANDOM;
 			case PLAYLIST_RANDOM -> PLAYLIST_NEXT;
 		};
-	}
-
-	public static PlayerLoopMode fromPersistedValue(final int persistedValue) {
-		for (final PlayerLoopMode mode : values()) {
-			if (mode.persistedValue == persistedValue) return mode;
-		}
-		return PLAYLIST_NEXT;
 	}
 }

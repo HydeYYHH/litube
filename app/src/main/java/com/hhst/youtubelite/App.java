@@ -13,6 +13,9 @@ import java.io.IOException;
 
 import dagger.hilt.android.HiltAndroidApp;
 
+/**
+ * Application entry point that initializes shared runtime state and logging.
+ */
 @HiltAndroidApp
 public class App extends Application {
 

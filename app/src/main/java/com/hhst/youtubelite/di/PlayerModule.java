@@ -13,6 +13,9 @@ import dagger.hilt.InstallIn;
 import dagger.hilt.android.components.ActivityComponent;
 import dagger.hilt.android.scopes.ActivityScoped;
 
+/**
+ * Hilt module that wires playback dependencies.
+ */
 @Module
 @InstallIn(ActivityComponent.class)
 @UnstableApi

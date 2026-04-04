@@ -11,6 +11,9 @@ import com.hhst.youtubelite.R;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Component that handles app logic.
+ */
 public class ExtensionDialog {
 	private final Context context;
 	private final ExtensionManager manager;
