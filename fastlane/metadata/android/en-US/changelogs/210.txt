@@ -1,0 +1,23 @@
+feat: add mini-player with drag/resize and playback controls
+feat: add local queue with full playback order control and drag reorder
+feat: add playlist download for local queue and YouTube playlists
+feat: add playback end modes: next / loop / pause / shuffle
+feat: add video card long-press preview dialog
+feat: add video card actions for share, download, and add to queue
+feat: add download preference memory with fallback quality
+feat: add swipe gestures for fullscreen, brightness, and volume
+feat: add player swipe seeking
+feat: add extension one-click reset
+feat: add timestamp navigation support
+feat: add shorts ad removal and long-press speed control
+opt: improve playback fluency and performance
+opt: aggressive caching for network resources and extractor data
+opt: optimize JavaScript polling with timer and interval throttling
+opt: optimize PO token and extractor handling for 403 cases
+opt: optimize login flow without external browser
+opt: dynamic resolution adjustment for live streams to reduce buffering
+opt: UI and interaction improvements
+fix: fix player controller initialization flicker
+fix: fix playlist order playback issue
+fix: fix playlist overlap issue
+fix: fix search suggestion overlap issue
