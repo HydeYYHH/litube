@@ -12,6 +12,9 @@ import dagger.Module;
 import dagger.hilt.InstallIn;
 import dagger.hilt.components.SingletonComponent;
 
+/**
+ * Hilt module that wires download dependencies.
+ */
 @Module
 @InstallIn(SingletonComponent.class)
 public abstract class DownloaderModule {

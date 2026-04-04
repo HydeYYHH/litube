@@ -65,7 +65,7 @@
                 android:text="@string/queue_now_playing"
                 android:textAllCaps="true"
                 android:textColor="@android:color/white"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
         </LinearLayout>

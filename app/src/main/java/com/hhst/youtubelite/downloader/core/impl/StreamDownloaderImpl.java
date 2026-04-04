@@ -34,15 +34,11 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
+/**
+ * Streams a file by chunk and keeps resume state in MMKV.
+ */
 @Singleton
 public class StreamDownloaderImpl implements StreamDownloader {
-	private static final long MIN_CHUNK_SIZE = 512 * 1024; // 512KB
-	private static final int DOWNLOAD_MAX_REQUESTS = 8;
-	private static final int DOWNLOAD_MAX_REQUESTS_PER_HOST = 4;
-	private static final long DOWNLOAD_CALL_TIMEOUT_MILLIS = 0L;
-	private static final long DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 15L;
-	private static final long DOWNLOAD_WRITE_TIMEOUT_SECONDS = 15L;
-	private static final long DOWNLOAD_READ_TIMEOUT_SECONDS = 30L;
 	private final OkHttpClient client;
 	private final MMKV mmkv;
 	private final ThreadPoolExecutor executor;
@@ -53,60 +49,70 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		this.client = client.newBuilder()
 						.cache(null)
 						.dispatcher(createDispatcher())
-						.callTimeout(DOWNLOAD_CALL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-						.connectTimeout(DOWNLOAD_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-						.writeTimeout(DOWNLOAD_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-						.readTimeout(DOWNLOAD_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+						.callTimeout(0L, TimeUnit.MILLISECONDS)
+						.connectTimeout(20L, TimeUnit.SECONDS)
+						.writeTimeout(30L, TimeUnit.SECONDS)
+						.readTimeout(60L, TimeUnit.SECONDS)
 						.build();
 		this.mmkv = mmkv;
-		this.executor = new ThreadPoolExecutor(4, 4, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> new Thread(r, "dl-node"));
+		this.executor = new ThreadPoolExecutor(8, 8, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> new Thread(r, "dl-node"));
 		this.executor.allowCoreThreadTimeOut(true);
 	}
 
 	private static Dispatcher createDispatcher() {
-		final Dispatcher dispatcher = new Dispatcher();
-		dispatcher.setMaxRequests(StreamDownloaderImpl.DOWNLOAD_MAX_REQUESTS);
-		dispatcher.setMaxRequestsPerHost(StreamDownloaderImpl.DOWNLOAD_MAX_REQUESTS_PER_HOST);
+		Dispatcher dispatcher = new Dispatcher();
+		dispatcher.setMaxRequests(24);
+		dispatcher.setMaxRequestsPerHost(12);
 		return dispatcher;
 	}
 
-	private static long chunkLength(final int idx, final int totalChunks, final long partSize, final long totalLen) {
-		final long start = idx * partSize;
-		final long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
+	private static long chunkLength(int idx, int totalChunks, long partSize, long totalLen) {
+		long start = idx * partSize;
+		long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
 		if (totalLen <= 0 || end < start) return 0;
 		return end - start + 1;
 	}
 
-	private static void maybeReportProgress(@NonNull final TaskContext ctx, final long totalLen) {
-		if (ctx.cb == null || totalLen <= 0) return;
-		final long downloaded = Math.min(totalLen, Math.max(0, ctx.downloadedBytes.get()));
-		final int progress = (int) Math.min(99, (downloaded * 100) / totalLen);
-		synchronized (ctx.progressLock) {
+	private static void maybeReportProgress(@NonNull TaskContext task, long totalLen) {
+		if (task.callback == null || totalLen <= 0) return;
+		long downloaded = Math.min(totalLen, Math.max(0, task.downloadedBytes.get()));
+		int progress = (int) Math.min(99, (downloaded * 100) / totalLen);
+		synchronized (task.progressLock) {
 			int prev;
 			do {
-				prev = ctx.lastProgress.get();
+				prev = task.lastProgress.get();
 				if (progress <= prev) return;
-			} while (!ctx.lastProgress.compareAndSet(prev, progress));
-			ctx.cb.onProgress(progress);
+			} while (!task.lastProgress.compareAndSet(prev, progress));
+			task.callback.onProgress(progress);
 		}
 	}
 
 	@Override
-	public CompletableFuture<File> download(@NonNull String url, @NonNull File out, @Nullable ProgressCallback cb) {
+	public CompletableFuture<File> download(@NonNull String url, @NonNull File out, @Nullable ProgressCallback callback) {
 		CompletableFuture<File> future = new CompletableFuture<>();
-		TaskContext ctx = new TaskContext(url, out, "dl_" + md5(url), future, cb);
-		tasks.put(url, ctx);
-		new Thread(() -> runTask(ctx)).start();
+		TaskContext task = new TaskContext(
+						url,
+						out,
+						"dl_" + md5(url),
+						future,
+						callback,
+						new AtomicBoolean(),
+						new AtomicBoolean(),
+						new AtomicInteger(),
+						new AtomicLong(),
+						new AtomicInteger(-1));
+		tasks.put(url, task);
+		new Thread(() -> runTask(task)).start();
 		return future;
 	}
 
-	private void runTask(TaskContext ctx) {
+	private void runTask(TaskContext task) {
 		RandomAccessFile raf = null;
 		try {
 			// 1. fetch metadata
 			final long total;
 			final boolean range;
-			try (Response head = client.newCall(new Request.Builder().url(ctx.url).head().build()).execute()) {
+			try (Response head = client.newCall(new Request.Builder().url(task.url).head().build()).execute()) {
 				if (!head.isSuccessful()) throw new IOException("HEAD " + head.code());
 				total = Long.parseLong(head.header("Content-Length", "-1"));
 				range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
@@ -116,47 +122,47 @@ public class StreamDownloaderImpl implements StreamDownloader {
 			int chunks;
 			if (total <= 0 || !range) chunks = 1;
 			else {
-				final int candidate = (int) Math.min(128, Math.max(4, total / MIN_CHUNK_SIZE));
+				int candidate = (int) Math.min(128, Math.max(4, total / 512 * 1024));
 				chunks = (total / Math.max(candidate, 1)) > 0 ? candidate : 1;
 			}
 			long part = total > 0 ? total / chunks : total;
 
 			// 3. resume or initialize
-			byte[] saved = mmkv.decodeBytes(ctx.key);
+			byte[] saved = mmkv.decodeBytes(task.key);
 			BitSet bits = (range && saved != null) ? BitSet.valueOf(saved) : new BitSet();
-			ctx.done.set(bits.cardinality());
+			task.done.set(bits.cardinality());
 			if (total > 0) {
-				final long initialDownloaded = IntStream.range(0, chunks)
+				long initialDownloaded = IntStream.range(0, chunks)
 								.filter(bits::get)
 								.mapToLong(i -> chunkLength(i, chunks, part, total))
 								.sum();
-				ctx.downloadedBytes.set(initialDownloaded);
-				maybeReportProgress(ctx, total);
+				task.downloadedBytes.set(initialDownloaded);
+				maybeReportProgress(task, total);
 			}
-			raf = new RandomAccessFile(ctx.out, "rw");
+			raf = new RandomAccessFile(task.out, "rw");
 			if (total > 0) raf.setLength(total);
 			else raf.setLength(0);
 
 			// 4. submit task
-			if (ctx.done.get() < chunks) {
+			if (task.done.get() < chunks) {
 				RandomAccessFile finalRaf = raf;
 				CompletableFuture.allOf(IntStream.range(0, chunks).filter(i -> !bits.get(i)) // skip finished
-								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(ctx, i, chunks, part, total, range, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
+								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(task, i, chunks, part, total, range, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
 			}
 
 			// 5. clean up
-			if (!ctx.isInactive()) {
-				mmkv.removeValueForKey(ctx.key);
-				tasks.remove(ctx.url);
-				ctx.future.complete(ctx.out);
-				if (ctx.cb != null) ctx.cb.onComplete(ctx.out);
+			if (!task.isInactive()) {
+				mmkv.removeValueForKey(task.key);
+				tasks.remove(task.url);
+				task.future.complete(task.out);
+				if (task.callback != null) task.callback.onComplete(task.out);
 			}
 		} catch (Exception e) {
-			if (!ctx.isInactive()) {
-				tasks.remove(ctx.url);
-				ctx.future.completeExceptionally(e);
-				if (ctx.cb != null)
-					ctx.cb.onError(e instanceof RuntimeException && e.getCause() instanceof Exception ? (Exception) e.getCause() : e);
+			if (!task.isInactive()) {
+				tasks.remove(task.url);
+				task.future.completeExceptionally(e);
+				if (task.callback != null)
+					task.callback.onError(e instanceof RuntimeException && e.getCause() instanceof Exception ? (Exception) e.getCause() : e);
 			}
 		} finally {
 			try {
@@ -166,13 +172,13 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		}
 	}
 
-	private void downloadChunk(TaskContext ctx, int idx, int totalChunks, long partSize, long totalLen, boolean rangeSupported, RandomAccessFile raf, BitSet bits) {
-		if (ctx.isInactive()) return;
+	private void downloadChunk(TaskContext task, int idx, int totalChunks, long partSize, long totalLen, boolean rangeSupported, RandomAccessFile raf, BitSet bits) {
+		if (task.isInactive()) return;
 		long start = idx * partSize;
 		long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
 		String range = rangeSupported && totalLen > 0 ? "bytes=" + start + "-" + end : null;
 
-		Request.Builder rb = new Request.Builder().url(ctx.url);
+		Request.Builder rb = new Request.Builder().url(task.url);
 		if (range != null) rb.header("Range", range);
 
 		try (Response resp = client.newCall(rb.build()).execute()) {
@@ -182,20 +188,20 @@ public class StreamDownloaderImpl implements StreamDownloader {
 				int read;
 				long offset = start;
 				while ((read = is.read(buf)) != -1) {
-					if (ctx.isInactive()) throw new IOException("Stop");
-					synchronized (ctx.lock) {
+					if (task.isInactive()) throw new IOException("Stop");
+					synchronized (task.lock) {
 						raf.seek(offset);
 						raf.write(buf, 0, read);
 					}
 					if (totalLen > 0) {
-						ctx.downloadedBytes.addAndGet(read);
-						maybeReportProgress(ctx, totalLen);
+						task.downloadedBytes.addAndGet(read);
+						maybeReportProgress(task, totalLen);
 					}
 					offset += read;
 				}
-				if (range != null) synchronized (ctx.lock) {
+				if (range != null) synchronized (task.lock) {
 					bits.set(idx);
-					mmkv.encode(ctx.key, bits.toByteArray());
+					mmkv.encode(task.key, bits.toByteArray());
 				}
 			}
 		} catch (Exception e) {
@@ -215,7 +221,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 			t.cancelled.set(true);
 			t.future.cancel(true);
 			mmkv.removeValueForKey(t.key);
-			if (t.cb != null) t.cb.onCancel();
+			if (t.callback != null) t.callback.onCancel();
 		}
 	}
 
@@ -227,8 +233,8 @@ public class StreamDownloaderImpl implements StreamDownloader {
 
 	@Override
 	public synchronized void setMaxThreadCount(int count) {
-		final int targetCount = Math.max(1, count);
-		final Dispatcher dispatcher = client.dispatcher();
+		int targetCount = Math.max(1, count);
+		Dispatcher dispatcher = client.dispatcher();
 		dispatcher.setMaxRequests(targetCount);
 		dispatcher.setMaxRequestsPerHost(targetCount);
 		if (targetCount > executor.getMaximumPoolSize()) {
@@ -251,20 +257,23 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	@AllArgsConstructor
 	private static class TaskContext {
 		final String url;
 		final File out;
 		final String key;
 		final CompletableFuture<File> future;
-		final ProgressCallback cb;
+		final ProgressCallback callback;
 		final Object lock = new Object();
 		final Object progressLock = new Object();
-		final AtomicBoolean paused = new AtomicBoolean(false);
-		final AtomicBoolean cancelled = new AtomicBoolean(false);
-		final AtomicInteger done = new AtomicInteger(0);
-		final AtomicLong downloadedBytes = new AtomicLong(0);
-		final AtomicInteger lastProgress = new AtomicInteger(-1);
+		final AtomicBoolean paused;
+		final AtomicBoolean cancelled;
+		final AtomicInteger done;
+		final AtomicLong downloadedBytes;
+		final AtomicInteger lastProgress;
 
 		boolean isInactive() {
 			return paused.get() || cancelled.get() || future.isCancelled();

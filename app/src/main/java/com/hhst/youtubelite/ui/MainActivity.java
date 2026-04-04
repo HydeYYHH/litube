@@ -1,23 +1,20 @@
 package com.hhst.youtubelite.ui;
 
-import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.os.Build;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
-import android.webkit.WebView;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
@@ -25,11 +22,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.media3.common.Player;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleEventObserver;
+import androidx.lifecycle.ProcessLifecycleOwner;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -46,32 +45,25 @@ import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.browser.YoutubeWebview;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
+import com.hhst.youtubelite.downloader.ui.DownloadPermissionHost;
+import com.hhst.youtubelite.downloader.ui.PlaylistDownloadDialog;
+import com.hhst.youtubelite.downloader.ui.PlaylistDownloadItem;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
+import com.hhst.youtubelite.extractor.potoken.PoTokenHost;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
-import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.player.queue.QueueItem;
-import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.player.queue.QueueRepository;
 import com.hhst.youtubelite.ui.queue.QueueAdapter;
 import com.hhst.youtubelite.ui.queue.QueueTouch;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.PermissionUtils;
 import com.hhst.youtubelite.util.ToastUtils;
 import com.hhst.youtubelite.util.UrlUtils;
+import com.hhst.youtubelite.util.ViewUtils;
 
-import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage;
-import org.schabi.newpipe.extractor.NewPipe;
-import org.schabi.newpipe.extractor.Page;
-import org.schabi.newpipe.extractor.exceptions.ExtractionException;
-import org.schabi.newpipe.extractor.playlist.PlaylistExtractor;
-import org.schabi.newpipe.extractor.stream.StreamInfoItem;
-
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -79,13 +71,13 @@ import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
+/**
+ * Primary screen that wires playback, queue, and download entry points.
+ */
 @AndroidEntryPoint
 @UnstableApi
-public final class MainActivity extends AppCompatActivity {
-	private static final String YOUTUBE_WWW_HOST = "www.youtube.com";
-	private static final int REQUEST_NOTIFICATION_CODE = 100;
-	private static final int DOUBLE_TAP_EXIT_INTERVAL_MS = 2_000;
-	private final Handler mainHandler = new Handler(Looper.getMainLooper());
+public final class MainActivity extends AppCompatActivity implements LifecycleEventObserver, DownloadPermissionHost {
+	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Inject
 	ExtensionManager extensionManager;
 	@Inject
@@ -93,46 +85,144 @@ public final class MainActivity extends AppCompatActivity {
 	@Inject
 	LitePlayer player;
 	@Inject
-	Engine engine;
-	@Inject
 	YoutubeExtractor youtubeExtractor;
 	@Inject
 	QueueRepository queueRepository;
 	@Inject
-	QueueWarmer queueWarmer;
+	PoTokenHost poTokenHost;
 	@Nullable
 	private PlaybackService playbackService;
 	@Nullable
-	private ServiceConnection playbackServiceConnection;
+	private ServiceConnection serviceConnection;
 	@Nullable
-	private BottomSheetDialog queueBottomSheetDialog;
-	private long lastBackTime = 0;
-	private boolean suppressNextUserLeaveHintPictureInPicture;
+	private TextView hintText;
+	@NonNull
+	private final Runnable hideHintRunnable = this::hideHint;
+	private MainActivityViewModel viewModel;
+	@Nullable
+	private QueueSheet queueSheet;
+	private long lastBackTime;
+	private boolean bootstrapped;
+	private boolean suppressPiP;
+	@Nullable
+	private Runnable pendingPermissionAction;
+
+	static boolean shouldEnterPictureInPicture(@Nullable LitePlayer player,
+	                                           @Nullable ExtensionManager extensionManager,
+	                                           final boolean isInPictureInPictureMode) {
+		return !isInPictureInPictureMode
+						&& extensionManager != null
+						&& extensionManager.isEnabled(Constant.ENABLE_PIP)
+						&& player != null
+						&& player.shouldAutoEnterPictureInPicture();
+	}
 
 	@Override
-	protected void onCreate(@Nullable final Bundle savedInstanceState) {
+	protected void onCreate(@Nullable Bundle savedInstanceState) {
 		EdgeToEdge.enable(this);
 		setContentView(R.layout.activity_main);
 		super.onCreate(savedInstanceState);
+		viewModel = new ViewModelProvider(this).get(MainActivityViewModel.class);
+		viewModel.getState().observe(this, this::renderQueueSheet);
 
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 
-		final View mainView = findViewById(R.id.main);
+		View mainView = findViewById(R.id.main);
 		ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
-			final Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
 			// FIX: Set bottom padding to 0 to ensure the Nav Bar sticks to the bottom edge
 			v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
 			return insets;
 		});
 
-		setupNativeContextMenu();
-		setupQueueUi();
-		requestPermissions();
-		startPlaybackService();
-		setupBackNavigation();
-		queueWarmer.warmItems(queueRepository.getItems());
+		hintText = findViewById(R.id.activity_hint_text);
+		if (hintText != null) {
+			int pad = ViewUtils.dpToPx(this, 16);
+			hintText.setPadding(pad, pad / 2, pad, pad / 2);
+		}
 
-		mainView.post(() -> handleIntent(getIntent()));
+		View playerRoot = findViewById(R.id.playerView);
+		playerRoot.post(() -> {
+			findViewById(R.id.btn_queue).setOnClickListener(v -> showQueueBottomSheet());
+			findViewById(R.id.btn_mini_queue).setOnClickListener(v -> showQueueBottomSheet());
+		});
+		if (PermissionUtils.needsPostNotificationsPermission()
+						&& !PermissionUtils.hasPostNotificationsPermission(this)) {
+			ActivityCompat.requestPermissions(
+							this,
+							PermissionUtils.postNotificationsPermission(),
+							PermissionUtils.REQUEST_POST_NOTIFICATIONS);
+		}
+		serviceConnection = new ServiceConnection() {
+			@Override
+			public void onServiceConnected(ComponentName name, IBinder binder) {
+				playbackService = ((PlaybackService.PlaybackBinder) binder).getService();
+				if (player != null && playbackService != null) {
+					player.attachPlaybackService(playbackService);
+				}
+			}
+
+			@Override
+			public void onServiceDisconnected(ComponentName name) {
+				playbackService = null;
+			}
+		};
+		bindService(new Intent(this, PlaybackService.class), serviceConnection, Context.BIND_AUTO_CREATE);
+		ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackPressed() {
+				if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
+					setEnabled(false);
+					getOnBackPressedDispatcher().onBackPressed();
+					setEnabled(true);
+					return;
+				}
+				if (player != null && player.isFullscreen()) {
+					player.exitFullscreen();
+					return;
+				}
+				YoutubeWebview webview = getWebView();
+				if (webview != null && tabManager != null) {
+					tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
+					if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
+						tabManager.evaluateJavascript("document.exitFullscreen()", null);
+						return;
+					}
+				}
+				if (tabManager != null && !tabManager.goBack()) {
+					long time = System.currentTimeMillis();
+					if (time - lastBackTime < 2_000L) finish();
+					else {
+						lastBackTime = time;
+						ToastUtils.show(MainActivity.this, R.string.press_back_again_to_exit);
+					}
+				}
+			}
+		});
+
+		// Initialize potoken dependency and open home page.
+		long startupDeadlineMs = SystemClock.uptimeMillis() + 4_000L;
+
+		mainView.post(new Runnable() {
+			@Override
+			public void run() {
+				if (bootstrapped) {
+					handleIntent(getIntent());
+					return;
+				}
+				poTokenHost.prewarm();
+				if (tabManager.getWebView() == null) {
+					tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
+				}
+				if (!poTokenHost.isReady() && SystemClock.uptimeMillis() < startupDeadlineMs) {
+					handler.postDelayed(this, 100L);
+					return;
+				}
+				bootstrapped = true;
+				handleIntent(getIntent());
+			}
+		});
 	}
 
 	@Override
@@ -145,30 +235,33 @@ public final class MainActivity extends AppCompatActivity {
 	@Override
 	protected void onUserLeaveHint() {
 		super.onUserLeaveHint();
-		final boolean suppressAutoEnterPictureInPicture = suppressNextUserLeaveHintPictureInPicture;
-		suppressNextUserLeaveHintPictureInPicture = false;
-		if (shouldEnterPictureInPictureOnUserLeaveHint(
-						player,
-						extensionManager,
-						DeviceUtils.isInPictureInPictureMode(this),
-						suppressAutoEnterPictureInPicture)) {
+		boolean suppressAutoEnterPiP = suppressPiP;
+		suppressPiP = false;
+		if (!suppressAutoEnterPiP
+						&& shouldEnterPictureInPicture(player, extensionManager, DeviceUtils.isInPictureInPictureMode(this))) {
 			player.enterPictureInPicture();
 		}
 	}
 
 	@Override
-	public void onPictureInPictureModeChanged(final boolean isInPictureInPictureMode, @NonNull final Configuration newConfig) {
+	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, @NonNull Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-		dispatchPictureInPictureModeChanged(player, isInPictureInPictureMode);
-		syncQueueUiVisibility(isInPictureInPictureMode);
+		player.onPictureInPictureModeChanged(isInPictureInPictureMode);
 	}
 
 	@Override
-	public void onConfigurationChanged(@NonNull final Configuration newConfig) {
-		super.onConfigurationChanged(newConfig);
-		if (player != null) {
-			player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
+	public void onStateChanged(@NonNull androidx.lifecycle.LifecycleOwner source,
+	                           @NonNull Lifecycle.Event event) {
+		if (event == Lifecycle.Event.ON_STOP
+						&& shouldEnterPictureInPicture(player, extensionManager, isInPictureInPictureMode())) {
+			player.enterPictureInPicture();
 		}
+	}
+
+	@Override
+	public void onConfigurationChanged(@NonNull Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
@@ -181,383 +274,189 @@ public final class MainActivity extends AppCompatActivity {
 			return;
 		}
 
-		String urlToLoad = null;
+		String url = null;
 		if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null) {
-			urlToLoad = intent.getData().toString();
+			url = intent.getData().toString();
 		} else if (Intent.ACTION_SEND.equals(action) || isDownloadAction) {
-			String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-			if (sharedText != null) {
-				urlToLoad = extractUrlFromText(sharedText);
+			// Extract a shared YouTube URL from the incoming text.
+			String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+			if (text != null) {
+				Pattern pat = Pattern.compile("https?://[\\w./?=&%#-]+", Pattern.CASE_INSENSITIVE);
+				Matcher m = pat.matcher(text);
+				url = m.find() ? m.group() : null;
 			}
 		}
 
-		if (urlToLoad != null) {
+		if (url != null) {
 			if (isDownloadAction) {
-				triggerDownload(urlToLoad);
+				String loadUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, "www.youtube.com");
+				long fetchToast = ToastUtils.show(this, "Fetching download links...");
+				handler.postDelayed(() -> ToastUtils.cancel(fetchToast), 1000);
+				handler.postDelayed(() -> new DownloadDialog(loadUrl, this, youtubeExtractor).show(), 600);
 			} else {
-				final String cleanUrl = urlToLoad.replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
+				String loadUrl = url.replace("www.youtube.com", Constant.YOUTUBE_MOBILE_HOST);
 				if (tabManager != null) {
-					tabManager.openTab(cleanUrl, UrlUtils.getPageClass(cleanUrl));
+					tabManager.openTab(loadUrl, UrlUtils.getPageClass(loadUrl));
 				}
 			}
-		} else if (tabManager.getWebview() == null) {
+		} else if (tabManager.getWebView() == null) {
 			tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
 		}
 	}
 
-	static boolean shouldEnterPictureInPictureOnUserLeaveHint(@Nullable final LitePlayer player,
-	                                                          @Nullable final ExtensionManager extensionManager,
-	                                                          final boolean isInPictureInPictureMode,
-	                                                          final boolean suppressAutoEnterPictureInPicture) {
-		return !isInPictureInPictureMode
-						&& !suppressAutoEnterPictureInPicture
-						&& player != null
-						&& extensionManager != null
-						&& extensionManager.isEnabled(Constant.ENABLE_PIP)
-						&& player.shouldAutoEnterPictureInPicture();
-	}
-
-	static boolean shouldSuppressPictureInPictureForStartedActivity(@Nullable final Intent intent,
-	                                                                @NonNull final String appPackageName) {
-		if (intent == null || intent.getComponent() == null) return false;
-		return appPackageName.equals(intent.getComponent().getPackageName());
-	}
-
-	static void dispatchPictureInPictureModeChanged(@Nullable final LitePlayer player, final boolean isInPictureInPictureMode) {
-		if (player != null) {
-			player.onPictureInPictureModeChanged(isInPictureInPictureMode);
-		}
-	}
-
-	static boolean shouldShowQueueUi(final boolean isInPictureInPictureMode) {
-		return !isInPictureInPictureMode;
-	}
-
-	static boolean shouldReleasePlayerOnDestroy(final boolean isChangingConfigurations) {
-		return !isChangingConfigurations;
-	}
-
-	static boolean shouldRestoreMiniPlayerOnResume(final boolean isInAppMiniPlayer,
-	                                               final boolean isInPictureInPictureMode) {
-		return isInAppMiniPlayer && !isInPictureInPictureMode;
-	}
-
-	static boolean shouldSuspendMiniPlayerOnStop(final boolean isInAppMiniPlayer,
-	                                             final boolean isChangingConfigurations,
-	                                             final boolean isInPictureInPictureMode) {
-		return isInAppMiniPlayer && !isChangingConfigurations && !isInPictureInPictureMode;
-	}
-
-	static int sheetMax(final int mainHeight,
-	                    final int topInset,
-	                    final int playerBottom,
-	                    final boolean isInAppMiniPlayer) {
-		if (mainHeight <= 0) return 0;
-		if (isInAppMiniPlayer) return Math.max(0, mainHeight - Math.max(0, topInset));
-		if (playerBottom <= 0 || playerBottom >= mainHeight) return mainHeight;
-		return mainHeight - playerBottom;
-	}
-
-	static int sheetPad(final int baseBottomPadding, final int bottomInset) {
-		return baseBottomPadding + Math.max(0, bottomInset);
-	}
-
-	static int listPad(final int baseBottomPadding,
-	                   final int bottomInset,
-	                   final int minimumTrailingSpace) {
-		return baseBottomPadding + Math.max(Math.max(0, bottomInset), Math.max(0, minimumTrailingSpace));
-	}
-
-	static int queueAnchor(final int listHeight, final int topPadding) {
-		return Math.max(0, topPadding) + Math.max(0, listHeight) / 3;
-	}
-
-	private String extractUrlFromText(String text) {
-		Pattern pattern = Pattern.compile("https?://[\\w./?=&%#-]+", Pattern.CASE_INSENSITIVE);
-		Matcher matcher = pattern.matcher(text);
-		return matcher.find() ? matcher.group() : null;
-	}
-
-	private void setupNativeContextMenu() {
-		findViewById(R.id.main).postDelayed(() -> {
-			final YoutubeWebview webview = getWebview();
-			if (webview != null) {
-				webview.setOnLongClickListener(v -> {
-					final WebView.HitTestResult result = webview.getHitTestResult();
-					String url = result.getExtra();
-					if (url == null) return false;
-					if (url.startsWith("/")) url = "https://m.youtube.com" + url;
-					if (url.contains("/watch") || url.contains("/shorts/") || url.contains("list=") || url.contains("video_id=")) {
-						showVideoOptionsDialog(url);
-						return true;
-					}
-					return false;
-				});
-
-				final String scripts = "var style = document.createElement('style');" +
-								"style.innerHTML = ' " +
-								":root { --safe-area-inset-bottom: 0px !important; } " +
-								"body { padding-bottom: 0px !important; margin-bottom: 0px !important; } " +
-								"ytm-pivot-bar-renderer { " +
-								"  height: 48px !important; " +
-								"  padding-bottom: 0px !important; " +
-								"  bottom: 0px !important; " +
-								"  margin-bottom: 0px !important; " +
-								"  min-height: 48px !important; " +
-								"} " +
-								"a { text-decoration: none !important; } " +
-								"a.yt-simple-endpoint { text-decoration: none !important; color: inherit !important; } " +
-								"'; document.head.appendChild(style);";
-				webview.evaluateJavascript(scripts, null);
-			}
-		}, 1500);
-	}
-
-	private void showVideoOptionsDialog(String url) {
-		boolean isPlaylist = url.contains("list=");
-		String[] options = isPlaylist ?
-						new String[]{"Download Video", "Download Playlist", "Share Link", "Cancel"} :
-						new String[]{"Download Video", "Share Link", "Cancel"};
-
-		new MaterialAlertDialogBuilder(this)
-						.setTitle("Video Options")
-						.setItems(options, (dialog, which) -> {
-							if (isPlaylist) {
-								if (which == 0) triggerDownload(url);
-								else if (which == 1) triggerPlaylistDownload(url);
-								else if (which == 2) shareUrl(url);
-							} else {
-								if (which == 0) triggerDownload(url);
-								else if (which == 1) shareUrl(url);
-							}
-						})
-						.show();
-	}
-
-	private void setupQueueUi() {
-		final View playerRoot = findViewById(R.id.playerView);
-		if (playerRoot == null) return;
-		playerRoot.post(() -> {
-			final View queueButton = findViewById(R.id.btn_queue);
-			if (queueButton != null) {
-				queueButton.setOnClickListener(v -> showQueueBottomSheet());
-			}
-			final View miniQueueButton = findViewById(R.id.btn_mini_queue);
-			if (miniQueueButton != null) {
-				miniQueueButton.setOnClickListener(v -> showQueueBottomSheet());
-			}
-			syncQueueUiVisibility(DeviceUtils.isInPictureInPictureMode(this));
-		});
-	}
-
-	private void syncQueueUiVisibility(final boolean isInPictureInPictureMode) {
-		final View queueButton = findViewById(R.id.btn_queue);
-		final View miniQueueButton = findViewById(R.id.btn_mini_queue);
-		if (shouldShowQueueUi(isInPictureInPictureMode)) {
-			if (queueButton != null) queueButton.setVisibility(View.VISIBLE);
-			return;
-		}
-		if (queueButton != null) queueButton.setVisibility(View.GONE);
-		if (miniQueueButton != null) miniQueueButton.setVisibility(View.GONE);
-		if (queueBottomSheetDialog != null && queueBottomSheetDialog.isShowing()) {
-			queueBottomSheetDialog.dismiss();
-		}
-	}
-
-	private void triggerDownload(String url) {
-		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
-		final long fetchToast = ToastUtils.show(this, "Fetching download links...");
-		mainHandler.postDelayed(() -> ToastUtils.cancel(fetchToast), 1000);
-		mainHandler.postDelayed(() -> {
-			DownloadDialog dialog = new DownloadDialog(cleanUrl, this, youtubeExtractor);
-			dialog.show();
-		}, 600);
-	}
-
-	private void triggerPlaylistDownload(String url) {
-		String cleanUrl = url.replace(Constant.YOUTUBE_MOBILE_HOST, YOUTUBE_WWW_HOST);
-		final long fetchToast = ToastUtils.show(this, "Fetching playlist...");
-
-		new Thread(() -> {
-			List<String> videoUrls = new ArrayList<>();
-			try {
-				PlaylistExtractor extractor = NewPipe.getService(0).getPlaylistExtractor(cleanUrl);
-				extractor.fetchPage();
-				InfoItemsPage<StreamInfoItem> page = extractor.getInitialPage();
-
-				while (page != null) {
-					for (StreamInfoItem item : page.getItems()) {
-						videoUrls.add(item.getUrl());
-					}
-					if (!Page.isValid(page.getNextPage())) break;
-					page = extractor.getPage(page.getNextPage());
-				}
-
-				ToastUtils.cancel(fetchToast);
-
-				if (videoUrls.isEmpty()) {
-					ToastUtils.show(this, "Playlist is empty", Toast.LENGTH_LONG);
-					return;
-				}
-
-				ToastUtils.show(this, "Downloading " + videoUrls.size() + " videos...", Toast.LENGTH_LONG);
-
-				for (String videoUrl : videoUrls) {
-					mainHandler.post(() -> triggerDownload(videoUrl));
-					Thread.sleep(250);
-				}
-
-			} catch (ExtractionException | IOException | InterruptedException e) {
-				ToastUtils.show(this, "Failed to load playlist: " + e.getMessage(), Toast.LENGTH_LONG);
-			}
-		}).start();
-	}
-
-	private void triggerQueueDownload() {
-		final String watchUrl = tabManager != null ? tabManager.getWatchUrl() : null;
-		if (watchUrl != null && watchUrl.contains("list=")) {
-			triggerPlaylistDownload(watchUrl);
-			return;
-		}
-		final List<QueueItem> items = queueRepository.getItems();
-		if (items.isEmpty()) {
-			ToastUtils.show(this, R.string.queue_download_unavailable);
-			return;
-		}
-		ToastUtils.show(this, getString(R.string.downloading_queue_count, items.size()), Toast.LENGTH_LONG);
-		for (int i = 0; i < items.size(); i++) {
-			final String itemUrl = items.get(i).getUrl();
-			if (itemUrl == null || itemUrl.isBlank()) continue;
-			mainHandler.postDelayed(() -> triggerDownload(itemUrl), i * 250L);
-		}
-	}
-
 	private void showQueueBottomSheet() {
-		if (!shouldShowQueueUi(DeviceUtils.isInPictureInPictureMode(this))) return;
-		final BottomSheetDialog dialog = new BottomSheetDialog(this);
-		queueBottomSheetDialog = dialog;
-		final View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_queue, new android.widget.FrameLayout(this), false);
+		if (DeviceUtils.isInPictureInPictureMode(this)) return;
+		BottomSheetDialog dialog = new BottomSheetDialog(this);
+		View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_queue, new android.widget.FrameLayout(this), false);
 		dialog.setContentView(sheetView);
-		final AtomicReference<BottomSheetBehavior<android.widget.FrameLayout>> sheetRef = new AtomicReference<>();
-		final AtomicBoolean dirty = new AtomicBoolean(false);
 
-		final ImageButton closeButton = sheetView.findViewById(R.id.btn_queue_close);
-		final SwitchMaterial enabledSwitch = sheetView.findViewById(R.id.switch_queue_enabled);
-		final ImageButton downloadButton = sheetView.findViewById(R.id.btn_queue_download);
-		final ImageButton orderButton = sheetView.findViewById(R.id.btn_queue_order);
-		final ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
-		final TextView emptyView = sheetView.findViewById(R.id.queue_empty);
-		final RecyclerView recyclerView = sheetView.findViewById(R.id.queue_items_recycler);
-		final QueueAdapter adapter = queueAdapter(dialog, recyclerView, emptyView);
-		final Player.Listener queuePlaybackListener = new Player.Listener() {
+		ImageButton closeButton = sheetView.findViewById(R.id.btn_queue_close);
+		SwitchMaterial enabledSwitch = sheetView.findViewById(R.id.switch_queue_enabled);
+		ImageButton downloadButton = sheetView.findViewById(R.id.btn_queue_download);
+		ImageButton orderButton = sheetView.findViewById(R.id.btn_queue_order);
+		ImageButton clearButton = sheetView.findViewById(R.id.btn_queue_clear);
+		TextView emptyView = sheetView.findViewById(R.id.queue_empty);
+		RecyclerView recyclerView = sheetView.findViewById(R.id.queue_items_recycler);
+		QueueAdapter adapter = new QueueAdapter(new QueueAdapter.Actions() {
 			@Override
-			public void onPlaybackStateChanged(final int state) {
-				mainHandler.post(() -> {
-					if (queueBottomSheetDialog == dialog) {
-						syncQueueSheet(adapter, recyclerView, emptyView);
-					}
-				});
+			public void onPlayRequested(@NonNull QueueItem item) {
+				dialog.dismiss();
+				if (item.getVideoUrl() != null) {
+					tabManager.playInWatch(item.getVideoUrl());
+				}
 			}
-		};
-		engine.addListener(queuePlaybackListener);
+
+			@Override
+			public void onDeleteRequested(@NonNull QueueItem item) {
+				new MaterialAlertDialogBuilder(MainActivity.this)
+								.setMessage(R.string.remove_queue_item_confirmation)
+								.setPositiveButton(R.string.confirm, (d, which) -> {
+									String videoId = item.getVideoId();
+									if (videoId == null) return;
+									viewModel.removeQueueItem(videoId);
+								})
+								.setNegativeButton(R.string.cancel, null)
+								.show();
+			}
+		});
+		QueueSheet sheet = new QueueSheet(enabledSwitch, orderButton, emptyView, recyclerView, adapter);
+		queueSheet = sheet;
 		recyclerView.setLayoutManager(new LinearLayoutManager(this));
 		recyclerView.setAdapter(adapter);
 		recyclerView.setNestedScrollingEnabled(true);
 		recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-		new ItemTouchHelper(new QueueTouch((from, to) -> {
-			final boolean moved = adapter.moveItem(from, to);
-			if (moved) {
-				dirty.set(true);
-			}
-			return moved;
-		}, new QueueTouch.DragStateCallback() {
+		new ItemTouchHelper(new QueueTouch(adapter::moveItem, new QueueTouch.DragStateCallback() {
 			@Override
-			public void onDragStateChanged(final boolean dragging) {
-				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
-				if (behavior != null) {
-					// Avoid gesture fights.
-					behavior.setDraggable(!dragging);
-				}
+			public void onDragStateChanged(boolean dragging) {
+				if (sheet.behavior != null) sheet.behavior.setDraggable(!dragging);
 			}
 
 			@Override
 			public void onDragFinished() {
-				if (dirty.getAndSet(false)) {
-					saveQueueOrder(adapter.snapshotItems());
-					player.refreshQueueNavigationAvailability();
-				}
-				syncQueueSheet(adapter, recyclerView, emptyView);
-				final BottomSheetBehavior<android.widget.FrameLayout> behavior = sheetRef.get();
-				if (behavior != null) {
-					behavior.setDraggable(true);
-				}
+				viewModel.moveQueue(adapter.snapshotItems());
+				if (sheet.behavior != null) sheet.behavior.setDraggable(true);
 			}
 		})).attachToRecyclerView(recyclerView);
 
-		if (closeButton != null) {
-			closeButton.setOnClickListener(v -> dialog.dismiss());
-		}
-		if (enabledSwitch != null) {
-			enabledSwitch.setChecked(queueRepository.isEnabled());
-			enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-				queueRepository.setEnabled(isChecked);
-				player.refreshQueueNavigationAvailability();
-				ToastUtils.show(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off);
-			});
-		}
-		if (downloadButton != null) {
-			downloadButton.setOnClickListener(v -> {
-				dialog.dismiss();
-				triggerQueueDownload();
-			});
-		}
-		if (orderButton != null) {
-			renderLoop(orderButton, player.getLoopMode());
-			orderButton.setOnClickListener(v -> {
-				final PlayerLoopMode newMode = player.getLoopMode().next();
-				player.setLoopMode(newMode);
-				renderLoop(orderButton, newMode);
-			});
-		}
-		if (clearButton != null) {
-			clearButton.setOnClickListener(v -> confirmClear(() -> {
-				queueRepository.clear();
-				player.refreshQueueNavigationAvailability();
-				syncQueueSheet(adapter, recyclerView, emptyView);
-			}));
-		}
+		closeButton.setOnClickListener(v -> dialog.dismiss());
+		enabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+			if (!buttonView.isPressed()) return;
+			viewModel.setQueueEnabled(isChecked);
+			ToastUtils.show(this, isChecked ? R.string.queue_enabled_on : R.string.queue_enabled_off);
+		});
+		downloadButton.setOnClickListener(v -> {
+			dialog.dismiss();
+			List<QueueItem> items = uiState().items();
+			if (items.isEmpty()) {
+				ToastUtils.show(this, R.string.queue_download_unavailable);
+				return;
+			}
+			List<PlaylistDownloadItem> dialogItems = new java.util.ArrayList<>();
+			for (int i = 0; i < items.size(); i++) {
+				QueueItem queueItem = items.get(i);
+				String videoId = queueItem.getVideoId() != null
+								? queueItem.getVideoId()
+								: YoutubeExtractor.getVideoId(queueItem.getVideoUrl());
+				String itemUrl = queueItem.getVideoUrl() != null && !queueItem.getVideoUrl().isBlank()
+								? queueItem.getVideoUrl()
+								: videoId == null || videoId.isBlank()
+								? null
+								: "https://www.youtube.com/watch?v=" + videoId;
+				PlaylistDownloadItem item = new PlaylistDownloadItem(
+								i,
+								videoId == null ? "unknown" : videoId,
+								itemUrl == null ? "" : itemUrl);
+				item.setTitle(queueItem.getTitle());
+				item.setAuthor(queueItem.getAuthor());
+				item.setThumbnailUrl(queueItem.getThumbnailUrl());
+				if (videoId == null || itemUrl == null || itemUrl.isBlank()) {
+					item.setAvailabilityStatus(PlaylistDownloadItem.AvailabilityStatus.LOAD_FAILED);
+					item.setFailureReason(getString(R.string.playlist_download_status_failed));
+					item.setSelected(false);
+				} else {
+					item.setAvailabilityStatus(PlaylistDownloadItem.AvailabilityStatus.READY);
+					item.setSelected(true);
+				}
+				dialogItems.add(item);
+			}
+			new PlaylistDownloadDialog(
+							getString(R.string.queue),
+							dialogItems,
+							null,
+							null,
+							this,
+							youtubeExtractor,
+							null).show();
+		});
+		orderButton.setOnClickListener(v -> {
+			PlayerLoopMode newMode = uiState().loopMode().next();
+			player.setLoopMode(newMode);
+		});
+		clearButton.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+						.setMessage(R.string.clear_queue_confirmation)
+						.setPositiveButton(R.string.confirm, (d, which) -> viewModel.clearQueue())
+						.setNegativeButton(R.string.cancel, null)
+						.show());
 		dialog.setOnShowListener(ignored -> {
 			final android.widget.FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
 			if (bottomSheet == null) return;
-			final BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
-			sheetRef.set(behavior);
-			final int sheetBasePaddingBottom = sheetView.getPaddingBottom();
-			final int recyclerBasePaddingBottom = recyclerView.getPaddingBottom();
-			final int recyclerTrailingSpace = Math.round(getResources().getDisplayMetrics().density * 24);
-			final View mainView = findViewById(R.id.main);
-			final WindowInsetsCompat rootInsets = mainView != null
-					? ViewCompat.getRootWindowInsets(mainView)
-					: ViewCompat.getRootWindowInsets(bottomSheet);
-			final int bottomInset = rootInsets != null
-					? rootInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
-					: 0;
+			BottomSheetBehavior<android.widget.FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
+			sheet.behavior = behavior;
+			int sheetBasePaddingBottom = sheetView.getPaddingBottom();
+			int recyclerBasePaddingBottom = recyclerView.getPaddingBottom();
+			int recyclerTrailingSpace = Math.round(getResources().getDisplayMetrics().density * 24);
+			View mainView = findViewById(R.id.main);
+			WindowInsetsCompat rootInsets = mainView != null
+							? ViewCompat.getRootWindowInsets(mainView)
+							: ViewCompat.getRootWindowInsets(bottomSheet);
+			int bottomInset = rootInsets != null
+							? rootInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+							: 0;
 			sheetView.setPadding(
-					sheetView.getPaddingLeft(),
-					sheetView.getPaddingTop(),
-					sheetView.getPaddingRight(),
-					sheetPad(sheetBasePaddingBottom, bottomInset));
+							sheetView.getPaddingLeft(),
+							sheetView.getPaddingTop(),
+							sheetView.getPaddingRight(),
+							sheetBasePaddingBottom + Math.max(0, bottomInset));
 			// Keep last row visible.
 			recyclerView.setPadding(
-					recyclerView.getPaddingLeft(),
-					recyclerView.getPaddingTop(),
-					recyclerView.getPaddingRight(),
-					listPad(recyclerBasePaddingBottom, bottomInset, recyclerTrailingSpace));
-			final View playerRoot = findViewById(R.id.playerView);
-			final int maxSheetHeight = sheetMax(
-					mainView != null ? mainView.getHeight() : 0,
-					mainView != null ? mainView.getPaddingTop() : 0,
-					playerRoot != null ? playerRoot.getBottom() : 0,
-					player != null && player.isInAppMiniPlayer());
+							recyclerView.getPaddingLeft(),
+							recyclerView.getPaddingTop(),
+							recyclerView.getPaddingRight(),
+							recyclerBasePaddingBottom + Math.max(Math.max(0, bottomInset), Math.max(0, recyclerTrailingSpace)));
+			View playerRoot = findViewById(R.id.playerView);
+			int mainHeight = mainView != null ? mainView.getHeight() : 0;
+			int topInset = mainView != null ? mainView.getPaddingTop() : 0;
+			int playerBottom = playerRoot != null ? playerRoot.getBottom() : 0;
+			final int maxSheetHeight;
+			if (mainHeight <= 0) {
+				maxSheetHeight = 0;
+			} else if (uiState().miniPlayer()) {
+				maxSheetHeight = Math.max(0, mainHeight - Math.max(0, topInset));
+			} else if (playerBottom <= 0 || playerBottom >= mainHeight) {
+				maxSheetHeight = mainHeight;
+			} else {
+				maxSheetHeight = mainHeight - playerBottom;
+			}
 			final android.view.ViewGroup.LayoutParams bottomSheetLayoutParams = bottomSheet.getLayoutParams();
 			if (bottomSheetLayoutParams != null && maxSheetHeight > 0) {
 				bottomSheetLayoutParams.height = maxSheetHeight;
@@ -570,116 +469,73 @@ public final class MainActivity extends AppCompatActivity {
 			}
 			behavior.setPeekHeight(maxSheetHeight > 0 ? maxSheetHeight : sheetView.getMeasuredHeight());
 			behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
-			scrollToPlaying(adapter, recyclerView);
+			sheet.scrollPending = true;
+			renderQueueSheet(uiState());
 		});
 		dialog.setOnDismissListener(d -> {
-			engine.removeListener(queuePlaybackListener);
-			if (queueBottomSheetDialog == dialog) {
-				queueBottomSheetDialog = null;
+			if (queueSheet == sheet) {
+				queueSheet = null;
 			}
 		});
-		syncQueueSheet(adapter, recyclerView, emptyView);
+		renderQueueSheet(uiState());
 		dialog.show();
 	}
 
 	@NonNull
-	private QueueAdapter queueAdapter(BottomSheetDialog dialog, RecyclerView recyclerView, TextView emptyView) {
-		final AtomicReference<QueueAdapter> adapterRef = new AtomicReference<>();
-		final QueueAdapter adapter = new QueueAdapter(new QueueAdapter.Actions() {
-			@Override
-			public void onPlayRequested(@NonNull final QueueItem item) {
-				dialog.dismiss();
-				if (item.getUrl() != null) {
-					tabManager.playInWatch(item.getUrl());
-				}
-			}
-
-			@Override
-			public void onDeleteRequested(@NonNull final QueueItem item) {
-				confirmRemove(item, () -> {
-					final String videoId = item.getVideoId();
-					if (videoId == null) return;
-					if (queueRepository.remove(videoId)) {
-						player.refreshQueueNavigationAvailability();
-						final QueueAdapter a = adapterRef.get();
-						if (a != null) {
-							syncQueueSheet(a, recyclerView, emptyView);
-						}
-					}
-				});
-			}
-		});
-		adapterRef.set(adapter);
-		return adapter;
+	private MainActivityViewModel.UiState uiState() {
+		final MainActivityViewModel.UiState state = viewModel.getState().getValue();
+		if (state != null) return state;
+		return new MainActivityViewModel.UiState(
+						queueRepository.isEnabled(),
+						queueRepository.getItems(),
+						player.getVideoId(),
+						player.getLoopMode(),
+						player.isInMiniPlayer());
 	}
 
-	private void confirmClear(@NonNull final Runnable onConfirmed) {
-		new MaterialAlertDialogBuilder(this)
-						.setMessage(R.string.clear_queue_confirmation)
-						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
-						.setNegativeButton(R.string.cancel, null)
-						.show();
-	}
-
-	private void confirmRemove(@NonNull final QueueItem item,
-	                           @NonNull final Runnable onConfirmed) {
-		new MaterialAlertDialogBuilder(this)
-						.setMessage(R.string.remove_queue_item_confirmation)
-						.setPositiveButton(R.string.confirm, (d, which) -> onConfirmed.run())
-						.setNegativeButton(R.string.cancel, null)
-						.show();
-	}
-
-	private void syncQueueSheet(@NonNull final QueueAdapter adapter,
-	                            @NonNull final RecyclerView recyclerView,
-	                            @NonNull final TextView emptyView) {
-		final List<QueueItem> items = queueRepository.getItems();
-		adapter.replaceItems(items, player.getLoadedVideoId());
-		emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
-		recyclerView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
-	}
-
-	private void scrollToPlaying(@NonNull final QueueAdapter adapter,
-	                             @NonNull final RecyclerView recyclerView) {
-		final int i = adapter.playingPos();
-		if (i < 0) {
-			return;
+	private void renderQueueSheet(@NonNull MainActivityViewModel.UiState state) {
+		QueueSheet sheet = queueSheet;
+		if (sheet == null) return;
+		if (sheet.enabledSwitch.isChecked() != state.queueEnabled()) {
+			sheet.enabledSwitch.setChecked(state.queueEnabled());
 		}
+		renderLoop(sheet.orderButton, state.loopMode());
+		sheet.adapter.replaceItems(state.items(), state.videoId());
+		boolean empty = state.items().isEmpty();
+		sheet.emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+		sheet.recyclerView.setVisibility(empty ? View.GONE : View.VISIBLE);
+		if (sheet.scrollPending) {
+			scrollQueueToPlaying(sheet.recyclerView, state.items(), state.videoId());
+			sheet.scrollPending = false;
+		}
+	}
+
+	private void scrollQueueToPlaying(@NonNull RecyclerView recyclerView,
+	                                  @NonNull List<QueueItem> items,
+	                                  @Nullable String playingId) {
+		if (playingId == null) return;
+		int playingPosition = -1;
+		for (int i = 0; i < items.size(); i++) {
+			if (playingId.equals(items.get(i).getVideoId())) {
+				playingPosition = i;
+				break;
+			}
+		}
+		if (playingPosition < 0) return;
+		int target = playingPosition;
 		recyclerView.post(() -> {
-			final RecyclerView.LayoutManager m = recyclerView.getLayoutManager();
-			if (m instanceof LinearLayoutManager l) {
-				l.scrollToPositionWithOffset(i, queueAnchor(recyclerView.getHeight(), recyclerView.getPaddingTop()));
+			final RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
+			if (layoutManager instanceof LinearLayoutManager linearLayoutManager) {
+				linearLayoutManager.scrollToPositionWithOffset(
+								target,
+								Math.max(0, recyclerView.getPaddingTop()) + Math.max(0, recyclerView.getHeight()) / 3);
 				return;
 			}
-			recyclerView.scrollToPosition(i);
+			recyclerView.scrollToPosition(target);
 		});
 	}
 
-	private void saveQueueOrder(@NonNull final List<QueueItem> order) {
-		final List<QueueItem> items = queueRepository.getItems();
-		for (int to = 0; to < order.size(); to++) {
-			final String videoId = order.get(to).getVideoId();
-			final int from = find(items, videoId);
-			if (from < 0 || from == to) continue;
-			if (queueRepository.move(from, to)) {
-				final QueueItem item = items.remove(from);
-				items.add(to, item);
-			}
-		}
-	}
-
-	private int find(@NonNull final List<QueueItem> items,
-	                 @Nullable final String videoId) {
-		if (videoId == null) return -1;
-		for (int i = 0; i < items.size(); i++) {
-			if (videoId.equals(items.get(i).getVideoId())) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	private void renderLoop(@NonNull final ImageButton button, @NonNull final PlayerLoopMode mode) {
+	private void renderLoop(@NonNull ImageButton button, @NonNull PlayerLoopMode mode) {
 		switch (mode) {
 			case PLAYLIST_NEXT -> {
 				button.setImageResource(R.drawable.ic_playback_end_next);
@@ -700,120 +556,55 @@ public final class MainActivity extends AppCompatActivity {
 		}
 	}
 
-	private void shareUrl(String url) {
-		Intent sendIntent = new Intent(Intent.ACTION_SEND);
-		sendIntent.putExtra(Intent.EXTRA_TEXT, url);
-		sendIntent.setType("text/plain");
-		startActivity(Intent.createChooser(sendIntent, "Share Video"));
-	}
-
-
-	private void setupBackNavigation() {
-		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-			@Override
-			public void handleOnBackPressed() {
-				if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
-					setEnabled(false);
-					getOnBackPressedDispatcher().onBackPressed();
-					setEnabled(true);
-					return;
-				}
-				if (player != null && player.isFullscreen()) {
-					player.exitFullscreen();
-					return;
-				}
-				final YoutubeWebview webview = getWebview();
-				if (webview != null && tabManager != null) {
-					tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
-					if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
-						tabManager.evaluateJavascript("document.exitFullscreen()", null);
-						return;
-					}
-				}
-				goBack();
-			}
-		});
-	}
-
-	@NonNull
-	private String getInitialUrl() {
-		final Intent intent = getIntent();
-		if (intent.getData() != null)
-			return intent.getData().toString().replace(YOUTUBE_WWW_HOST, Constant.YOUTUBE_MOBILE_HOST);
-		return Constant.HOME_URL;
-	}
-
 	@Nullable
-	private YoutubeWebview getWebview() {
-		return tabManager != null ? tabManager.getWebview() : null;
+	private YoutubeWebview getWebView() {
+		return tabManager != null ? tabManager.getWebView() : null;
 	}
 
-	private void goBack() {
-		if (tabManager != null && !tabManager.goBack()) {
-			final long time = System.currentTimeMillis();
-			if (time - lastBackTime < DOUBLE_TAP_EXIT_INTERVAL_MS) finish();
-			else {
-				lastBackTime = time;
-				ToastUtils.show(this, R.string.press_back_again_to_exit);
-			}
+	public void showHint(@NonNull String text, long durationMs) {
+		if (hintText == null || DeviceUtils.isInPictureInPictureMode(this)) return;
+		hintText.setText(text);
+		hintText.setVisibility(View.VISIBLE);
+		hintText.bringToFront();
+		hintText.setTranslationZ(1000f);
+		hintText.setAlpha(1.0f);
+		ViewUtils.animateViewAlpha(hintText, 1.0f, View.GONE);
+		handler.removeCallbacks(hideHintRunnable);
+		if (durationMs > 0) {
+			handler.postDelayed(hideHintRunnable, durationMs);
 		}
 	}
 
-	private void startPlaybackService() {
-		playbackServiceConnection = new ServiceConnection() {
-			@Override
-			public void onServiceConnected(ComponentName name, IBinder binder) {
-				playbackService = ((PlaybackService.PlaybackBinder) binder).getService();
-				if (player != null && playbackService != null)
-					player.attachPlaybackService(playbackService);
-			}
-
-			@Override
-			public void onServiceDisconnected(ComponentName name) {
-				playbackService = null;
-			}
-		};
-		bindService(new Intent(this, PlaybackService.class), playbackServiceConnection, Context.BIND_AUTO_CREATE);
-	}
-
-	private void requestPermissions() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-			ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_CODE);
+	public void hideHint() {
+		if (hintText != null) {
+			ViewUtils.animateViewAlpha(hintText, 0.0f, View.GONE);
+		}
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
-		suppressNextUserLeaveHintPictureInPicture = false;
-		if (player != null && shouldRestoreMiniPlayerOnResume(player.isInAppMiniPlayer(), DeviceUtils.isInPictureInPictureMode(this))) {
+		suppressPiP = false;
+		if (player != null && player.isInMiniPlayer() && !DeviceUtils.isInPictureInPictureMode(this)) {
 			player.restoreInAppMiniPlayerUiIfNeeded();
-		}
-		if (player != null) {
-			player.syncRotation(DeviceUtils.isRotateOn(this), getResources().getConfiguration().orientation);
 		}
 	}
 
 	@Override
-	public void startActivity(@Nullable final Intent intent) {
-		suppressNextUserLeaveHintPictureInPicture =
-						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+	public void startActivity(@Nullable Intent intent) {
+		suppressPiP = shouldSuppressPiPForStartedActivity(intent);
 		super.startActivity(intent);
 	}
 
 	@Override
-	public void startActivity(@Nullable final Intent intent, @Nullable final Bundle options) {
-		suppressNextUserLeaveHintPictureInPicture =
-						shouldSuppressPictureInPictureForStartedActivity(intent, getPackageName());
+	public void startActivity(@Nullable Intent intent, @Nullable Bundle options) {
+		suppressPiP = shouldSuppressPiPForStartedActivity(intent);
 		super.startActivity(intent, options);
 	}
 
 	@Override
 	protected void onStop() {
-		if (player != null
-						&& shouldSuspendMiniPlayerOnStop(
-						player.isInAppMiniPlayer(),
-						isChangingConfigurations(),
-						DeviceUtils.isInPictureInPictureMode(this))) {
+		if (player != null && player.isInMiniPlayer() && !isChangingConfigurations() && !DeviceUtils.isInPictureInPictureMode(this)) {
 			player.suspendInAppMiniPlayerUiIfNeeded();
 		}
 		super.onStop();
@@ -822,8 +613,74 @@ public final class MainActivity extends AppCompatActivity {
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
-		if (playbackServiceConnection != null) unbindService(playbackServiceConnection);
-		if (player != null && shouldReleasePlayerOnDestroy(isChangingConfigurations())) player.release();
+		ProcessLifecycleOwner.get().getLifecycle().removeObserver(this);
+		if (serviceConnection != null) unbindService(serviceConnection);
+		if (!isChangingConfigurations() && player != null) player.release();
 	}
-}
 
+	@Override
+	public void onRequestPermissionsResult(int requestCode,
+	                                       @NonNull String[] permissions,
+	                                       @NonNull int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		if (requestCode != PermissionUtils.REQUEST_STORAGE_PERMISSION) return;
+		Runnable action = pendingPermissionAction;
+		pendingPermissionAction = null;
+		if (grantResults.length == 0) return;
+		for (int result : grantResults) {
+			if (result != PackageManager.PERMISSION_GRANTED) return;
+		}
+		if (action != null) action.run();
+	}
+
+	@Override
+	public void requestDownloadStoragePermission(@NonNull Runnable onGranted) {
+		if (!PermissionUtils.needsLegacyStoragePermission()
+						|| PermissionUtils.hasDownloadStoragePermission(this)) {
+			onGranted.run();
+			return;
+		}
+		pendingPermissionAction = onGranted;
+		ActivityCompat.requestPermissions(
+						this,
+						PermissionUtils.downloadStoragePermissions(),
+						PermissionUtils.REQUEST_STORAGE_PERMISSION);
+	}
+
+	private boolean shouldSuppressPiPForStartedActivity(@Nullable Intent intent) {
+		if (intent == null || intent.getComponent() == null) return false;
+		return getPackageName().equals(intent.getComponent().getPackageName());
+	}
+
+/**
+ * Helper that owns the queue bottom sheet widgets and transient state.
+ */
+	private static final class QueueSheet {
+		@NonNull
+		private final SwitchMaterial enabledSwitch;
+		@NonNull
+		private final ImageButton orderButton;
+		@NonNull
+		private final TextView emptyView;
+		@NonNull
+		private final RecyclerView recyclerView;
+		@NonNull
+		private final QueueAdapter adapter;
+		@Nullable
+		private BottomSheetBehavior<android.widget.FrameLayout> behavior;
+		private boolean scrollPending;
+
+		private QueueSheet(@NonNull SwitchMaterial enabledSwitch,
+		                   @NonNull ImageButton orderButton,
+		                   @NonNull TextView emptyView,
+		                   @NonNull RecyclerView recyclerView,
+		                   @NonNull QueueAdapter adapter) {
+			this.enabledSwitch = enabledSwitch;
+			this.orderButton = orderButton;
+			this.emptyView = emptyView;
+			this.recyclerView = recyclerView;
+			this.adapter = adapter;
+		}
+	}
+
+}

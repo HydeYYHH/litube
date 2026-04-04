@@ -13,6 +13,9 @@ import com.hhst.youtubelite.R;
 
 import java.util.List;
 
+/**
+ * Value object for app logic.
+ */
 public record Extension(String key, int description, List<Extension> children) {
 
 	public static List<Extension> defaultExtensionTree() {
@@ -31,7 +34,7 @@ public record Extension(String key, int description, List<Extension> children) {
 										new Extension(ENABLE_IN_APP_MINI_PLAYER, R.string.in_app_mini_player, null),
 										new Extension(ENABLE_BACKGROUND_PLAY, R.string.background_play, null)
 						)),
-						new Extension(null, R.string.skip_sponsors, List.of(
+						new Extension(null, R.string.sponsorblock, List.of(
 										new Extension(SKIP_SPONSORS, R.string.skip_sponsors, null),
 										new Extension(SKIP_SELF_PROMO, R.string.skip_sponsors_selfpromo, null),
 										new Extension(SKIP_POI_HIGHLIGHT, R.string.skip_sponsors_highlight, null)

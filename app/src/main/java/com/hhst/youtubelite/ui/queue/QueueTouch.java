@@ -7,6 +7,9 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
+/**
+ * Touch helper that reorders queue items by drag and drop.
+ */
 public final class QueueTouch extends ItemTouchHelper.SimpleCallback {
 	private static final float DRAGGED_SCALE = 1.02f;
 	private static final float IDLE_SCALE = 1.0f;
@@ -20,31 +23,27 @@ public final class QueueTouch extends ItemTouchHelper.SimpleCallback {
 	@NonNull
 	private final DragStateCallback dragStateCallback;
 
-	public QueueTouch(@NonNull final MoveCallback moveCallback) {
-		this(moveCallback, DragStateCallback.NO_OP);
-	}
-
-	public QueueTouch(@NonNull final MoveCallback moveCallback,
-	                  @NonNull final DragStateCallback dragStateCallback) {
+	public QueueTouch(@NonNull MoveCallback moveCallback,
+	                  @NonNull DragStateCallback dragStateCallback) {
 		super(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
 		this.moveCallback = moveCallback;
 		this.dragStateCallback = dragStateCallback;
 	}
 
 	@Override
-	public boolean onMove(@NonNull final RecyclerView recyclerView,
-	                      @NonNull final RecyclerView.ViewHolder viewHolder,
-	                      @NonNull final RecyclerView.ViewHolder target) {
+	public boolean onMove(@NonNull RecyclerView recyclerView,
+	                      @NonNull RecyclerView.ViewHolder viewHolder,
+	                      @NonNull RecyclerView.ViewHolder target) {
 		return moveCallback.onMove(
-				viewHolder.getBindingAdapterPosition(),
-				target.getBindingAdapterPosition());
+						viewHolder.getBindingAdapterPosition(),
+						target.getBindingAdapterPosition());
 	}
 
 	@Override
-	public void onSelectedChanged(final RecyclerView.ViewHolder viewHolder, final int actionState) {
+	public void onSelectedChanged(final RecyclerView.ViewHolder viewHolder, int actionState) {
 		super.onSelectedChanged(viewHolder, actionState);
 		if (viewHolder == null) return;
-		final boolean dragging = actionState == ItemTouchHelper.ACTION_STATE_DRAG;
+		boolean dragging = actionState == ItemTouchHelper.ACTION_STATE_DRAG;
 		dragStateCallback.onDragStateChanged(dragging);
 		if (dragging) {
 			animateDraggedState(viewHolder.itemView);
@@ -52,8 +51,8 @@ public final class QueueTouch extends ItemTouchHelper.SimpleCallback {
 	}
 
 	@Override
-	public void clearView(@NonNull final RecyclerView recyclerView,
-	                      @NonNull final RecyclerView.ViewHolder viewHolder) {
+	public void clearView(@NonNull RecyclerView recyclerView,
+	                      @NonNull RecyclerView.ViewHolder viewHolder) {
 		super.clearView(recyclerView, viewHolder);
 		animateReleasedState(viewHolder.itemView);
 		dragStateCallback.onDragStateChanged(false);
@@ -61,12 +60,12 @@ public final class QueueTouch extends ItemTouchHelper.SimpleCallback {
 	}
 
 	@Override
-	public float getMoveThreshold(@NonNull final RecyclerView.ViewHolder viewHolder) {
+	public float getMoveThreshold(@NonNull RecyclerView.ViewHolder viewHolder) {
 		return 0.16f;
 	}
 
 	@Override
-	public int interpolateOutOfBoundsScroll(@NonNull final RecyclerView recyclerView,
+	public int interpolateOutOfBoundsScroll(@NonNull RecyclerView recyclerView,
 	                                        final int viewSize,
 	                                        final int viewSizeOutOfBounds,
 	                                        final int totalSize,
@@ -74,55 +73,49 @@ public final class QueueTouch extends ItemTouchHelper.SimpleCallback {
 		if (viewSizeOutOfBounds == 0) {
 			return 0;
 		}
-		final int direction = viewSizeOutOfBounds > 0 ? 1 : -1;
-		final float distanceFraction = Math.min(1.0f, Math.abs(viewSizeOutOfBounds) / (float) viewSize);
+		int direction = viewSizeOutOfBounds > 0 ? 1 : -1;
+		float distanceFraction = Math.min(1.0f, Math.abs(viewSizeOutOfBounds) / (float) viewSize);
 		return Math.round((8 + (MAX_EDGE_SCROLL_PX - 8) * distanceFraction * distanceFraction) * direction);
 	}
 
 	@Override
-	public void onSwiped(@NonNull final RecyclerView.ViewHolder viewHolder, final int direction) {
+	public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
 	}
 
-	private void animateDraggedState(@NonNull final View itemView) {
+	private void animateDraggedState(@NonNull View itemView) {
 		itemView.animate()
-				.cancel();
+						.cancel();
 		itemView.setPressed(false);
 		itemView.animate()
-				.scaleX(DRAGGED_SCALE)
-				.scaleY(DRAGGED_SCALE)
-				.alpha(DRAGGED_ALPHA)
-				.translationZ(12f)
-				.setDuration(LIFT_ANIMATION_DURATION_MS)
-				.start();
+						.scaleX(DRAGGED_SCALE)
+						.scaleY(DRAGGED_SCALE)
+						.alpha(DRAGGED_ALPHA)
+						.translationZ(12f)
+						.setDuration(LIFT_ANIMATION_DURATION_MS)
+						.start();
 	}
 
-	private void animateReleasedState(@NonNull final View itemView) {
+	private void animateReleasedState(@NonNull View itemView) {
 		itemView.animate()
-				.cancel();
+						.cancel();
 		itemView.animate()
-				.scaleX(IDLE_SCALE)
-				.scaleY(IDLE_SCALE)
-				.alpha(IDLE_ALPHA)
-				.translationZ(0f)
-				.setDuration(RELEASE_ANIMATION_DURATION_MS)
-				.setInterpolator(new OvershootInterpolator(1.15f))
-				.start();
+						.scaleX(IDLE_SCALE)
+						.scaleY(IDLE_SCALE)
+						.alpha(IDLE_ALPHA)
+						.translationZ(0f)
+						.setDuration(RELEASE_ANIMATION_DURATION_MS)
+						.setInterpolator(new OvershootInterpolator(1.15f))
+						.start();
 	}
 
+/**
+ * Contract for app logic.
+ */
 	public interface MoveCallback {
 		boolean onMove(int from, int to);
 	}
 
 	public interface DragStateCallback {
-		DragStateCallback NO_OP = new DragStateCallback() {
-			@Override
-			public void onDragStateChanged(final boolean dragging) {
-			}
-
-			@Override
-			public void onDragFinished() {
-			}
-		};
 
 		void onDragStateChanged(boolean dragging);
 

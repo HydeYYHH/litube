@@ -21,6 +21,9 @@ import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * Dialog that shows structured error details.
+ */
 public final class ErrorDialog {
 
 	private static final String TAG = "ErrorDialog";

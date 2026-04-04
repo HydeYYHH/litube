@@ -26,6 +26,9 @@ import java.io.OutputStream;
 import java.net.URL;
 import java.util.Locale;
 
+/**
+ * Utility that publishes completed downloads into shared storage.
+ */
 public final class DownloadStorageUtils {
 	private static final String WORK_DIR_NAME = "download_work";
 
@@ -33,9 +36,9 @@ public final class DownloadStorageUtils {
 	}
 
 	@NonNull
-	public static File getWorkingDirectory(@NonNull final Context context) {
-		final File externalDir = context.getExternalFilesDir(WORK_DIR_NAME);
-		final File appDir = externalDir != null ? externalDir : new File(context.getFilesDir(), WORK_DIR_NAME);
+	public static File getWorkingDirectory(@NonNull Context context) {
+		File externalDir = context.getExternalFilesDir(WORK_DIR_NAME);
+		File appDir = externalDir != null ? externalDir : new File(context.getFilesDir(), WORK_DIR_NAME);
 		if ((!appDir.exists() && !appDir.mkdirs()) && !appDir.isDirectory()) {
 			throw new IllegalStateException("Unable to create work directory: " + appDir.getAbsolutePath());
 		}
@@ -43,26 +46,37 @@ public final class DownloadStorageUtils {
 	}
 
 	@NonNull
-	public static String publishToDownloads(@NonNull final Context context, @NonNull final File sourceFile, @NonNull final String displayName) throws IOException {
-		final String mimeType = guessMimeType(displayName);
+	public static String publishToDownloads(@NonNull Context context, @NonNull File sourceFile, @NonNull String displayName) throws IOException {
+		String mimeType = guessMimeType(displayName);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 			return publishToDownloadsMediaStore(context, sourceFile, displayName, mimeType);
 		}
 
-		final File targetDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
+		File targetDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), context.getString(R.string.app_name));
 		if ((!targetDir.exists() && !targetDir.mkdirs()) && !targetDir.isDirectory()) {
 			throw new IOException("Unable to create downloads directory: " + targetDir.getAbsolutePath());
 		}
 
-		final File destination = buildUniqueFile(targetDir, displayName);
+		// Keep the filename unique when the target already exists.
+		File destination = new File(targetDir, displayName);
+		if (destination.exists()) {
+			int dot = displayName.lastIndexOf('.');
+			String baseName = dot >= 0 ? displayName.substring(0, dot) : displayName;
+			String extension = dot >= 0 ? displayName.substring(dot) : "";
+			int suffix = 1;
+			while (destination.exists()) {
+				destination = new File(targetDir, baseName + " (" + suffix + ")" + extension);
+				suffix++;
+			}
+		}
 		FileUtils.copyFile(sourceFile, destination);
 		MediaScannerConnection.scanFile(context, new String[]{destination.getAbsolutePath()}, mimeType != null ? new String[]{mimeType} : null, null);
 		FileUtils.deleteQuietly(sourceFile);
 		return destination.getAbsolutePath();
 	}
 
-	public static void saveUrlToDownloads(@NonNull final Context context, @NonNull final URL url, @NonNull final String displayName) throws IOException {
-		final File tmpFile = File.createTempFile("download_", ".tmp", getWorkingDirectory(context));
+	public static void saveUrlToDownloads(@NonNull Context context, @NonNull URL url, @NonNull String displayName) throws IOException {
+		File tmpFile = File.createTempFile("download_", ".tmp", getWorkingDirectory(context));
 		try {
 			FileUtils.copyURLToFile(url, tmpFile);
 			publishToDownloads(context, tmpFile, displayName);
@@ -71,19 +85,19 @@ public final class DownloadStorageUtils {
 		}
 	}
 
-	public static boolean exists(@NonNull final Context context, @Nullable final String outputReference) {
-		if (outputReference == null || outputReference.isBlank()) return false;
+	public static boolean doesNotExist(@NonNull Context context, @Nullable String outputReference) {
+		if (outputReference == null || outputReference.isBlank()) return true;
 		if (isContentUri(outputReference)) {
-			try (final var cursor = context.getContentResolver().query(Uri.parse(outputReference), new String[]{MediaStore.MediaColumns._ID}, null, null, null)) {
-				return cursor != null && cursor.moveToFirst();
+			try (var cursor = context.getContentResolver().query(Uri.parse(outputReference), new String[]{MediaStore.MediaColumns._ID}, null, null, null)) {
+				return cursor == null || !cursor.moveToFirst();
 			} catch (Exception ignored) {
-				return false;
+				return true;
 			}
 		}
-		return new File(outputReference).exists();
+		return !new File(outputReference).exists();
 	}
 
-	public static void delete(@NonNull final Context context, @Nullable final String outputReference) {
+	public static void delete(@NonNull Context context, @Nullable String outputReference) {
 		if (outputReference == null || outputReference.isBlank()) return;
 		if (isContentUri(outputReference)) {
 			try {
@@ -97,45 +111,45 @@ public final class DownloadStorageUtils {
 	}
 
 	@Nullable
-	public static Uri getOpenUri(@NonNull final Context context, @Nullable final String outputReference) {
+	public static Uri getOpenUri(@NonNull Context context, @Nullable String outputReference) {
 		if (outputReference == null || outputReference.isBlank()) return null;
 		if (isContentUri(outputReference)) return Uri.parse(outputReference);
-		final File file = new File(outputReference);
+		File file = new File(outputReference);
 		if (!file.exists()) return null;
 		return FileProvider.getUriForFile(context, context.getPackageName() + ".provider", file);
 	}
 
 	@Nullable
-	public static String getMimeType(@NonNull final Context context, @Nullable final String outputReference, @NonNull final String fileName) {
+	public static String getMimeType(@NonNull Context context, @Nullable String outputReference, @NonNull String fileName) {
 		if (outputReference != null && isContentUri(outputReference)) {
 			try {
-				final String contentType = context.getContentResolver().getType(Uri.parse(outputReference));
+				String contentType = context.getContentResolver().getType(Uri.parse(outputReference));
 				if (contentType != null && !contentType.isBlank()) return contentType;
 			} catch (RuntimeException ignored) {
 			}
 		}
 		if (outputReference != null && !outputReference.isBlank() && !isContentUri(outputReference)) {
-			final String outputMimeType = guessMimeType(new File(outputReference).getName());
+			String outputMimeType = guessMimeType(new File(outputReference).getName());
 			if (outputMimeType != null) return outputMimeType;
 		}
 		return guessMimeType(fileName);
 	}
 
 	@NonNull
-	public static String getDownloadsLocationLabel(@NonNull final Context context) {
+	public static String getDownloadsLocationLabel(@NonNull Context context) {
 		return Environment.DIRECTORY_DOWNLOADS + "/" + context.getString(R.string.app_name);
 	}
 
-	private static boolean isContentUri(@NonNull final String outputReference) {
+	private static boolean isContentUri(@NonNull String outputReference) {
 		return outputReference.startsWith("content://");
 	}
 
 	@Nullable
-	private static String guessMimeType(@NonNull final String fileName) {
-		final String extension = extractExtension(fileName);
+	private static String guessMimeType(@NonNull String fileName) {
+		String extension = extractExtension(fileName);
 		if (extension == null) return null;
 		try {
-			final String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+			String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
 			if (mimeType != null && !mimeType.isBlank()) return mimeType;
 		} catch (RuntimeException ignored) {
 		}
@@ -152,52 +166,40 @@ public final class DownloadStorageUtils {
 	}
 
 	@Nullable
-	private static String extractExtension(@NonNull final String fileName) {
-		final int queryIndex = fileName.indexOf('?');
-		final String withoutQuery = queryIndex >= 0 ? fileName.substring(0, queryIndex) : fileName;
-		final int fragmentIndex = withoutQuery.indexOf('#');
-		final String normalized = fragmentIndex >= 0 ? withoutQuery.substring(0, fragmentIndex) : withoutQuery;
-		final int slashIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
-		final String lastSegment = slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
-		final int dotIndex = lastSegment.lastIndexOf('.');
+	private static String extractExtension(@NonNull String fileName) {
+		int queryIndex = fileName.indexOf('?');
+		String withoutQuery = queryIndex >= 0 ? fileName.substring(0, queryIndex) : fileName;
+		int fragmentIndex = withoutQuery.indexOf('#');
+		String normalized = fragmentIndex >= 0 ? withoutQuery.substring(0, fragmentIndex) : withoutQuery;
+		int slashIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+		String lastSegment = slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
+		int dotIndex = lastSegment.lastIndexOf('.');
 		if (dotIndex <= 0 || dotIndex == lastSegment.length() - 1) return null;
 		return lastSegment.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
 	}
 
 	@NonNull
-	private static File buildUniqueFile(@NonNull final File targetDir, @NonNull final String displayName) {
-		File candidate = new File(targetDir, displayName);
-		if (!candidate.exists()) return candidate;
-
-		final int dot = displayName.lastIndexOf('.');
-		final String baseName = dot >= 0 ? displayName.substring(0, dot) : displayName;
-		final String extension = dot >= 0 ? displayName.substring(dot) : "";
-		int suffix = 1;
-		while (candidate.exists()) {
-			candidate = new File(targetDir, baseName + " (" + suffix + ")" + extension);
-			suffix++;
-		}
-		return candidate;
-	}
-
-	@NonNull
 	@RequiresApi(Build.VERSION_CODES.Q)
-	private static String publishToDownloadsMediaStore(@NonNull final Context context, @NonNull final File sourceFile, @NonNull final String displayName, @Nullable final String mimeType) throws IOException {
-		final ContentResolver resolver = context.getContentResolver();
-		final ContentValues values = new ContentValues();
+	private static String publishToDownloadsMediaStore(@NonNull Context context, @NonNull File sourceFile, @NonNull String displayName, @Nullable String mimeType) throws IOException {
+		ContentResolver resolver = context.getContentResolver();
+		ContentValues values = new ContentValues();
 		values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
 		values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + context.getString(R.string.app_name));
 		values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 		if (mimeType != null) values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
 
-		final Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+		Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
 		if (uri == null) throw new IOException("Unable to create MediaStore entry for " + displayName);
 
-		try (final FileInputStream inputStream = new FileInputStream(sourceFile);
-		     final OutputStream outputStream = resolver.openOutputStream(uri, "w")) {
+		try (FileInputStream inputStream = new FileInputStream(sourceFile);
+		     OutputStream outputStream = resolver.openOutputStream(uri, "w")) {
 			if (outputStream == null)
 				throw new IOException("Unable to open MediaStore output stream for " + displayName);
-			inputStream.transferTo(outputStream);
+			byte[] buffer = new byte[8_192];
+			int read;
+			while ((read = inputStream.read(buffer)) != -1) {
+				outputStream.write(buffer, 0, read);
+			}
 		} catch (Exception e) {
 			resolver.delete(uri, null, null);
 			throw e instanceof IOException ? (IOException) e : new IOException(e);
@@ -205,7 +207,7 @@ public final class DownloadStorageUtils {
 			FileUtils.deleteQuietly(sourceFile);
 		}
 
-		final ContentValues completedValues = new ContentValues();
+		ContentValues completedValues = new ContentValues();
 		completedValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
 		resolver.update(uri, completedValues, null, null);
 		return uri.toString();

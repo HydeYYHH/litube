@@ -2,6 +2,8 @@ package com.hhst.youtubelite.player.queue;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -17,6 +19,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+/**
+ * Repository that persists the playback queue in MMKV.
+ */
 @Singleton
 public final class QueueRepository {
 	static final String KEY_QUEUE_ITEMS = "local_queue_items";
@@ -30,43 +35,55 @@ public final class QueueRepository {
 	private final Gson gson;
 	@NonNull
 	private final List<QueueInvalidationListener> listeners = new ArrayList<>();
+	@NonNull
+	private final MutableLiveData<QueueState> state;
 
 	@Inject
-	public QueueRepository(@NonNull final MMKV mmkv, @NonNull final Gson gson) {
+	public QueueRepository(@NonNull MMKV mmkv, @NonNull Gson gson) {
 		this.mmkv = mmkv;
 		this.gson = gson;
+		this.state = new MutableLiveData<>(snapshotState());
 	}
 
 	public synchronized boolean isEnabled() {
 		return mmkv.decodeBool(KEY_QUEUE_ENABLED, false);
 	}
 
-	public void setEnabled(final boolean enabled) {
+	public void setEnabled(boolean enabled) {
 		synchronized (this) {
 			mmkv.encode(KEY_QUEUE_ENABLED, enabled);
 		}
 		notifyListeners();
 	}
 
-	public synchronized void addListener(@NonNull final QueueInvalidationListener listener) {
+	public synchronized void addListener(@NonNull QueueInvalidationListener listener) {
 		if (!listeners.contains(listener)) {
 			listeners.add(listener);
 		}
 	}
 
-	@NonNull
-	public synchronized List<QueueItem> getItems() {
-		final List<QueueItem> items = readItems();
-		final List<QueueItem> copies = new ArrayList<>(items.size());
-		for (final QueueItem item : items) {
-			copies.add(item.copy());
-		}
-		return copies;
+	public synchronized void removeListener(@NonNull QueueInvalidationListener listener) {
+		listeners.remove(listener);
 	}
 
-	public void add(@NonNull final QueueItem item) {
+	@NonNull
+	public LiveData<QueueState> getState() {
+		return state;
+	}
+
+	@NonNull
+	public synchronized List<QueueItem> getItems() {
+		List<QueueItem> items = readItems();
+		List<QueueItem> out = new ArrayList<>(items.size());
+		for (QueueItem item : items) {
+			out.add(item.copy());
+		}
+		return out;
+	}
+
+	public void add(@NonNull QueueItem item) {
 		synchronized (this) {
-			final List<QueueItem> items = readItems();
+			List<QueueItem> items = readItems();
 			items.removeIf(it -> sameVideo(it, item));
 			items.add(item.copy());
 			writeItems(items);
@@ -74,11 +91,11 @@ public final class QueueRepository {
 		notifyListeners();
 	}
 
-	public boolean remove(@NonNull final String videoId) {
+	public boolean remove(@NonNull String videoId) {
 		boolean removed = false;
 		synchronized (this) {
-			final List<QueueItem> items = readItems();
-			final Iterator<QueueItem> iterator = items.iterator();
+			List<QueueItem> items = readItems();
+			Iterator<QueueItem> iterator = items.iterator();
 			while (iterator.hasNext()) {
 				if (Objects.equals(iterator.next().getVideoId(), videoId)) {
 					iterator.remove();
@@ -96,12 +113,12 @@ public final class QueueRepository {
 		return removed;
 	}
 
-	public boolean move(final int fromIndex, final int toIndex) {
+	public boolean move(int fromIndex, int toIndex) {
 		boolean moved = false;
 		synchronized (this) {
-			final List<QueueItem> items = readItems();
+			List<QueueItem> items = readItems();
 			if (isValidIndex(fromIndex, items.size()) && isValidIndex(toIndex, items.size()) && fromIndex != toIndex) {
-				final QueueItem item = items.remove(fromIndex);
+				QueueItem item = items.remove(fromIndex);
 				items.add(toIndex, item);
 				writeItems(items);
 				moved = true;
@@ -113,9 +130,9 @@ public final class QueueRepository {
 		return moved;
 	}
 
-	public synchronized boolean containsVideo(@Nullable final String videoId) {
+	public synchronized boolean containsVideo(@Nullable String videoId) {
 		if (videoId == null) return false;
-		for (final QueueItem item : readItems()) {
+		for (QueueItem item : readItems()) {
 			if (Objects.equals(item.getVideoId(), videoId)) return true;
 		}
 		return false;
@@ -133,17 +150,17 @@ public final class QueueRepository {
 	}
 
 	@Nullable
-	public synchronized QueueItem findRelative(@Nullable final String videoId, final int offset) {
-		final List<QueueItem> items = readItems();
+	public synchronized QueueItem findRelative(@Nullable String videoId, int offset) {
+		List<QueueItem> items = readItems();
 		if (items.isEmpty() || offset == 0) return null;
-		final int index = indexOf(items, videoId);
+		int index = indexOf(items, videoId);
 		if (index < 0) {
 			return offset > 0 ? items.get(0).copy() : items.get(items.size() - 1).copy();
 		}
-		final int target = index + offset;
+		int target = index + offset;
 		if (target < 0) return null;
 		if (target >= items.size()) {
-			if (offset > 0 && items.size() > 1) {
+			if (offset > 0) {
 				return items.get(target % items.size()).copy();
 			}
 			return null;
@@ -152,22 +169,22 @@ public final class QueueRepository {
 	}
 
 	@Nullable
-	public synchronized QueueItem findRandom(@Nullable final String videoId) {
-		final List<QueueItem> items = readItems();
+	public synchronized QueueItem findRandom(@Nullable String videoId) {
+		List<QueueItem> items = readItems();
 		if (items.isEmpty()) return null;
 		if (items.size() == 1) return items.get(0).copy();
-		final int index = indexOf(items, videoId);
-		final List<QueueItem> candidates = new ArrayList<>(items);
+		int index = indexOf(items, videoId);
+		List<QueueItem> candidates = new ArrayList<>(items);
 		if (index >= 0) candidates.remove(index);
 		if (candidates.isEmpty()) return items.get(0).copy();
 		return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())).copy();
 	}
 
-	private boolean isValidIndex(final int index, final int size) {
+	private boolean isValidIndex(int index, int size) {
 		return index >= 0 && index < size;
 	}
 
-	private int indexOf(@NonNull final List<QueueItem> items, @Nullable final String videoId) {
+	private int indexOf(@NonNull List<QueueItem> items, @Nullable String videoId) {
 		if (videoId == null) return -1;
 		for (int i = 0; i < items.size(); i++) {
 			if (Objects.equals(items.get(i).getVideoId(), videoId)) return i;
@@ -175,35 +192,42 @@ public final class QueueRepository {
 		return -1;
 	}
 
-	private boolean sameVideo(@NonNull final QueueItem first, @NonNull final QueueItem second) {
+	private boolean sameVideo(@NonNull QueueItem first, @NonNull QueueItem second) {
 		if (first.getVideoId() == null || second.getVideoId() == null) return false;
 		return Objects.equals(first.getVideoId(), second.getVideoId());
 	}
 
 	@NonNull
 	private List<QueueItem> readItems() {
-		final String json = mmkv.decodeString(KEY_QUEUE_ITEMS, null);
+		String json = mmkv.decodeString(KEY_QUEUE_ITEMS, null);
 		if (json == null || json.isBlank()) return new ArrayList<>();
 		try {
-			final List<QueueItem> items = gson.fromJson(json, LIST_TYPE);
+			List<QueueItem> items = gson.fromJson(json, LIST_TYPE);
 			return items != null ? items : new ArrayList<>();
-		} catch (final Exception ignored) {
+		} catch (Exception ignored) {
 			return new ArrayList<>();
 		}
 	}
 
 	private void notifyListeners() {
-		final List<QueueInvalidationListener> snapshot;
+		QueueState queueState = snapshotState();
+		state.postValue(queueState);
+		final List<QueueInvalidationListener> out;
 		synchronized (this) {
 			if (listeners.isEmpty()) return;
-			snapshot = new ArrayList<>(listeners);
+			out = new ArrayList<>(listeners);
 		}
-		for (final QueueInvalidationListener listener : snapshot) {
+		for (QueueInvalidationListener listener : out) {
 			listener.onQueueInvalidated();
 		}
 	}
 
-	private void writeItems(@NonNull final List<QueueItem> items) {
+	private void writeItems(@NonNull List<QueueItem> items) {
 		mmkv.encode(KEY_QUEUE_ITEMS, gson.toJson(items, LIST_TYPE));
+	}
+
+	@NonNull
+	private synchronized QueueState snapshotState() {
+		return new QueueState(isEnabled(), readItems());
 	}
 }

@@ -36,19 +36,19 @@ import java.util.concurrent.Executors;
 import dagger.hilt.android.AndroidEntryPoint;
 
 /**
- * Show image in full screen mode.
+ * Full-screen image viewer.
  */
 @AndroidEntryPoint
 public class GalleryActivity extends AppCompatActivity {
 	private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
-	// thumbnail filenames, used for saving or caching
+	// Thumbnail names used for saving or caching.
 	private final List<String> filenames = new ArrayList<>();
-	// thumbnail files to cache
+	// Cached thumbnail files.
 	private final List<File> files = new ArrayList<>();
-	// thumbnail resource urls
+	// Thumbnail URLs.
 	private List<String> urls = new ArrayList<>();
-	// current position in the pager
+	// Current pager index.
 	private int position = 0;
 
 	private ViewPager2 viewPager;
@@ -66,19 +66,19 @@ public class GalleryActivity extends AppCompatActivity {
 
 		viewPager = findViewById(R.id.viewPager);
 
-		// destroy this activity when click image or button
+		// Close the viewer when the user taps the image or the close button.
 		findViewById(R.id.btnClose).setOnClickListener(view -> finish());
 
-		// Get the list of URLs and filenames from intent
+		// Read the thumbnail list from the intent.
 		List<String> urlList = getIntent().getStringArrayListExtra("thumbnails");
-		String baseFilename = getIntent().getStringExtra("filename");
+		String baseName = getIntent().getStringExtra("filename");
 
 		urls = urlList;
 		if (urls == null) urls = new ArrayList<>();
-		// Generate filenames for each image
+		// Build a stable name for each image.
 		for (int i = 0; i < urls.size(); i++) {
-			filenames.add(baseFilename + "_" + i);
-			files.add(null); // Initialize with null files
+			filenames.add(baseName + "_" + i);
+			files.add(null);
 		}
 
 		setupViewPager();
@@ -97,11 +97,11 @@ public class GalleryActivity extends AppCompatActivity {
 	}
 
 	public void onContextMenuClicked(int index) {
-		final int currentPosition = position;
-		if (currentPosition >= urls.size()) return;
+		int pos = position;
+		if (pos >= urls.size()) return;
 
-		String url = urls.get(currentPosition);
-		String filename = filenames.get(currentPosition);
+		String url = urls.get(pos);
+		String filename = filenames.get(pos);
 
 		switch (index) {
 			case 0: // Save
@@ -109,11 +109,11 @@ public class GalleryActivity extends AppCompatActivity {
 				return;
 			case 1: // Share
 				File file = new File(getCacheDir(), filename + ".jpg");
-				// download thumbnail to local cache directory and send it
+				// Cache the thumbnail, then share the local file.
 				ioExecutor.execute(() -> {
 					try {
 						if (!file.exists()) FileUtils.copyURLToFile(new URL(url), file);
-						files.set(currentPosition, file);
+						files.set(pos, file);
 						Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
 						Intent shareIntent = new Intent(Intent.ACTION_SEND);
 						shareIntent.setType("image/*");
@@ -131,10 +131,10 @@ public class GalleryActivity extends AppCompatActivity {
 		}
 	}
 
-	private void saveCurrentImage(@NonNull final String url, @Nullable final String filename) {
+	private void saveCurrentImage(@NonNull String url, @Nullable String filename) {
 		ioExecutor.execute(() -> {
 			try {
-				final String displayName = sanitizeFileName(filename) + ".jpg";
+				String displayName = sanitizeFileName(filename) + ".jpg";
 				DownloadStorageUtils.saveUrlToDownloads(this, new URL(url), displayName);
 				ToastUtils.show(this, getString(R.string.download_finished, displayName, DownloadStorageUtils.getDownloadsLocationLabel(this)));
 			} catch (Exception e) {
@@ -145,8 +145,8 @@ public class GalleryActivity extends AppCompatActivity {
 	}
 
 	@NonNull
-	private String sanitizeFileName(@Nullable final String fileName) {
-		final String safeName = fileName == null || fileName.isBlank() ? "thumbnail" : fileName;
+	private String sanitizeFileName(@Nullable String fileName) {
+		String safeName = fileName == null || fileName.isBlank() ? "thumbnail" : fileName;
 		return safeName.replaceAll("[<>:\"/\\\\|?*]", "_");
 	}
 
@@ -164,6 +164,9 @@ public class GalleryActivity extends AppCompatActivity {
 		super.onDestroy();
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private class ImagePagerAdapter extends FragmentStateAdapter {
 		public ImagePagerAdapter(FragmentManager fragmentManager, Lifecycle lifecycle) {
 			super(fragmentManager, lifecycle);

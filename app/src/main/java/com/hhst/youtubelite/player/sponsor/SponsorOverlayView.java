@@ -12,6 +12,9 @@ import androidx.annotation.NonNull;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Overlay view that marks SponsorBlock segments on the timeline.
+ */
 public class SponsorOverlayView extends View {
 	private final Paint paint = new Paint();
 	private List<long[]> segments;

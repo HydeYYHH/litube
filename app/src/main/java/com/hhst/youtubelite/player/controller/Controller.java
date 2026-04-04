@@ -43,7 +43,7 @@ import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.browser.TabManager;
 import com.hhst.youtubelite.browser.YoutubeFragment;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.StreamDetails;
+import com.hhst.youtubelite.extractor.StreamCatalog;
 import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
@@ -62,22 +62,76 @@ import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.scopes.ActivityScoped;
 import lombok.Setter;
 
+/**
+ * Enumeration of app logic.
+ */
+enum PlaybackPrimaryAction {
+	PLAY(R.drawable.ic_play, R.string.action_play, false, false),
+	PAUSE(R.drawable.ic_pause, R.string.action_pause, true, false),
+	REPLAY(R.drawable.ic_replay, R.string.action_replay, false, true);
+
+	private final int iconRes;
+	private final int contentDescriptionRes;
+	private final boolean showsPauseButton;
+	private final boolean restartsCurrentItem;
+
+	PlaybackPrimaryAction(int iconRes,
+	                      final int contentDescriptionRes,
+	                      final boolean showsPauseButton,
+	                      final boolean restartsCurrentItem) {
+		this.iconRes = iconRes;
+		this.contentDescriptionRes = contentDescriptionRes;
+		this.showsPauseButton = showsPauseButton;
+		this.restartsCurrentItem = restartsCurrentItem;
+	}
+
+	@NonNull
+	static PlaybackPrimaryAction get(boolean isPlaying,
+	                                 final int playbackState,
+	                                 @NonNull PlayerLoopMode loopMode,
+	                                 final boolean inMiniPlayer,
+	                                 final boolean inQueue,
+	                                 final boolean hasPlaylistContext) {
+		if (isPlaying) return PAUSE;
+		if (!inMiniPlayer
+						&& playbackState == Player.STATE_ENDED
+						&& (loopMode == PlayerLoopMode.PAUSE_AT_END || (!inQueue && !hasPlaylistContext))) {
+			return REPLAY;
+		}
+		return PLAY;
+	}
+
+	int iconRes() {
+		return iconRes;
+	}
+
+	int contentDescriptionRes() {
+		return contentDescriptionRes;
+	}
+
+	boolean showsPauseButton() {
+		return showsPauseButton;
+	}
+
+	boolean restartsCurrentItem() {
+		return restartsCurrentItem;
+	}
+}
+
+/**
+ * Playback controller that translates engine state into UI actions.
+ */
 @ActivityScoped
 @UnstableApi
 public class Controller {
-	private static final int HINT_PADDING_DP = 8;
-	private static final int HINT_TOP_MARGIN_DP = 24;
-	private static final int CONTROLS_HIDE_DELAY_MS = 3000;
 	static final float DISABLED_BUTTON_ALPHA = 0.38f;
 	@NonNull
 	private final Activity activity;
@@ -100,17 +154,20 @@ public class Controller {
 	@Setter
 	private boolean longPress = false;
 	@NonNull
-	private final ControllerMachine stateMachine = new ControllerMachine();
+	private ControllerState state = ControllerState.initial();
 	private boolean block = false;
 	// Exit fullscreen after portrait.
 	private boolean pending = false;
 	private boolean autoFs = false;
+	private int lastSyncedOrientation = Configuration.ORIENTATION_UNDEFINED;
+	private boolean lastSyncedAutoRotate = false;
+	private boolean rotationSynced = false;
 	private long lastVideoRenderedCount = 0;
 	private long lastFpsUpdateTime = 0;
-	private float fps = 0;	@NonNull
-	private final Runnable hideControls = () -> setControlsVisible(false);
+	private float fps = 0;
+
 	@Inject
-	public Controller(@NonNull final Activity activity, @NonNull final LitePlayerView playerView, @NonNull final Engine engine, @NonNull final PlayerPreferences prefs, @NonNull final ZoomTouchListener zoomListener, @NonNull final TabManager tabManager, @NonNull final ExtensionManager extensionManager) {
+	public Controller(@NonNull Activity activity, @NonNull LitePlayerView playerView, @NonNull Engine engine, @NonNull PlayerPreferences prefs, @NonNull ZoomTouchListener zoomListener, @NonNull TabManager tabManager, @NonNull ExtensionManager extensionManager) {
 		this.activity = activity;
 		this.playerView = playerView;
 		this.engine = engine;
@@ -120,7 +177,7 @@ public class Controller {
 		this.extensionManager = extensionManager;
 		this.playerView.setOnMiniPlayerBackgroundTap(() -> setControlsVisible(!isControlsVisible()));
 		this.zoomListener.setOnShowReset(show ->
-						showReset(show && isControlsVisible() && stateMachine.getState() == ControllerMachine.State.FULLSCREEN_UNLOCKED));
+						showReset(show && isControlsVisible() && state.mode() == ControllerState.Mode.FULLSCREEN_UNLOCK));
 
 
 		playerView.post(() -> {
@@ -133,23 +190,24 @@ public class Controller {
 		});
 	}
 
-	public static boolean shouldEnablePrevious(@NonNull final QueueNav availability) {
+	public static boolean shouldEnablePrevious(@NonNull QueueNav availability) {
 		return availability.isPreviousActionEnabled();
-	}
+	}	@NonNull
+	private final Runnable hideControls = () -> setControlsVisible(false);
 
-	public static boolean shouldEnableNext(@NonNull final QueueNav availability) {
+	public static boolean shouldEnableNext(@NonNull QueueNav availability) {
 		return availability.isNextActionEnabled();
 	}
 
-	static float previousButtonAlpha(@NonNull final QueueNav availability) {
+	static float previousButtonAlpha(@NonNull QueueNav availability) {
 		return shouldEnablePrevious(availability) ? 1.0f : DISABLED_BUTTON_ALPHA;
 	}
 
-	static float nextButtonAlpha(@NonNull final QueueNav availability) {
+	static float nextButtonAlpha(@NonNull QueueNav availability) {
 		return shouldEnableNext(availability) ? 1.0f : DISABLED_BUTTON_ALPHA;
 	}
 
-	static boolean shouldEnterFs(final boolean watch,
+	static boolean shouldEnterFs(boolean watch,
 	                             final boolean rotate,
 	                             final boolean visible,
 	                             final boolean fullscreen,
@@ -167,15 +225,13 @@ public class Controller {
 						&& !blocked;
 	}
 
-	static boolean shouldExitFs(final boolean watch,
-	                            final boolean fullscreen,
+	static boolean shouldExitFs(boolean fullscreen,
 	                            final int orientation) {
-		return watch
-						&& fullscreen
+		return fullscreen
 						&& orientation == Configuration.ORIENTATION_PORTRAIT;
 	}
 
-	static boolean shouldLockPortrait(final boolean watch,
+	static boolean shouldLockPortrait(boolean watch,
 	                                  final boolean fullscreen,
 	                                  final int orientation) {
 		return watch
@@ -183,14 +239,18 @@ public class Controller {
 						&& orientation == Configuration.ORIENTATION_LANDSCAPE;
 	}
 
-	static int fsOrientation(final boolean autoFs, final boolean portrait) {
+	static int fsOrientation(boolean autoFs, boolean portrait) {
 		if (autoFs) return ActivityInfo.SCREEN_ORIENTATION_FULL_USER;
 		return portrait
 						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
 						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
 	}
 
-	public void refreshQueueNavigationAvailability(@NonNull final QueueNav availability) {
+	static boolean shouldAutoHideControls(boolean isPlaying, boolean isInPictureInPicture) {
+		return isPlaying && !isInPictureInPicture;
+	}
+
+	public void refreshQueueNavigationAvailability(@NonNull QueueNav availability) {
 		playerView.post(() -> {
 			applyPreviousButtonState(availability);
 			applyNextButtonState(availability);
@@ -203,22 +263,24 @@ public class Controller {
 	}
 
 	private void refreshPlaybackButtons() {
-		updateCenterPlaybackButtons(resolveCenterPrimaryAction());
+		updateCenterPlaybackButtons(getCenterPrimaryAction());
 		updatePlayPauseVisibility(R.id.btn_mini_play, R.id.btn_mini_pause, engine.isPlaying());
 	}
 
 	@NonNull
-	private PlaybackPrimaryAction resolveCenterPrimaryAction() {
-		return PlaybackPrimaryAction.resolve(
+	private PlaybackPrimaryAction getCenterPrimaryAction() {
+		return PlaybackPrimaryAction.get(
 						engine.isPlaying(),
 						engine.getPlaybackState(),
 						getLoopMode(),
-						stateMachine.isInMiniPlayer());
+						state.isInMiniPlayer(),
+						engine.isCurrentVideoInQueue(),
+						tabManager.watchHasPlaylist());
 	}
 
-	private void updateCenterPlaybackButtons(@NonNull final PlaybackPrimaryAction action) {
-		final ImageButton play = playerView.findViewById(R.id.btn_play);
-		final View pause = playerView.findViewById(R.id.btn_pause);
+	private void updateCenterPlaybackButtons(@NonNull PlaybackPrimaryAction action) {
+		ImageButton play = playerView.findViewById(R.id.btn_play);
+		View pause = playerView.findViewById(R.id.btn_pause);
 		if (play != null) {
 			if (!action.showsPauseButton()) {
 				play.setImageResource(action.iconRes());
@@ -234,23 +296,24 @@ public class Controller {
 	private void setupHintOverlay() {
 		this.hintText = playerView.findViewById(R.id.hint_text);
 		if (this.hintText != null) {
-			final int pad = ViewUtils.dpToPx(activity, HINT_PADDING_DP);
+			int pad = ViewUtils.dpToPx(activity, 8);
 			this.hintText.setPadding(pad, pad / 2, pad, pad / 2);
 			final FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) this.hintText.getLayoutParams();
-			lp.topMargin = ViewUtils.dpToPx(activity, HINT_TOP_MARGIN_DP);
+			lp.topMargin = ViewUtils.dpToPx(activity, 24);
 			this.hintText.setLayoutParams(lp);
 		}
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
 	private void setupListeners() {
-		final PlayerGestureListener gestureListener = new PlayerGestureListener(activity, playerView, engine, this);
-		final GestureDetector detector = new GestureDetector(activity, gestureListener);
+		// Wire gestures and player callbacks.
+		PlayerGestureListener gestureListener = new PlayerGestureListener(activity, playerView, engine, this);
+		GestureDetector detector = new GestureDetector(activity, gestureListener);
 		playerView.setOnTouchListener((v, ev) -> {
-			if (stateMachine.isInMiniPlayer()) {
+			if (state.isInMiniPlayer()) {
 				return false;
 			}
-			final int action = ev.getAction();
+			int action = ev.getAction();
 			if (action == MotionEvent.ACTION_DOWN && isControlsVisible()) {
 				handler.removeCallbacks(hideControls);
 			}
@@ -288,11 +351,11 @@ public class Controller {
 				}
 				if (playbackState == Player.STATE_READY) {
 					playerView.post(() -> {
-						final TextView speedView = playerView.findViewById(R.id.btn_speed);
+						TextView speedView = playerView.findViewById(R.id.btn_speed);
 						if (speedView != null) {
 							speedView.setText(String.format(Locale.getDefault(), "%sx", engine.getPlaybackRate()));
 						}
-						final TextView qualityView = playerView.findViewById(R.id.btn_quality);
+						TextView qualityView = playerView.findViewById(R.id.btn_quality);
 						if (qualityView != null) qualityView.setText(engine.getQualityLabel());
 					});
 				}
@@ -302,7 +365,7 @@ public class Controller {
 			public void onTracksChanged(@NonNull Tracks tracks) {
 				updateSubtitleButtonState();
 				playerView.post(() -> {
-					final TextView qualityView = playerView.findViewById(R.id.btn_quality);
+					TextView qualityView = playerView.findViewById(R.id.btn_quality);
 					if (qualityView != null) qualityView.setText(engine.getQualityLabel());
 				});
 			}
@@ -318,6 +381,7 @@ public class Controller {
 	}
 
 	private void setupButtonListeners() {
+		// Wire the controller buttons after the view is ready.
 		setupPlaybackButtons();
 		setupQualityAndSpeedButtons();
 		setupSubtitleAndSegmentButtons();
@@ -326,7 +390,7 @@ public class Controller {
 
 	private void setupPlaybackButtons() {
 		setClick(R.id.btn_play, v -> {
-			if (resolveCenterPrimaryAction().restartsCurrentItem()) {
+			if (getCenterPrimaryAction().restartsCurrentItem()) {
 				engine.seekTo(0);
 			}
 			engine.play();
@@ -349,16 +413,16 @@ public class Controller {
 			setControlsVisible(true);
 		});
 
-		final ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
+		ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
 		if (lockBtn != null) {
 			lockBtn.setOnClickListener(v -> {
 				toggleLockState();
-				showHint(activity.getString(stateMachine.isLocked() ? R.string.lock_screen : R.string.unlock_screen),
+				showHint(activity.getString(state.isLocked() ? R.string.lock_screen : R.string.unlock_screen),
 								com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 			});
 		}
 
-		final ImageButton fsBtn = playerView.findViewById(R.id.btn_fullscreen);
+		ImageButton fsBtn = playerView.findViewById(R.id.btn_fullscreen);
 		if (fsBtn != null) {
 			fsBtn.setOnClickListener(v -> {
 				if (!isFullscreen()) {
@@ -369,11 +433,11 @@ public class Controller {
 			});
 		}
 
-		final ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
+		ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
 		if (loopBtn != null) {
 			applyLoopMode(loopBtn, prefs.getLoopMode());
 			loopBtn.setOnClickListener(v -> {
-				final PlayerLoopMode newMode = getLoopMode().next();
+				PlayerLoopMode newMode = getLoopMode().next();
 				setLoopMode(newMode);
 				showHint(activity.getString(getLoopModeLabelRes(newMode)), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 				setControlsVisible(true);
@@ -383,15 +447,20 @@ public class Controller {
 		setClick(R.id.btn_reset, v -> zoomListener.reset());
 	}
 
-	private void applyLoopMode(@NonNull final ImageButton loopBtn, @NonNull final PlayerLoopMode mode) {
+	private void applyLoopMode(@NonNull ImageButton loopBtn, @NonNull PlayerLoopMode mode) {
 		engine.setLoopMode(mode);
 		loopBtn.setImageResource(getLoopModeIconRes(mode));
 		loopBtn.setContentDescription(activity.getString(getLoopModeLabelRes(mode)));
 	}
 
-	public void setLoopMode(@NonNull final PlayerLoopMode mode) {
+	@NonNull
+	public PlayerLoopMode getLoopMode() {
+		return prefs.getLoopMode();
+	}
+
+	public void setLoopMode(@NonNull PlayerLoopMode mode) {
 		prefs.setLoopMode(mode);
-		final ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
+		ImageButton loopBtn = playerView.findViewById(R.id.btn_loop);
 		if (loopBtn != null) {
 			applyLoopMode(loopBtn, mode);
 		} else {
@@ -400,12 +469,7 @@ public class Controller {
 		refreshPlaybackButtons();
 	}
 
-	@NonNull
-	public PlayerLoopMode getLoopMode() {
-		return prefs.getLoopMode();
-	}
-
-	private int getLoopModeIconRes(@NonNull final PlayerLoopMode mode) {
+	private int getLoopModeIconRes(@NonNull PlayerLoopMode mode) {
 		return switch (mode) {
 			case PLAYLIST_NEXT -> R.drawable.ic_playback_end_next;
 			case LOOP_ONE -> R.drawable.ic_playback_end_loop;
@@ -414,7 +478,7 @@ public class Controller {
 		};
 	}
 
-	private int getLoopModeLabelRes(@NonNull final PlayerLoopMode mode) {
+	private int getLoopModeLabelRes(@NonNull PlayerLoopMode mode) {
 		return switch (mode) {
 			case PLAYLIST_NEXT -> R.string.playback_end_next;
 			case LOOP_ONE -> R.string.playback_end_loop;
@@ -424,20 +488,21 @@ public class Controller {
 	}
 
 	private void setupQualityAndSpeedButtons() {
-		final TextView speedView = playerView.findViewById(R.id.btn_speed);
-		final TextView qualityView = playerView.findViewById(R.id.btn_quality);
+		// Keep the pickers aligned with the active playback options.
+		TextView speedView = playerView.findViewById(R.id.btn_speed);
+		TextView qualityView = playerView.findViewById(R.id.btn_quality);
 		if (speedView != null)
 			speedView.setText(String.format(Locale.getDefault(), "%sx", engine.getPlaybackRate()));
 
 		if (speedView != null) {
 			speedView.setOnClickListener(v -> {
-				final float[] speeds = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f};
-				final String[] options = new String[speeds.length];
+				float[] speeds = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f};
+				String[] options = new String[speeds.length];
 				int checked = -1;
-				float currentSpeed = engine.getPlaybackRate();
+				float speed = engine.getPlaybackRate();
 				for (int i = 0; i < speeds.length; i++) {
 					options[i] = speeds[i] + "x";
-					if (Math.abs(speeds[i] - currentSpeed) < 0.01) checked = i;
+					if (Math.abs(speeds[i] - speed) < 0.01) checked = i;
 				}
 				showSelectionPopup(v, options, checked, (index, label) -> {
 					engine.setPlaybackRate(speeds[index]);
@@ -452,11 +517,8 @@ public class Controller {
 			qualityView.setOnClickListener(v -> {
 				List<String> available = engine.getAvailableResolutions();
 				if (available.isEmpty()) return;
-				Map<String, String> map = new LinkedHashMap<>();
-				for (String s : available)
-					map.merge(s.replaceAll("(?<=p)\\d+|\\s", ""), s, (o, n) -> n.contains("60") ? n : o);
-				String[] labels = map.keySet().toArray(new String[0]);
-				String[] values = map.values().toArray(new String[0]);
+				String[] labels = available.toArray(new String[0]);
+				String[] values = available.toArray(new String[0]);
 				int checked = Arrays.asList(values).indexOf(engine.getQuality());
 				showSelectionPopup(v, labels, checked, (index, label) -> {
 					String selected = values[index];
@@ -471,7 +533,8 @@ public class Controller {
 	}
 
 	private void setupSubtitleAndSegmentButtons() {
-		final ImageButton subBtn = playerView.findViewById(R.id.btn_subtitles);
+		// Build compact pickers for subtitle, segment, and audio choices.
+		ImageButton subBtn = playerView.findViewById(R.id.btn_subtitles);
 		updateSubtitleButtonState();
 		if (subBtn != null) {
 			subBtn.setOnClickListener(v -> {
@@ -482,8 +545,8 @@ public class Controller {
 					return;
 				}
 				String[] options = available.toArray(new String[0]);
-				String current = engine.getSelectedSubtitle();
-				int checked = (engine.areSubtitlesEnabled() && current != null) ? available.indexOf(current) : -1;
+				String sel = engine.getSelectedSubtitle();
+				int checked = (engine.areSubtitlesEnabled() && sel != null) ? available.indexOf(sel) : -1;
 				showSelectionPopup(subBtn, options, checked, (index, label) -> {
 					if (index == checked) {
 						engine.setSubtitlesEnabled(false);
@@ -497,30 +560,40 @@ public class Controller {
 				});
 			});
 		}
-		setClick(R.id.btn_segments, this::showSegmentsPopup);
-	}
-
-	private void showSegmentsPopup(@NonNull final View anchor) {
-		List<StreamSegment> segments = engine.getSegments();
-		String[] titles = new String[segments.size()];
-		int currentIdx = -1;
-		long posSec = engine.position() / 1000;
-		for (int i = 0; i < segments.size(); i++) {
-			StreamSegment seg = segments.get(i);
-			titles[i] = DateUtils.formatElapsedTime(Math.max(seg.getStartTimeSeconds(), 0)) + " - " + seg.getTitle();
-			if (posSec >= seg.getStartTimeSeconds()) currentIdx = i;
-		}
-		showSelectionPopup(anchor, titles, currentIdx, new SelectionCallback() {
-			@Override
-			public void onSelected(int index, String label) {
-				engine.seekTo(segments.get(index).getStartTimeSeconds() * 1000L);
-				showHint(activity.getString(R.string.jumped_to_segment, segments.get(index).getTitle()), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
+		setClick(R.id.btn_segments, anchor -> {
+			List<StreamSegment> segments = engine.getSegments();
+			String[] titles = new String[segments.size()];
+			int idx = -1;
+			long posSec = engine.position() / 1000;
+			for (int i = 0; i < segments.size(); i++) {
+				StreamSegment seg = segments.get(i);
+				titles[i] = DateUtils.formatElapsedTime(Math.max(seg.getStartTimeSeconds(), 0)) + " - " + seg.getTitle();
+				if (posSec >= seg.getStartTimeSeconds()) idx = i;
 			}
+			showSelectionPopup(anchor, titles, idx, new SelectionCallback() {
+				@Override
+				public void onSelected(int index, String label) {
+					StreamSegment segment = segments.get(index);
+					engine.seekTo(segment.getStartTimeSeconds() * 1000L);
+					showHint(activity.getString(R.string.jumped_to_segment, segment.getTitle()), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
+				}
 
-			@Override
-			public void onLongClick(int index, String label) {
-				showSegmentDetailsDialog(segments.get(index));
-			}
+				@Override
+				public void onLongClick(int index, String label) {
+					StreamSegment segment = segments.get(index);
+					MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(activity);
+					View v = activity.getLayoutInflater().inflate(R.layout.dialog_segment, null, false);
+					((TextView) v.findViewById(R.id.segment_title)).setText(segment.getTitle());
+					((TextView) v.findViewById(R.id.segment_time)).setText(DateUtils.formatElapsedTime(Math.max(segment.getStartTimeSeconds(), 0)));
+					ImageUtils.loadThumb(v.findViewById(R.id.segment_thumbnail),
+									segment.getPreviewUrl() != null ? segment.getPreviewUrl() : engine.getThumbnailUrl());
+					b.setView(v).setPositiveButton(R.string.jump, (d, w) -> {
+						engine.seekTo(segment.getStartTimeSeconds() * 1000L);
+						showHint(activity.getString(R.string.jumped_to_segment, segment.getTitle()), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
+						hideControlsAutomatically();
+					}).setNegativeButton(R.string.close, null).show();
+				}
+			});
 		});
 	}
 
@@ -595,10 +668,10 @@ public class Controller {
 			options[i] = s.getAudioTrackName() == null ? bitrate + "kbps" : String.format("%s (%s)", s.getAudioTrackName(), bitrate + "kbps");
 		}
 		int checked = -1;
-		AudioStream current = engine.getAudioTrack();
-		if (current != null) {
+		AudioStream sel = engine.getAudioTrack();
+		if (sel != null) {
 			for (int i = 0; i < audioTracks.size(); i++)
-				if (audioTracks.get(i).getContent().equals(current.getContent())) checked = i;
+				if (audioTracks.get(i).getContent().equals(sel.getContent())) checked = i;
 		}
 		new MaterialAlertDialogBuilder(activity).setTitle(R.string.audio_track).setAdapter(getAdapter(checked, options), (dialog, which) -> {
 			engine.setAudioTrack(audioTracks.get(which));
@@ -636,7 +709,7 @@ public class Controller {
 	}
 
 	private void showVideoDetails() {
-		StreamDetails details = engine.getStreamDetails();
+		StreamCatalog details = engine.getStreamCatalog();
 		if (details == null) {
 			showHint(activity.getString(R.string.unable_to_get_stream_info), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
 			hideControlsAutomatically();
@@ -665,7 +738,8 @@ public class Controller {
 	}
 
 	@NonNull
-	private String getVideoDetailsText(@NonNull StreamDetails details) {
+	private String getVideoDetailsText(@NonNull StreamCatalog details) {
+		// Assemble the debug info shown in the info dialog.
 		StringBuilder sb = new StringBuilder();
 		Format vF = engine.getVideoFormat();
 		Format aF = engine.getAudioFormat();
@@ -721,43 +795,57 @@ public class Controller {
 						isWatch(),
 						DeviceUtils.isRotateOn(activity),
 						playerView.getVisibility() == View.VISIBLE,
-						stateMachine.isFullscreen(),
-						stateMachine.isInPictureInPicture(),
-						stateMachine.isInMiniPlayer(),
+						state.isFullscreen(),
+						state.isInPictureInPicture(),
+						state.isInMiniPlayer(),
 						orientation(),
 						false)) {
 			enterAutoFs();
 			return;
 		}
 		autoFs = false;
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.enterFullscreen();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.enterFullscreen();
 		applyControllerState(previousState, true);
 	}
 
 	public void exitFullscreen() {
-		if (shouldLockPortrait(isWatch(), stateMachine.isFullscreen(), orientation())) {
+		if (shouldLockPortrait(isWatch(), state.isFullscreen(), orientation())) {
 			pending = true;
 			block = true;
-			activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+			activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 			return;
 		}
+		exitNow();
+	}
+
+	public void exitFullscreenImmediately() {
+		if (!state.isFullscreen()) return;
+		clearRotation();
 		exitNow();
 	}
 
 	private void exitNow() {
 		pending = false;
 		autoFs = false;
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.exitFullscreen();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.exitFullscreen();
 		applyControllerState(previousState, true);
 		zoomListener.reset();
 	}
 
-	public void syncRotation(final boolean autoRotate, final int orientation) {
+	public void syncRotation(boolean autoRotate, int orientation) {
+		if (rotationSynced
+						&& orientation == lastSyncedOrientation
+						&& autoRotate == lastSyncedAutoRotate) {
+			return;
+		}
+		lastSyncedOrientation = orientation;
+		lastSyncedAutoRotate = autoRotate;
+		rotationSynced = true;
 		if (!isWatch()
-						|| stateMachine.isInPictureInPicture()
-						|| stateMachine.isInMiniPlayer()
+						|| state.isInPictureInPicture()
+						|| state.isInMiniPlayer()
 						|| playerView.getVisibility() != View.VISIBLE) {
 			clearRotation();
 			return;
@@ -765,11 +853,11 @@ public class Controller {
 		if (orientation == Configuration.ORIENTATION_PORTRAIT) {
 			if (pending) {
 				pending = false;
-				if (stateMachine.isFullscreen()) exitNow();
+				if (state.isFullscreen()) exitNow();
 				return;
 			}
 			block = false;
-			if (shouldExitFs(true, stateMachine.isFullscreen(), orientation)) {
+			if (shouldExitFs(state.isFullscreen(), orientation)) {
 				exitNow();
 			}
 			return;
@@ -779,9 +867,9 @@ public class Controller {
 						true,
 						autoRotate,
 						playerView.getVisibility() == View.VISIBLE,
-						stateMachine.isFullscreen(),
-						stateMachine.isInPictureInPicture(),
-						stateMachine.isInMiniPlayer(),
+						state.isFullscreen(),
+						state.isInPictureInPicture(),
+						state.isInMiniPlayer(),
 						orientation,
 						block)) {
 			enterAutoFs();
@@ -792,58 +880,49 @@ public class Controller {
 		block = false;
 		pending = false;
 		autoFs = false;
+		rotationSynced = false;
+		lastSyncedOrientation = Configuration.ORIENTATION_UNDEFINED;
+		lastSyncedAutoRotate = false;
 	}
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.onPictureInPictureModeChanged(isInPiP);
+		final ControllerState.Mode previousState = state.mode();
+		state = isInPiP ? state.enterPip() : state.exitPip();
 		applyControllerState(previousState, !isInPiP);
 	}
 
 	public void enterMiniPlayer() {
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.enterMiniPlayer();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.enterMiniPlayer();
 		applyControllerState(previousState, true);
 	}
 
 	public void exitMiniPlayer() {
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.exitMiniPlayer();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.exitMiniPlayer();
 		applyControllerState(previousState, true);
 	}
 
-	public void setControlsVisible(boolean visible) {
-		stateMachine.setControlsVisible(visible);
-		handler.removeCallbacks(hideControls);
-		final ControllerMachine.RenderState renderState = stateMachine.currentRenderState(
-						engine.getPlaybackState() == Player.STATE_BUFFERING,
-						zoomListener.isZoomed());
-		applyRenderState(renderState);
-		if (renderState.controlsVisible()) {
-			hideControlsAutomatically();
-		}
-	}
-
-	private void applyRenderState(@NonNull final ControllerMachine.RenderState renderState) {
+	private void applyRenderState(@NonNull ControllerState.RenderState renderState) {
 		View center = playerView.findViewById(R.id.center_controls);
 		View other = playerView.findViewById(R.id.other_controls);
 		View bar = playerView.findViewById(R.id.exo_progress);
 		ImageButton lockBtn = playerView.findViewById(R.id.btn_lock);
 		updateLockButton(lockBtn);
 		if (center != null) {
-			ViewUtils.animateViewAlpha(center, renderState.showCenterControls() ? 1.0f : 0.0f, View.GONE);
+			ViewUtils.animateViewAlpha(center, renderState.centerVisible() ? 1.0f : 0.0f, View.GONE);
 		}
 		if (other != null) {
-			ViewUtils.animateViewAlpha(other, renderState.showOtherControls() ? 1.0f : 0.0f, View.GONE);
+			ViewUtils.animateViewAlpha(other, renderState.otherVisible() ? 1.0f : 0.0f, View.GONE);
 		}
 		if (bar != null) {
-			ViewUtils.animateViewAlpha(bar, renderState.showProgressBar() ? 1.0f : 0.0f, View.GONE);
+			ViewUtils.animateViewAlpha(bar, renderState.progressVisible() ? 1.0f : 0.0f, View.GONE);
 		}
-		showReset(renderState.showResetButton());
+		showReset(renderState.resetVisible());
 		if (lockBtn != null) {
-			ViewUtils.animateViewAlpha(lockBtn, renderState.showLockButton() ? 1.0f : 0.0f, View.GONE);
+			ViewUtils.animateViewAlpha(lockBtn, renderState.lockVisible() ? 1.0f : 0.0f, View.GONE);
 		}
-		updateMiniControls(renderState.showMiniControls(), renderState.showMiniScrim());
+		updateMiniControls(renderState.miniVisible(), renderState.scrimVisible());
 	}
 
 	private void showReset(boolean show) {
@@ -853,17 +932,14 @@ public class Controller {
 
 	private void hideControlsAutomatically() {
 		handler.removeCallbacks(hideControls);
-		if (shouldAutoHideControls(engine.isPlaying(), stateMachine.isInPictureInPicture())) {
-			handler.postDelayed(hideControls, CONTROLS_HIDE_DELAY_MS);
+		if (shouldAutoHideControls(engine.isPlaying(), state.isInPictureInPicture())) {
+			handler.postDelayed(hideControls, 3000);
 		}
 	}
 
-	static boolean shouldAutoHideControls(final boolean isPlaying, final boolean isInPictureInPicture) {
-		return isPlaying && !isInPictureInPicture;
-	}
-
 	public void showHint(@NonNull String text, long durationMs) {
-		if (hintText == null || activity.isInPictureInPictureMode() || stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) return;
+		if (hintText == null || activity.isInPictureInPictureMode() || state.isInPictureInPicture() || state.isInMiniPlayer())
+			return;
 		hintText.setText(text);
 		ViewUtils.animateViewAlpha(hintText, 1.0f, View.GONE);
 		handler.removeCallbacks(this::hideHint);
@@ -871,27 +947,39 @@ public class Controller {
 	}
 
 	public boolean isFullscreen() {
-		return stateMachine.isFullscreen();
+		return state.isFullscreen();
 	}
 
 	public boolean isControlsVisible() {
-		return stateMachine.isControlsVisible();
+		return state.controlsVisible();
+	}
+
+	public void setControlsVisible(boolean visible) {
+		state = state.withControlsVisible(visible);
+		handler.removeCallbacks(hideControls);
+		final ControllerState.RenderState renderState = state.renderState(
+						engine.getPlaybackState() == Player.STATE_BUFFERING,
+						zoomListener.isZoomed());
+		applyRenderState(renderState);
+		if (renderState.controlsVisible()) {
+			hideControlsAutomatically();
+		}
 	}
 
 	private void toggleLockState() {
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.toggleLock();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.toggleLock();
 		applyControllerState(previousState, true);
 	}
 
-	private void applyControllerState(@NonNull final ControllerMachine.State previousState,
+	private void applyControllerState(@NonNull ControllerState.Mode previousState,
 	                                  final boolean controlsVisible) {
 		playerView.applyControllerState(
 						previousState,
-						stateMachine.getState(),
+						state.mode(),
 						fsOrientation(autoFs, PlayerUtils.isPortrait(engine)),
 						prefs.getResizeMode());
-		if (stateMachine.isInPictureInPicture() || stateMachine.isInMiniPlayer()) {
+		if (state.isInPictureInPicture() || state.isInMiniPlayer()) {
 			hideHint();
 		}
 		refreshPlaybackButtons();
@@ -901,8 +989,8 @@ public class Controller {
 	private void enterAutoFs() {
 		autoFs = true;
 		pending = false;
-		final ControllerMachine.State previousState = stateMachine.getState();
-		stateMachine.enterFullscreen();
+		final ControllerState.Mode previousState = state.mode();
+		state = state.enterFullscreen();
 		applyControllerState(previousState, true);
 	}
 
@@ -911,18 +999,18 @@ public class Controller {
 	}
 
 	private boolean isWatch() {
-		final YoutubeFragment tab = tabManager.getTab();
+		YoutubeFragment tab = tabManager.getTab();
 		if (tab == null) return false;
-		if (Constant.PAGE_WATCH.equals(tab.getMTag())) return true;
-		final String url = tab.getUrl();
+		if (Constant.PAGE_WATCH.equals(tab.getTabTag())) return true;
+		String url = tab.getUrl();
 		return url != null && Constant.PAGE_WATCH.equals(UrlUtils.getPageClass(url));
 	}
 
-	private void updateLockButton(@Nullable final ImageButton lockBtn) {
+	private void updateLockButton(@Nullable ImageButton lockBtn) {
 		if (lockBtn == null) return;
-		lockBtn.setImageResource(stateMachine.isLocked() ? R.drawable.ic_lock : R.drawable.ic_unlock);
+		lockBtn.setImageResource(state.isLocked() ? R.drawable.ic_lock : R.drawable.ic_unlock);
 		lockBtn.setContentDescription(activity.getString(
-						stateMachine.isLocked() ? R.string.lock_screen : R.string.unlock_screen));
+						state.isLocked() ? R.string.lock_screen : R.string.unlock_screen));
 	}
 
 	public void hideHint() {
@@ -930,10 +1018,11 @@ public class Controller {
 	}
 
 	private void showResizeModeOptions() {
+		// Build the resize picker with the active mode highlighted.
 		setControlsVisible(true);
 		String[] opts = {activity.getString(R.string.resize_fit), activity.getString(R.string.resize_fill), activity.getString(R.string.resize_zoom), activity.getString(R.string.resize_fixed_width), activity.getString(R.string.resize_fixed_height)};
 		int[] modes = {AspectRatioFrameLayout.RESIZE_MODE_FIT, AspectRatioFrameLayout.RESIZE_MODE_FILL, AspectRatioFrameLayout.RESIZE_MODE_ZOOM, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT};
-		final ListAdapter adapter = getResizeAdapter(modes, opts);
+		ListAdapter adapter = getResizeAdapter(modes, opts);
 		new MaterialAlertDialogBuilder(activity).setTitle(R.string.resize_mode).setAdapter(adapter, (d, w) -> {
 			playerView.setResizeMode(modes[w]);
 			prefs.setResizeMode(modes[w]);
@@ -945,10 +1034,10 @@ public class Controller {
 	@NonNull
 	private ListAdapter getResizeAdapter(@NonNull int[] modes, @NonNull String[] options) {
 		int[] icons = {R.drawable.ic_resize_fit, R.drawable.ic_resize_fill, R.drawable.ic_resize_zoom, R.drawable.ic_resize_width, R.drawable.ic_resize_height};
-		int currentMode = playerView.getResizeMode();
+		int mode = playerView.getResizeMode();
 		int checked = 0;
-		for (int i = 0; i < modes.length; i++) if (modes[i] == currentMode) checked = i;
-		final int finalChecked = checked;
+		for (int i = 0; i < modes.length; i++) if (modes[i] == mode) checked = i;
+		int selectedIndex = checked;
 		return new ArrayAdapter<>(activity, R.layout.dialog_resize_mode_item, options) {
 			@NonNull
 			@Override
@@ -959,7 +1048,7 @@ public class Controller {
 				icon.setImageResource(icons[position]);
 				text.setText(getItem(position));
 				TypedValue tv = new TypedValue();
-				if (position == finalChecked) {
+				if (position == selectedIndex) {
 					activity.getTheme().resolveAttribute(android.R.attr.colorPrimary, tv, true);
 					icon.setColorFilter(tv.data);
 					text.setTextColor(tv.data);
@@ -976,6 +1065,7 @@ public class Controller {
 	}
 
 	private void showSelectionPopup(@NonNull View anchor, @NonNull String[] options, int checkedIndex, @NonNull SelectionCallback callback) {
+		// Show a compact popup and keep long-press actions in the same flow.
 		setControlsVisible(true);
 		ListPopupWindow popup = new ListPopupWindow(activity);
 		popup.setAnchorView(anchor);
@@ -1028,20 +1118,6 @@ public class Controller {
 		return Math.min(maxWidth, (int) (ViewUtils.getScreenWidth(activity) * 0.8));
 	}
 
-	private void showSegmentDetailsDialog(@NonNull StreamSegment seg) {
-		MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(activity);
-		View v = activity.getLayoutInflater().inflate(R.layout.dialog_segment, null, false);
-		((TextView) v.findViewById(R.id.segment_title)).setText(seg.getTitle());
-		((TextView) v.findViewById(R.id.segment_time)).setText(DateUtils.formatElapsedTime(Math.max(seg.getStartTimeSeconds(), 0)));
-		ImageUtils.loadThumb((ImageView) v.findViewById(R.id.segment_thumbnail),
-				seg.getPreviewUrl() != null ? seg.getPreviewUrl() : engine.getThumbnail());
-		b.setView(v).setPositiveButton(R.string.jump, (d, w) -> {
-			engine.seekTo(seg.getStartTimeSeconds() * 1000L);
-			showHint(activity.getString(R.string.jumped_to_segment, seg.getTitle()), com.hhst.youtubelite.player.common.Constant.HINT_HIDE_DELAY_MS);
-			hideControlsAutomatically();
-		}).setNegativeButton(R.string.close, null).show();
-	}
-
 	private void setClick(int id, View.OnClickListener l) {
 		View v = playerView.findViewById(id);
 		if (v != null) v.setOnClickListener(l);
@@ -1053,41 +1129,41 @@ public class Controller {
 		}
 	}
 
-	private void updatePlayPauseVisibility(final int playId, final int pauseId, final boolean isPlaying) {
-		final View play = playerView.findViewById(playId);
-		final View pause = playerView.findViewById(pauseId);
+	private void updatePlayPauseVisibility(int playId, int pauseId, boolean isPlaying) {
+		View play = playerView.findViewById(playId);
+		View pause = playerView.findViewById(pauseId);
 		if (play != null) play.setVisibility(!isPlaying ? View.VISIBLE : View.GONE);
 		if (pause != null) pause.setVisibility(isPlaying ? View.VISIBLE : View.GONE);
 	}
 
-	private void applyPreviousButtonState(@NonNull final QueueNav availability) {
+	private void applyPreviousButtonState(@NonNull QueueNav availability) {
 		applyPreviousButtonState(R.id.btn_prev, availability);
 		applyPreviousButtonState(R.id.btn_mini_prev, availability);
 	}
 
-	private void applyPreviousButtonState(final int viewId,
-	                                      @NonNull final QueueNav availability) {
-		final View button = playerView.findViewById(viewId);
+	private void applyPreviousButtonState(int viewId,
+	                                      @NonNull QueueNav availability) {
+		View button = playerView.findViewById(viewId);
 		if (button == null) return;
 		button.setEnabled(shouldEnablePrevious(availability));
 		button.setAlpha(previousButtonAlpha(availability));
 	}
 
-	private void applyNextButtonState(@NonNull final QueueNav availability) {
+	private void applyNextButtonState(@NonNull QueueNav availability) {
 		applyNextButtonState(R.id.btn_next, availability);
 		applyNextButtonState(R.id.btn_mini_next, availability);
 	}
 
-	private void applyNextButtonState(final int viewId,
-	                                  @NonNull final QueueNav availability) {
-		final View button = playerView.findViewById(viewId);
+	private void applyNextButtonState(int viewId,
+	                                  @NonNull QueueNav availability) {
+		View button = playerView.findViewById(viewId);
 		if (button == null) return;
 		button.setEnabled(shouldEnableNext(availability));
 		button.setAlpha(nextButtonAlpha(availability));
 	}
 
-	private void updateMiniControls(final boolean showControls, final boolean showScrim) {
-		final View scrim = playerView.findViewById(R.id.mini_controller_scrim);
+	private void updateMiniControls(boolean showControls, boolean showScrim) {
+		View scrim = playerView.findViewById(R.id.mini_controller_scrim);
 		if (scrim != null) {
 			ViewUtils.animateViewAlpha(scrim, showScrim ? 1.0f : 0.0f, View.GONE);
 		}
@@ -1097,13 +1173,16 @@ public class Controller {
 		updateVisibility(R.id.mini_bottom_controls, showControls);
 	}
 
-	private void updateVisibility(final int viewId, final boolean visible) {
-		final View view = playerView.findViewById(viewId);
+	private void updateVisibility(int viewId, boolean visible) {
+		View view = playerView.findViewById(viewId);
 		if (view != null) {
 			view.setVisibility(visible ? View.VISIBLE : View.GONE);
 		}
 	}
 
+/**
+ * Contract for app logic.
+ */
 	private interface SelectionCallback {
 		void onSelected(int index, String label);
 
@@ -1114,56 +1193,5 @@ public class Controller {
 
 
 
-}
-
-enum PlaybackPrimaryAction {
-	PLAY(R.drawable.ic_play, R.string.action_play, false, false),
-	PAUSE(R.drawable.ic_pause, R.string.action_pause, true, false),
-	REPLAY(R.drawable.ic_replay, R.string.action_replay, false, true);
-
-	private final int iconRes;
-	private final int contentDescriptionRes;
-	private final boolean showsPauseButton;
-	private final boolean restartsCurrentItem;
-
-	PlaybackPrimaryAction(final int iconRes,
-	                      final int contentDescriptionRes,
-	                      final boolean showsPauseButton,
-	                      final boolean restartsCurrentItem) {
-		this.iconRes = iconRes;
-		this.contentDescriptionRes = contentDescriptionRes;
-		this.showsPauseButton = showsPauseButton;
-		this.restartsCurrentItem = restartsCurrentItem;
-	}
-
-	@NonNull
-	static PlaybackPrimaryAction resolve(final boolean isPlaying,
-	                                     final int playbackState,
-	                                     @NonNull final PlayerLoopMode loopMode,
-	                                     final boolean inMiniPlayer) {
-		if (isPlaying) return PAUSE;
-		if (!inMiniPlayer
-						&& playbackState == Player.STATE_ENDED
-						&& loopMode == PlayerLoopMode.PAUSE_AT_END) {
-			return REPLAY;
-		}
-		return PLAY;
-	}
-
-	int iconRes() {
-		return iconRes;
-	}
-
-	int contentDescriptionRes() {
-		return contentDescriptionRes;
-	}
-
-	boolean showsPauseButton() {
-		return showsPauseButton;
-	}
-
-	boolean restartsCurrentItem() {
-		return restartsCurrentItem;
-	}
 }
 

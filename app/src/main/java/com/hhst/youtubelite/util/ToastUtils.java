@@ -9,60 +9,63 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
+/**
+ * Toast helpers for short-lived user feedback.
+ */
 public final class ToastUtils {
 
 	private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 	private static final Object TOAST_LOCK = new Object();
 	@Nullable
-	private static Toast currentToast;
-	private static long currentId;
+	private static Toast toast;
+	private static long toastId;
 	private static long nextId = 1L;
 
 	private ToastUtils() {
 	}
 
-	public static long show(@NonNull final Context context, @StringRes final int resId) {
+	public static long show(@NonNull Context context, @StringRes int resId) {
 		return show(context, resId, Toast.LENGTH_SHORT);
 	}
 
-	public static long show(@NonNull final Context context, @StringRes final int resId, final int duration) {
-		final Context appContext = resolveAppContext(context);
-		final long id = next();
+	public static long show(@NonNull Context context, @StringRes int resId, int duration) {
+		Context appContext = getAppContext(context);
+		long id = next();
 		runOnMain(() -> {
 			synchronized (TOAST_LOCK) {
 				cancelLocked();
-				currentId = id;
-				currentToast = Toast.makeText(appContext, resId, duration);
-				currentToast.show();
+				toastId = id;
+				toast = Toast.makeText(appContext, resId, duration);
+				toast.show();
 			}
 		});
 		return id;
 	}
 
-	public static long show(@NonNull final Context context, @Nullable final CharSequence text) {
+	public static long show(@NonNull Context context, @Nullable CharSequence text) {
 		return show(context, text, Toast.LENGTH_SHORT);
 	}
 
-	public static long show(@NonNull final Context context, @Nullable final CharSequence text, final int duration) {
+	public static long show(@NonNull Context context, @Nullable CharSequence text, int duration) {
 		if (text == null) return -1L;
-		final Context appContext = resolveAppContext(context);
-		final long id = next();
+		Context appContext = getAppContext(context);
+		long id = next();
 		runOnMain(() -> {
 			synchronized (TOAST_LOCK) {
 				cancelLocked();
-				currentId = id;
-				currentToast = Toast.makeText(appContext, text, duration);
-				currentToast.show();
+				toastId = id;
+				toast = Toast.makeText(appContext, text, duration);
+				toast.show();
 			}
 		});
 		return id;
 	}
 
-	public static void cancel(final long id) {
+	public static void cancel(long id) {
 		if (id < 0) return;
 		runOnMain(() -> {
 			synchronized (TOAST_LOCK) {
-				if (currentToast != null && currentId == id) {
+				if (toast != null && toastId == id) {
 					cancelLocked();
 				}
 			}
@@ -76,13 +79,13 @@ public final class ToastUtils {
 	}
 
 	private static void cancelLocked() {
-		if (currentToast == null) return;
-		currentToast.cancel();
-		currentToast = null;
-		currentId = 0L;
+		if (toast == null) return;
+		toast.cancel();
+		toast = null;
+		toastId = 0L;
 	}
 
-	private static void runOnMain(@NonNull final Runnable action) {
+	private static void runOnMain(@NonNull Runnable action) {
 		if (Looper.myLooper() == Looper.getMainLooper()) {
 			action.run();
 			return;
@@ -91,8 +94,8 @@ public final class ToastUtils {
 	}
 
 	@NonNull
-	private static Context resolveAppContext(@NonNull final Context context) {
-		final Context appContext = context.getApplicationContext();
+	private static Context getAppContext(@NonNull Context context) {
+		Context appContext = context.getApplicationContext();
 		return appContext != null ? appContext : context;
 	}
 }

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -10,8 +9,8 @@
         android:id="@+id/segment_thumbnail"
         android:layout_width="match_parent"
         android:layout_height="160dp"
-        android:scaleType="centerCrop"
-        android:contentDescription="@string/thumbnail" />
+        android:contentDescription="@string/thumbnail"
+        android:scaleType="centerCrop" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -28,17 +27,17 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:maxLines="3"
                 android:textIsSelectable="true"
-                android:textSize="18sp"
-                android:maxLines="3" />
+                android:textSize="18sp" />
 
             <TextView
                 android:id="@+id/segment_time"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:textSize="14sp"
-                android:textColor="@android:color/darker_gray" />
+                android:textColor="@android:color/darker_gray"
+                android:textSize="14sp" />
 
         </LinearLayout>
     </ScrollView>

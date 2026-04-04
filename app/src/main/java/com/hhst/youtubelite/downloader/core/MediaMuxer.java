@@ -14,27 +14,33 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.List;
 
+/**
+ * Utility that merges audio and video streams into one file.
+ */
 public final class MediaMuxer {
-	public static void merge(@NonNull final File videoFile, @NonNull final File audioFile, @NonNull final File outputFile) throws IOException {
+	public static void merge(@NonNull File videoFile, @NonNull File audioFile, @NonNull File outputFile) throws IOException {
 
-		final Movie video = MovieCreator.build(videoFile.getAbsolutePath());
-		final Movie audio = MovieCreator.build(audioFile.getAbsolutePath());
+		Movie video = MovieCreator.build(videoFile.getAbsolutePath());
+		Movie audio = MovieCreator.build(audioFile.getAbsolutePath());
 
-		final List<Track> videoTracks = video.getTracks().stream().filter(track -> "vide".equals(track.getHandler())).toList();
-		final List<Track> audioTracks = audio.getTracks().stream().filter(track -> "soun".equals(track.getHandler())).toList();
+		List<Track> videoTracks = video.getTracks().stream().filter(track -> "vide".equals(track.getHandler())).toList();
+		List<Track> audioTracks = audio.getTracks().stream().filter(track -> "soun".equals(track.getHandler())).toList();
 
 		if (videoTracks.isEmpty() || audioTracks.isEmpty()) throw new EmptyTrackException();
 
-		final Movie result = new Movie();
+		Movie result = new Movie();
 		result.addTrack(videoTracks.get(0));
 		result.addTrack(audioTracks.get(0));
 
-		final Container out = new DefaultMp4Builder().build(result);
-		try (final FileOutputStream fos = new FileOutputStream(outputFile); final FileChannel fc = fos.getChannel()) {
+		Container out = new DefaultMp4Builder().build(result);
+		try (FileOutputStream fos = new FileOutputStream(outputFile); final FileChannel fc = fos.getChannel()) {
 			out.writeContainer(fc);
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private static class EmptyTrackException extends RuntimeException {
 		public EmptyTrackException() {
 			super("No video or audio tracks found in the provided files.");

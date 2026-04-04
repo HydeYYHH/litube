@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <issue id="AndroidGradlePluginVersion">
+        <ignore path="../gradle/libs.versions.toml" />
+    </issue>
+    <issue id="VectorPath">
+        <ignore path="src/main/res/drawable/ic_info.xml" />
+    </issue>
+    <issue id="MergeRootFrame">
+        <ignore path="src/main/res/layout/activity_gallery.xml" />
+    </issue>
+    <issue id="IconDipSize">
+        <ignore path="src/main/res/mipmap-xxxhdpi/ic_launcher.png" />
+        <ignore path="src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png" />
+        <ignore path="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png" />
+    </issue>
+    <issue id="IconDuplicates">
+        <ignore path="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png" />
+    </issue>
+</lint>

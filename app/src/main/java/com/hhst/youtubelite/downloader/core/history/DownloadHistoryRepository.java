@@ -16,6 +16,9 @@ import java.util.Objects;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+/**
+ * Repository for persisted download history records.
+ */
 @Singleton
 public final class DownloadHistoryRepository {
 	public static final String KEY_DOWNLOAD_HISTORY = "download_history";
@@ -29,45 +32,71 @@ public final class DownloadHistoryRepository {
 	private final Gson gson;
 
 	@Inject
-	public DownloadHistoryRepository(@NonNull final MMKV mmkv, @NonNull final Gson gson) {
+	public DownloadHistoryRepository(@NonNull MMKV mmkv, @NonNull Gson gson) {
 		this.mmkv = mmkv;
 		this.gson = gson;
 	}
 
 	@NonNull
 	public synchronized List<DownloadRecord> getAllSorted() {
-		final List<DownloadRecord> list = readAllInternal();
-		list.sort(Comparator.comparingLong(DownloadRecord::getCreatedAt).reversed());
-		return list;
+		List<DownloadRecord> items = readAllInternal();
+		items.sort(Comparator.comparingLong(DownloadRecord::getCreatedAt).reversed());
+		return items;
+	}
+
+	@NonNull
+	public synchronized List<DownloadRecord> getRootsSorted() {
+		List<DownloadRecord> roots = new ArrayList<>();
+		for (DownloadRecord record : readAllInternal()) {
+			if (record.getParentId() == null || record.getParentId().isBlank()) roots.add(record);
+		}
+		roots.sort(Comparator.comparingLong(DownloadRecord::getCreatedAt).reversed());
+		return roots;
+	}
+
+	@NonNull
+	public synchronized List<DownloadRecord> getChildrenSorted(@NonNull String parentId) {
+		List<DownloadRecord> children = new ArrayList<>();
+		for (DownloadRecord record : readAllInternal()) {
+			if (Objects.equals(parentId, record.getParentId())) children.add(record);
+		}
+		children.sort(Comparator.comparingLong(DownloadRecord::getCreatedAt).reversed());
+		return children;
 	}
 
 	@Nullable
-	public synchronized DownloadRecord findByTaskId(@Nullable final String taskId) {
+	public synchronized DownloadRecord findByTaskId(@Nullable String taskId) {
 		if (taskId == null) return null;
-		for (final DownloadRecord r : readAllInternal()) {
-			if (Objects.equals(r.getTaskId(), taskId)) return r;
+		for (DownloadRecord record : readAllInternal()) {
+			if (Objects.equals(record.getTaskId(), taskId)) return record;
 		}
 		return null;
 	}
 
-	public synchronized void upsert(@NonNull final DownloadRecord record) {
-		final List<DownloadRecord> list = readAllInternal();
+	public synchronized void upsert(@NonNull DownloadRecord record) {
+		List<DownloadRecord> items = readAllInternal();
 		boolean updated = false;
-		for (int i = 0; i < list.size(); i++) {
-			if (Objects.equals(list.get(i).getTaskId(), record.getTaskId())) {
-				list.set(i, record);
+		for (int i = 0; i < items.size(); i++) {
+			if (Objects.equals(items.get(i).getTaskId(), record.getTaskId())) {
+				items.set(i, record);
 				updated = true;
 				break;
 			}
 		}
-		if (!updated) list.add(record);
-		writeAllInternal(list);
+		if (!updated) items.add(record);
+		writeAllInternal(items);
 	}
 
-	public synchronized void remove(@NonNull final String taskId) {
-		final List<DownloadRecord> list = readAllInternal();
-		list.removeIf(r -> Objects.equals(r.getTaskId(), taskId));
-		writeAllInternal(list);
+	public synchronized void remove(@NonNull String taskId) {
+		List<DownloadRecord> items = readAllInternal();
+		items.removeIf(record -> Objects.equals(record.getTaskId(), taskId));
+		writeAllInternal(items);
+	}
+
+	public synchronized void removeWithChildren(@NonNull String taskId) {
+		List<DownloadRecord> items = readAllInternal();
+		items.removeIf(record -> Objects.equals(record.getTaskId(), taskId) || Objects.equals(taskId, record.getParentId()));
+		writeAllInternal(items);
 	}
 
 	public synchronized void clear() {
@@ -76,18 +105,18 @@ public final class DownloadHistoryRepository {
 
 	@NonNull
 	private List<DownloadRecord> readAllInternal() {
-		final String json = mmkv.decodeString(KEY_DOWNLOAD_HISTORY, null);
+		String json = mmkv.decodeString(KEY_DOWNLOAD_HISTORY, null);
 		if (json == null || json.isBlank()) return new ArrayList<>();
 		try {
-			final List<DownloadRecord> list = gson.fromJson(json, LIST_TYPE);
-			return list != null ? list : new ArrayList<>();
+			List<DownloadRecord> items = gson.fromJson(json, LIST_TYPE);
+			return items != null ? items : new ArrayList<>();
 		} catch (Exception ignored) {
 			return new ArrayList<>();
 		}
 	}
 
-	private void writeAllInternal(@NonNull final List<DownloadRecord> list) {
-		mmkv.encode(KEY_DOWNLOAD_HISTORY, gson.toJson(list, LIST_TYPE));
+	private void writeAllInternal(@NonNull List<DownloadRecord> items) {
+		mmkv.encode(KEY_DOWNLOAD_HISTORY, gson.toJson(items, LIST_TYPE));
 	}
 }
 

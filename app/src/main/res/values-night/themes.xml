@@ -23,7 +23,7 @@
 
         <item name="materialAlertDialogTheme">@style/Theme.YoutubeLite.AlertDialog</item>
         <item name="bottomSheetDialogTheme">@style/Theme.YoutubeLite.BottomSheetDialog</item>
-        
+
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 </resources>

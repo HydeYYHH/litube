@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+/**
+ * Component that handles app logic.
+ */
 public final class NullFilteringHeadersMap extends ForwardingMap<String, List<String>> {
 	private final Map<String, List<String>> headers;
 
@@ -26,12 +29,12 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 	}
 
 	@Override
-	public boolean containsKey(final Object key) {
+	public boolean containsKey(Object key) {
 		return key != null && super.containsKey(key);
 	}
 
 	@Override
-	public List<String> get(final Object key) {
+	public List<String> get(Object key) {
 		return key == null ? null : super.get(key);
 	}
 
@@ -47,6 +50,9 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		return new NullFilteringEntrySet(super.entrySet());
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private static final class NullFilteringSet extends ForwardingSet<String> {
 		private final Set<String> delegate;
 
@@ -74,7 +80,7 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 
 		@NonNull
 		@Override
-		public <T> T[] toArray(@NonNull final T[] array) {
+		public <T> T[] toArray(@NonNull T[] array) {
 			return filteredElements().toArray(array);
 		}
 
@@ -84,6 +90,9 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private static final class NullFilteringEntrySet extends ForwardingSet<Entry<String, List<String>>> {
 		private final Set<Entry<String, List<String>>> delegate;
 
@@ -111,7 +120,7 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 
 		@NonNull
 		@Override
-		public <T> T[] toArray(@NonNull final T[] array) {
+		public <T> T[] toArray(@NonNull T[] array) {
 			return filteredElements().toArray(array);
 		}
 
@@ -121,6 +130,9 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private static final class NullFilteringIterator<T> implements Iterator<T> {
 		private final Iterator<T> delegate;
 		private T next;
@@ -146,7 +158,7 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		@Override
 		public T next() {
 			if (next == null) throw new NoSuchElementException();
-			final T result = next;
+			T result = next;
 			advance();
 			return result;
 		}
@@ -157,6 +169,9 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		}
 	}
 
+/**
+ * Component that handles app logic.
+ */
 	private static final class NullFilteringEntryIterator implements Iterator<Entry<String, List<String>>> {
 		private final Iterator<Entry<String, List<String>>> delegate;
 		private Entry<String, List<String>> next;

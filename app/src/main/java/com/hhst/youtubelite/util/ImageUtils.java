@@ -9,6 +9,9 @@ import com.hhst.youtubelite.R;
 import com.squareup.picasso.Callback;
 import com.squareup.picasso.Picasso;
 
+/**
+ * Image helpers for loading and resizing thumbnails.
+ */
 public final class ImageUtils {
 
 	private static final int THUMB = R.drawable.bg_thumbnail_placeholder;
@@ -16,21 +19,21 @@ public final class ImageUtils {
 	private ImageUtils() {
 	}
 
-	public static void loadThumb(@NonNull final ImageView view, @Nullable final String url) {
+	public static void loadThumb(@NonNull ImageView view, @Nullable String url) {
 		loadThumb(view, url, null);
 	}
 
-	public static void loadThumb(@NonNull final ImageView view,
-	                             @Nullable final String url,
-	                             @Nullable final Callback callback) {
+	public static void loadThumb(@NonNull ImageView view,
+	                             @Nullable String url,
+	                             @Nullable Callback callback) {
 		if (url == null || url.isBlank()) {
 			showThumb(view);
 			return;
 		}
-		final var request = Picasso.get()
-				.load(url)
-				.placeholder(THUMB)
-				.error(THUMB);
+		var request = Picasso.get()
+						.load(url)
+						.placeholder(THUMB)
+						.error(THUMB);
 		if (callback == null) {
 			request.into(view);
 			return;
@@ -38,7 +41,7 @@ public final class ImageUtils {
 		request.into(view, callback);
 	}
 
-	public static void showThumb(@NonNull final ImageView view) {
+	public static void showThumb(@NonNull ImageView view) {
 		view.setImageResource(THUMB);
 	}
 }
