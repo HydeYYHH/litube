@@ -3,15 +3,15 @@ package com.hhst.youtubelite.player;
 public final class MiniPlayerLayout {
 
 	private static final int COMPACT_BREAKPOINT_DP = 600;
-	private static final float COMPACT_WIDTH_RATIO = 0.62f;
-	private static final float LARGE_WIDTH_RATIO = 0.46f;
-	private static final int COMPACT_MIN_WIDTH_DP = 190;
-	private static final int COMPACT_MAX_WIDTH_DP = 320;
-	private static final int LARGE_MIN_WIDTH_DP = 240;
-	private static final int LARGE_MAX_WIDTH_DP = 420;
+	private static final float COMPACT_WIDTH_RATIO = 0.72f; // Increased from 0.62
+	private static final float LARGE_WIDTH_RATIO = 0.55f;  // Increased from 0.46
+	private static final int COMPACT_MIN_WIDTH_DP = 220; // Increased from 190
+	private static final int COMPACT_MAX_WIDTH_DP = 360; // Increased from 320
+	private static final int LARGE_MIN_WIDTH_DP = 280;   // Increased from 240
+	private static final int LARGE_MAX_WIDTH_DP = 480;   // Increased from 420
 	private static final int OUTER_MARGIN_DP = 12;
 	private static final int MIN_BOTTOM_DOCK_DP = 56;
-	static final int NO_WIDTH_OVERRIDE_DP = -1;
+	static final int NO_WIDTH_OVER_DP = -1;
 
 	private MiniPlayerLayout() {
 	}
@@ -63,13 +63,13 @@ public final class MiniPlayerLayout {
 	}
 
 	static Spec computeSpec(int screenWidthDp, int bottomInsetDp) {
-		return computeSpec(screenWidthDp, bottomInsetDp, NO_WIDTH_OVERRIDE_DP);
+		return computeSpec(screenWidthDp, bottomInsetDp, NO_WIDTH_OVER_DP);
 	}
 
 	static Spec computeSpec(final int screenWidthDp,
 	                        final int bottomInsetDp,
 	                        final int widthOverrideDp) {
-		final int widthDp = widthOverrideDp == NO_WIDTH_OVERRIDE_DP
+		final int widthDp = widthOverrideDp == NO_WIDTH_OVER_DP
 						? computeWidthDp(screenWidthDp)
 						: clampWidthDp(screenWidthDp, widthOverrideDp);
 		final int heightDp = computeHeightDp(widthDp);
