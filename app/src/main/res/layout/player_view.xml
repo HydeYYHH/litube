@@ -33,13 +33,13 @@
 
         <View
             android:layout_width="match_parent"
-            android:layout_height="100dp"
+            android:layout_height="80dp"
             android:layout_gravity="top"
             android:background="@drawable/gradient_top" />
 
         <View
             android:layout_width="match_parent"
-            android:layout_height="100dp"
+            android:layout_height="80dp"
             android:layout_gravity="bottom"
             android:background="@drawable/gradient_bottom" />
 
@@ -49,14 +49,13 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:id="@+id/top_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingVertical="4dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="16dp">
+                android:paddingVertical="2dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="10dp">
 
                 <TextView
                     android:id="@+id/tv_title"
@@ -65,55 +64,69 @@
                     android:layout_weight="1"
                     android:ellipsize="marquee"
                     android:maxLines="1"
-                    android:padding="8dp"
+                    android:padding="4dp"
                     android:singleLine="true"
                     android:textColor="@android:color/white"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <ImageButton
                     android:id="@+id/btn_reload"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/restart"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_refresh" />
 
                 <ImageButton
                     android:id="@+id/btn_segments"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/segments"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_segment" />
 
                 <ImageButton
                     android:id="@+id/btn_subtitles"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/subtitles"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_subtitles_off" />
 
                 <ImageButton
                     android:id="@+id/btn_loop"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/action_repeat"
+                    android:contentDescription="@string/playback_end_next"
                     android:padding="4dp"
-                    android:src="@drawable/ic_repeat_off" />
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
+                    android:src="@drawable/ic_playback_end_next" />
 
                 <ImageButton
                     android:id="@+id/btn_more"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
                     android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:alpha="0.92"
                     android:src="@drawable/ic_more" />
             </LinearLayout>
 
@@ -123,23 +136,25 @@
                 android:layout_weight="1" />
 
             <LinearLayout
-                android:id="@+id/bottom_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="-2dp">
+
                     <androidx.media3.ui.DefaultTimeBar
                         android:id="@+id/exo_progress"
                         android:layout_width="match_parent"
                         android:layout_height="20dp"
                         app:bar_height="2dp"
+                        app:buffered_color="@android:color/white"
                         app:played_color="@color/yt_red"
-                        app:unplayed_color="#99FFFFFF"
                         app:scrubber_color="@color/yt_red"
-                        app:buffered_color="@android:color/white" />
+                        app:unplayed_color="#99FFFFFF" />
+
                     <com.hhst.youtubelite.player.sponsor.SponsorOverlayView
                         android:id="@+id/sponsor_overlay"
                         android:layout_width="match_parent"
@@ -149,24 +164,24 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="36dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="12dp">
+                    android:paddingHorizontal="8dp">
 
                     <TextView
                         android:id="@+id/exo_position"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="11sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text=" / "
                         android:textColor="@android:color/white"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         tools:ignore="HardcodedText" />
 
                     <TextView
@@ -174,7 +189,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="11sp" />
 
                     <View
                         android:layout_width="0dp"
@@ -184,36 +199,41 @@
                     <TextView
                         android:id="@+id/btn_speed"
                         android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
+                        android:layout_height="28dp"
+                        android:minWidth="46dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="50dp"
-                        android:paddingHorizontal="8dp"
+                        android:paddingStart="7dp"
+                        android:paddingEnd="7dp"
                         android:text="1.0x"
                         android:textColor="@android:color/white"
                         android:textSize="12sp"
+                        android:alpha="0.92"
                         tools:ignore="HardcodedText" />
 
                     <TextView
                         android:id="@+id/btn_quality"
                         android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
+                        android:layout_height="28dp"
+                        android:minWidth="46dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="50dp"
-                        android:paddingHorizontal="8dp"
+                        android:paddingStart="7dp"
+                        android:paddingEnd="7dp"
                         android:text="@string/player_quality_auto"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:alpha="0.92" />
 
                     <ImageButton
                         android:id="@+id/btn_fullscreen"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/action_fullscreen"
-                        android:padding="8dp"
+                        android:padding="4dp"
                         android:scaleType="fitCenter"
+                        android:alpha="0.92"
                         android:src="@drawable/ic_fullscreen" />
                 </LinearLayout>
             </LinearLayout>
@@ -246,7 +266,7 @@
             android:id="@+id/play_pause_container"
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:layout_marginHorizontal="32dp"
+            android:layout_marginHorizontal="20dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btn_next"
             app:layout_constraintStart_toEndOf="@+id/btn_prev"
@@ -294,10 +314,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="80dp"
-        android:background="#B3000000"
+        android:background="?attr/colorSurfaceVariant"
         android:padding="8dp"
         android:text="@string/reset"
-        android:textColor="@android:color/white"
+        android:textColor="?attr/colorOnSurface"
         android:visibility="gone" />
 
     <ImageButton
@@ -312,5 +332,75 @@
         android:src="@drawable/ic_unlock"
         android:visibility="gone" />
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mini_controller_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="0dp"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        app:cardBackgroundColor="#66000000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeColor="#12FFFFFF"
+        app:strokeWidth="1dp" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_close"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="top|start"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/close"
+        android:padding="16dp"
+        android:src="@drawable/ic_close"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/btn_mini_restore"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="top|end"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/action_restore_watch"
+        android:padding="16dp"
+        android:src="@drawable/ic_fullscreen"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/mini_bottom_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp">
+
+            <ImageButton
+                android:id="@+id/btn_mini_play"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_play"
+                android:padding="10dp"
+                android:src="@drawable/ic_play" />
+
+            <ImageButton
+                android:id="@+id/btn_mini_pause"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_pause"
+                android:padding="10dp"
+                android:src="@drawable/ic_pause" />
+        </FrameLayout>
+
+    </LinearLayout>
 
 </FrameLayout>
