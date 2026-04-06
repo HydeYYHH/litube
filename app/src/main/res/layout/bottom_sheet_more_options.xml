@@ -3,8 +3,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/bg_bottom_sheet"
     android:orientation="vertical"
     android:padding="16dp">
+
+    <View
+        android:layout_width="32dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="8dp"
+        android:background="@android:color/darker_gray" />
 
     <TextView
         android:layout_width="match_parent"
@@ -19,7 +27,7 @@
         android:id="@+id/option_resize_mode"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:background="?attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp">
@@ -49,43 +57,10 @@
     </LinearLayout>
 
     <LinearLayout
-        android:id="@+id/option_pip"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp">
-
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginEnd="16dp"
-            android:contentDescription="@string/pip"
-            android:src="@drawable/ic_pip"
-            app:tint="?attr/colorControlNormal" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/pip"
-            android:textSize="16sp" />
-
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_chevron_right"
-            app:tint="?attr/colorControlNormal" />
-    </LinearLayout>
-
-    <LinearLayout
         android:id="@+id/option_audio_track"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:background="?attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp">
@@ -119,7 +94,7 @@
         android:id="@+id/option_subtitle_style"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:background="?attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp">
@@ -152,7 +127,7 @@
         android:id="@+id/option_stream_details"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:background="?attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp">
