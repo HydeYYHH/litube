@@ -17,6 +17,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.Lifecycle;
+import androidx.media3.common.util.UnstableApi;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -27,8 +28,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
+
+import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 import okhttp3.OkHttpClient;
@@ -41,15 +43,17 @@ import okio.Okio;
  * Show image in full screen mode.
  */
 @AndroidEntryPoint
+@UnstableApi
 public class GalleryActivity extends AppCompatActivity {
 
-	// thumbnail filenames, used for saving or caching
+	private static final String TAG = "GalleryActivity";
+
+	@Inject OkHttpClient httpClient;
+	@Inject Executor executor;
+
 	private final List<String> filenames = new ArrayList<>();
-	// thumbnail files to cache
 	private final List<File> files = new ArrayList<>();
-	// thumbnail resource urls
 	private List<String> urls = new ArrayList<>();
-	// current position in the pager
 	private int position = 0;
 
 	private ViewPager2 viewPager;
@@ -66,20 +70,15 @@ public class GalleryActivity extends AppCompatActivity {
 		});
 
 		viewPager = findViewById(R.id.viewPager);
-
-		// destroy this activity when click image or button
 		findViewById(R.id.btnClose).setOnClickListener(view -> finish());
 
-		// Get the list of URLs and filenames from intent
 		List<String> urlList = getIntent().getStringArrayListExtra("thumbnails");
 		String baseFilename = getIntent().getStringExtra("filename");
 
-		urls = urlList;
-		if (urls == null) urls = new ArrayList<>();
-		// Generate filenames for each image
+		urls = urlList != null ? urlList : new ArrayList<>();
 		for (int i = 0; i < urls.size(); i++) {
 			filenames.add(baseFilename + "_" + i);
-			files.add(null); // Initialize with null files
+			files.add(null);
 		}
 
 		setupViewPager();
@@ -98,66 +97,63 @@ public class GalleryActivity extends AppCompatActivity {
 	}
 
 	public void onContextMenuClicked(int index) {
-		if (position >= urls.size()) return;
+		final int currentPosition = position;
+		if (currentPosition >= urls.size()) return;
 
-		String url = urls.get(position);
-		String filename = filenames.get(position);
+		String url = urls.get(currentPosition);
+		String filename = filenames.get(currentPosition);
 
 		switch (index) {
-			case 0: // Save
+			case 0:
 				Intent saveIntent = new Intent(this, DownloadService.class);
 				saveIntent.setAction("DOWNLOAD_THUMBNAIL");
 				saveIntent.putExtra("thumbnail", url);
 				saveIntent.putExtra("filename", filename);
 				startService(saveIntent);
-				return;
-			case 1: // Share
+				break;
+			case 1:
 				File file = new File(getCacheDir(), filename + ".jpg");
-				// download thumbnail to local cache directory and send it
-				try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
-					executorService.execute(() -> {
-						try {
-							// download thumbnail
-							if (!file.exists()) {
-								OkHttpClient client = new OkHttpClient();
-								Request request = new Request.Builder().url(url).build();
-								try (Response response = client.newCall(request).execute()) {
-									if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-									try (BufferedSink sink = Okio.buffer(Okio.sink(file))) {
-										sink.writeAll(response.body().source());
-									}
+				executor.execute(() -> {
+					try {
+						if (!file.exists()) {
+							Request request = new Request.Builder().url(url).build();
+							try (Response response = httpClient.newCall(request).execute()) {
+								if (!response.isSuccessful() || response.body() == null)
+									throw new IOException("Failed to download image: " + response);
+								try (BufferedSink sink = Okio.buffer(Okio.sink(file))) {
+									sink.writeAll(response.body().source());
 								}
 							}
-							files.set(position, file);
-							// build uri
-							Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
-							Intent shareIntent = new Intent(Intent.ACTION_SEND);
-							shareIntent.setType("image/*");
-							shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
-							shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-							startActivity(Intent.createChooser(shareIntent, getString(R.string.share_thumbnail)));
-						} catch (IOException e) {
-							Log.e(getString(R.string.failed_to_download_thumbnail), Log.getStackTraceString(e));
-							runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
 						}
-					});
-				}
+						files.set(currentPosition, file);
+						Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
+						Intent shareIntent = new Intent(Intent.ACTION_SEND);
+						shareIntent.setType("image/*");
+						shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+						shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+						runOnUiThread(() -> {
+							if (isFinishing() || isDestroyed()) return;
+							startActivity(Intent.createChooser(shareIntent, getString(R.string.share_thumbnail)));
+						});
+					} catch (IOException e) {
+						Log.e(TAG, "Failed to download thumbnail", e);
+						runOnUiThread(() -> Toast.makeText(this, R.string.failed_to_download_thumbnail, Toast.LENGTH_SHORT).show());
+					}
+				});
+				break;
 		}
 	}
 
 	@Override
 	public void finish() {
 		super.finish();
-		// clean cached images
-		try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
-			executorService.execute(() -> {
-				for (File file : files) {
-					if (file != null && file.exists()) {
-						file.delete();
-					}
+		executor.execute(() -> {
+			for (File file : files) {
+				if (file != null && file.exists()) {
+					if (!file.delete()) Log.w(TAG, "Failed to delete cache file: " + file.getPath());
 				}
-			});
-		}
+			}
+		});
 	}
 
 	private class ImagePagerAdapter extends FragmentStateAdapter {

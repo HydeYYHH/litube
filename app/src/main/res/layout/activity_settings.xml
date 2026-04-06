@@ -37,8 +37,7 @@
                 style="@style/AppCard">
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
-                    android:text="@string/general"
-                    app:drawableStartCompat="@drawable/ic_track" />
+                    android:text="@string/general" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
@@ -46,8 +45,7 @@
                 style="@style/AppCard">
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
-                    android:text="@string/player"
-                    app:drawableStartCompat="@drawable/ic_play" />
+                    android:text="@string/player" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
@@ -55,8 +53,7 @@
                 style="@style/AppCard">
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
-                    android:text="@string/sponsorblock"
-                    app:drawableStartCompat="@drawable/ic_segment" />
+                    android:text="@string/sponsorblock" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
@@ -64,8 +61,7 @@
                 style="@style/AppCard">
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
-                    android:text="@string/download"
-                    app:drawableStartCompat="@drawable/ic_download" />
+                    android:text="@string/download" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
@@ -73,8 +69,7 @@
                 style="@style/AppCard">
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
-                    android:text="@string/miscellaneous"
-                    app:drawableStartCompat="@drawable/ic_settings" />
+                    android:text="@string/miscellaneous" />
             </com.google.android.material.card.MaterialCardView>
 
             <View
@@ -89,9 +84,7 @@
                 <androidx.appcompat.widget.AppCompatTextView
                     style="@style/AppCardItem"
                     android:text="@string/reset"
-                    android:textColor="?attr/colorError"
-                    app:drawableStartCompat="@drawable/ic_refresh"
-                    app:drawableTint="?attr/colorError" />
+                    android:textColor="?attr/colorError" />
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
