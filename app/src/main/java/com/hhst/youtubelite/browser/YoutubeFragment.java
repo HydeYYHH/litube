@@ -16,19 +16,20 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.controller.Controller;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 
 import java.util.Objects;
+import java.util.concurrent.Executor;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
-import lombok.Getter;
+import okhttp3.OkHttpClient;
 
-@Getter
 @AndroidEntryPoint
 @UnstableApi
 public final class YoutubeFragment extends Fragment {
@@ -47,7 +48,13 @@ public final class YoutubeFragment extends Fragment {
 	@Inject
 	TabManager tabManager;
 	@Inject
-	PoTokenProviderImpl poTokenProvider;
+	QueueRepository queueRepository;
+	@Inject
+	QueueWarmer queueWarmer;
+	@Inject
+	OkHttpClient okHttpClient;
+	@Inject
+	Executor executor;
 
 	@Nullable
 	private String url;
@@ -74,6 +81,8 @@ public final class YoutubeFragment extends Fragment {
 		args.putString(ARG_URL, url);
 		args.putString(ARG_TAG, tag);
 		fragment.setArguments(args);
+		fragment.url = url;
+		fragment.mTag = tag;
 		return fragment;
 	}
 
@@ -103,27 +112,30 @@ public final class YoutubeFragment extends Fragment {
 		webview = view.findViewById(R.id.webview);
 		swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
-		swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
-		swipeRefreshLayout.setOnRefreshListener(() -> {
-			if (webview != null) {
-				webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", null);
-				// Fail-safe: stop refreshing after 8 seconds regardless of outcome
-				handler.removeCallbacks(refreshTimeoutRunnable);
-				handler.postDelayed(refreshTimeoutRunnable, 8000);
-			}
-		});
-		swipeRefreshLayout.setProgressViewOffset(true, 86, 196);
+		if (swipeRefreshLayout != null) {
+			swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
+			swipeRefreshLayout.setOnRefreshListener(() -> {
+				if (webview != null) {
+					webview.evaluateJavascript("window.dispatchEvent(new Event('onRefresh'));", null);
+					handler.removeCallbacks(refreshTimeoutRunnable);
+					handler.postDelayed(refreshTimeoutRunnable, 8000);
+				}
+			});
+			swipeRefreshLayout.setProgressViewOffset(true, 86, 196);
+		}
 
 		webview.setYoutubeExtractor(youtubeExtractor);
 		webview.setPlayer(player);
 		webview.setExtensionManager(extensionManager);
 		webview.setTabManager(tabManager);
-		webview.setPoTokenProvider(poTokenProvider);
-		webview.setUpdateVisitedHistory(url -> {
-			YoutubeFragment.this.url = url;
-			tabManager.onUrlChanged(this, url);
+		webview.setQueueRepository(queueRepository);
+		webview.setQueueWarmer(queueWarmer);
+		webview.setOkHttpClient(okHttpClient);
+		webview.setUpdateVisitedHistory(u -> {
+			YoutubeFragment.this.url = u;
+			tabManager.onUrlChanged(this, u);
 		});
-		webview.setOnPageFinishedListener(url -> {
+		webview.setOnPageFinishedListener(u -> {
 			takeHistorySnapshot();
 			handler.removeCallbacks(refreshTimeoutRunnable);
 			if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
@@ -131,13 +143,12 @@ public final class YoutubeFragment extends Fragment {
 		webview.init();
 		if (savedInstanceState != null) webview.restoreState(savedInstanceState);
 		else if (url != null) loadUrl(url);
-
-		// Load scripts in background
-		new Thread(() -> {
+		
+		executor.execute(() -> {
 			if (tabManager != null) {
 				tabManager.injectScripts(webview);
 			}
-		}).start();
+		});
 
 		return view;
 	}
@@ -147,7 +158,6 @@ public final class YoutubeFragment extends Fragment {
 		super.onResume();
 		if (webview != null && !isHidden()) {
 			webview.onResume();
-			webview.resumeTimers();
 		}
 	}
 
@@ -157,7 +167,6 @@ public final class YoutubeFragment extends Fragment {
 		if (webview != null && !isHidden()) {
 			if (getActivity() != null && getActivity().isInPictureInPictureMode()) return;
 			webview.onPause();
-			webview.pauseTimers();
 		}
 	}
 
@@ -167,10 +176,11 @@ public final class YoutubeFragment extends Fragment {
 		if (webview != null) {
 			if (hidden) {
 				webview.onPause();
-				webview.pauseTimers();
 			} else {
 				webview.onResume();
-				webview.resumeTimers();
+
+				webview.requestLayout();
+				webview.invalidate();
 			}
 		}
 	}
@@ -186,12 +196,33 @@ public final class YoutubeFragment extends Fragment {
 			webview.destroy();
 			webview = null;
 		}
+		swipeRefreshLayout = null;
 	}
 
 	@Override
 	public void onSaveInstanceState(@NonNull final Bundle outState) {
 		super.onSaveInstanceState(outState);
 		if (webview != null) webview.saveState(outState);
+	}
+
+	@Nullable
+	public String getUrl() {
+		return url;
+	}
+
+	@Nullable
+	public String getMTag() {
+		return mTag;
+	}
+
+	@Nullable
+	public YoutubeWebview getWebview() {
+		return webview;
+	}
+
+	@Nullable
+	public WebBackForwardList getHistorySnapshot() {
+		return historySnapshot;
 	}
 
 }
