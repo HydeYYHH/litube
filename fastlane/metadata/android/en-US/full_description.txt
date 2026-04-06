@@ -1,4 +1,4 @@
-Litube is an advanced webview wrapper for YouTube.
+LitePipe is an advanced webview wrapper for YouTube.
 
 <b>Features</b>
 * <b>Ad-free playback</b>
