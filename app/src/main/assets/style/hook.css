@@ -3,20 +3,35 @@
     to { opacity: 1; }
 }
 
-/* Elements that trigger JS logic in init.js */
 #player-container-id,
 #player,
 #movie_player,
-.watch-below-the-player {
+#content-wrapper,
+.watch-below-the-player,
+.video-ads.ytp-ad-module .ytp-ad-player-overlay,
+ytm-watch,
+ytm-settings,
+grid-shelf-view-model,
+ytm-shorts-lockup-view-model,
+.pivot-bar-item-tab.pivot-shorts,
+a[href^="/shorts/"] {
     animation-duration: 0.001s;
     animation-name: nodeInserted;
 }
 
-#player-container-id, #player, #movie_player {
-    background-color: #000 !important;
+ytm-pivot-bar-renderer {
+    display: none !important;
 }
 
-/* Basic clutter removal */
+body {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+:root {
+    --safe-area-inset-bottom: 0px !important;
+}
+
 ytm-promoted-sparkles-web-renderer,
 ytm-display-ad-renderer,
 ytm-ad-slot,
