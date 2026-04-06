@@ -24,10 +24,12 @@ import java.util.Locale;
 
 @UnstableApi
 public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListener {
-    private static final int AUTO_HIDE_DELAY_MS = 200;
-    private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
-    private static final int HINT_HIDE_FAST_MS = 500;
-    private static final float FULLSCREEN_SWIPE_THRESHOLD_RATIO = 0.08f;
+	private static final int AUTO_HIDE_DELAY_MS = 200;
+	private static final int SEEK_CONTINUATION_WINDOW_MS = 600;
+	private static final int HINT_HIDE_FAST_MS = 500;
+	private static final float FULLSCREEN_SWIPE_THRESHOLD_RATIO = 0.08f;
+	private static final float LEFT_ZONE_MAX_RATIO = 1f / 3f;
+	private static final float RIGHT_ZONE_MIN_RATIO = 2f / 3f;
 
     private final Activity activity;
     private final LitePlayerView playerView;
@@ -46,6 +48,12 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
     private long lastTapTime = 0;
     private float vol = -1;
 
+	enum DoubleTapAction {
+		SEEK_BACKWARD,
+		TOGGLE_PLAYBACK,
+		SEEK_FORWARD
+	}
+
     public PlayerGestureListener(Activity activity, LitePlayerView playerView, Engine engine, Controller controller) {
         this.activity = activity;
         this.playerView = playerView;
@@ -56,7 +64,6 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
     }
 
     private boolean isEnabled() {
-
         return controller.getExtensionManager().isEnabled(com.hhst.youtubelite.extension.Constant.ENABLE_PLAYER_GESTURES);
     }
 
@@ -74,37 +81,81 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
         }
     }
 
-    @Override
-    public boolean onDown(@NonNull MotionEvent e) {
-        if (!isEnabled()) return false;
-        handler.removeCallbacks(hideHintRunnable);
-        gestureMode = 0;
-        bri = -1;
-        vol = -1;
-        isGesturing = false;
-        fullscreenSwipeTriggered = false;
-        scrollStartPosition = engine.position();
-        return true;
-    }
+	@Override
+	public boolean onDown(@NonNull MotionEvent e) {
+		if (!isEnabled()) return false;
+		handler.removeCallbacks(hideHintRunnable);
+		gestureMode = 0;
+		bri = -1;
+		vol = -1;
+		isGesturing = false;
+		fullscreenSwipeTriggered = false;
+		scrollStartPosition = engine.position();
+		return true;
+	}
 
-    @Override
-    public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-        controller.setControlsVisible(!controller.isControlsVisible());
-        return true;
-    }
+	@Override
+	public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
+		controller.setControlsVisible(!controller.isControlsVisible());
+		return true;
+	}
 
-    @Override
-    public boolean onDoubleTap(@NonNull MotionEvent e) {
-        if (!isEnabled()) return false;
-        float x = e.getX();
-        float width = playerView.getWidth();
-        if (x < width * 0.35f || x > width * 0.65f) {
-            processSeek(x < width * 0.5f);
-            lastTapTime = System.currentTimeMillis();
-            return true;
-        }
-        return false;
-    }
+	@Override
+	public boolean onSingleTapUp(@NonNull MotionEvent e) {
+		if (!isEnabled()) return false;
+		long currentTime = System.currentTimeMillis();
+		float x = e.getX();
+		float width = playerView.getWidth();
+		final DoubleTapAction action = resolveDoubleTapAction(x, width);
+
+		if (cumulativeSeekAmount != 0 && (currentTime - lastTapTime < SEEK_CONTINUATION_WINDOW_MS)) {
+			if ((cumulativeSeekAmount < 0 && action == DoubleTapAction.SEEK_BACKWARD)
+					|| (cumulativeSeekAmount > 0 && action == DoubleTapAction.SEEK_FORWARD)) {
+				processSeek(action == DoubleTapAction.SEEK_BACKWARD);
+				lastTapTime = currentTime;
+				return true;
+			}
+		}
+		return super.onSingleTapUp(e);
+	}
+
+	@Override
+	public boolean onDoubleTap(@NonNull MotionEvent e) {
+		if (!isEnabled()) return false;
+		switch (resolveDoubleTapAction(e.getX(), playerView.getWidth())) {
+			case SEEK_BACKWARD:
+				processSeek(true);
+				lastTapTime = System.currentTimeMillis();
+				return true;
+			case SEEK_FORWARD:
+				processSeek(false);
+				lastTapTime = System.currentTimeMillis();
+				return true;
+			case TOGGLE_PLAYBACK:
+				if (engine.isPlaying()) {
+					engine.pause();
+				} else {
+					engine.play();
+				}
+				controller.setControlsVisible(true);
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	static DoubleTapAction resolveDoubleTapAction(final float x, final float width) {
+		if (width <= 0f) {
+			return DoubleTapAction.TOGGLE_PLAYBACK;
+		}
+		if (x < width * LEFT_ZONE_MAX_RATIO) {
+			return DoubleTapAction.SEEK_BACKWARD;
+		}
+		if (x > width * RIGHT_ZONE_MIN_RATIO) {
+			return DoubleTapAction.SEEK_FORWARD;
+		}
+		return DoubleTapAction.TOGGLE_PLAYBACK;
+	}
 
     private void processSeek(boolean isLeft) {
         handler.removeCallbacks(resetSeekRunnable);
