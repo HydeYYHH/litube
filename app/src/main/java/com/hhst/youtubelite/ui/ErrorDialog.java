@@ -17,7 +17,9 @@ import com.hhst.youtubelite.util.DeviceUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.IdentityHashMap;
 import java.util.Locale;
+import java.util.Set;
 
 public final class ErrorDialog {
 
@@ -31,10 +33,17 @@ public final class ErrorDialog {
 		show(context, title, stack, null);
 	}
 
+	public static void show(Context context, String title, Throwable throwable) {
+		show(context, title, throwable, null);
+	}
+
+	public static void show(Context context, String title, Throwable throwable, DialogInterface.OnDismissListener onDismissListener) {
+		show(context, title, buildExpandedStackTrace(throwable), onDismissListener);
+	}
+
 	public static void show(Context context, String title, String stack, DialogInterface.OnDismissListener onDismissListener) {
 		String displayTitle = (title == null) ? context.getString(R.string.error_title) : title;
 
-		// Avoid showing dialog in PIP mode
 		if (context instanceof Activity && DeviceUtils.isInPictureInPictureMode((Activity) context))
 			return;
 
@@ -46,6 +55,49 @@ public final class ErrorDialog {
 		stackView.setText(stack);
 
 		new MaterialAlertDialogBuilder(context).setView(view).setCancelable(true).setOnDismissListener(onDismissListener).setPositiveButton(R.string.copy, (dialog, which) -> copyDebugInfo(context, displayTitle, stack)).setNegativeButton(R.string.close, (dialog, which) -> dialog.dismiss()).show();
+	}
+
+	private static String buildExpandedStackTrace(Throwable throwable) {
+		if (throwable == null) {
+			return "";
+		}
+
+		StringBuilder sb = new StringBuilder();
+		Set<Throwable> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+		appendThrowable(sb, throwable, null, "", seen);
+		return sb.toString();
+	}
+
+	private static void appendThrowable(StringBuilder sb, Throwable throwable, String label, String indent, Set<Throwable> seen) {
+		if (!seen.add(throwable)) {
+			if (label != null) {
+				sb.append(indent).append(label);
+			}
+			sb.append(indent).append("[CIRCULAR REFERENCE: ").append(throwable.getClass().getName()).append("]\n");
+			return;
+		}
+
+		if (label != null) {
+			sb.append(indent).append(label);
+		}
+		sb.append(throwable.getClass().getName());
+		if (throwable.getMessage() != null && !throwable.getMessage().isBlank()) {
+			sb.append(": ").append(throwable.getMessage());
+		}
+		sb.append('\n');
+
+		for (StackTraceElement element : throwable.getStackTrace()) {
+			sb.append(indent).append("    at ").append(element).append('\n');
+		}
+
+		for (Throwable suppressed : throwable.getSuppressed()) {
+			appendThrowable(sb, suppressed, "Suppressed: ", indent + "    ", seen);
+		}
+
+		Throwable cause = throwable.getCause();
+		if (cause != null) {
+			appendThrowable(sb, cause, "Caused by: ", indent, seen);
+		}
 	}
 
 	private static void copyDebugInfo(Context context, String title, String stack) {

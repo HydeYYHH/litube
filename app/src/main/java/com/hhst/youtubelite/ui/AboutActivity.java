@@ -53,11 +53,13 @@ import okio.Source;
 @AndroidEntryPoint
 public class AboutActivity extends AppCompatActivity {
 	private static final String TAG = "AboutActivity";
-	private static final String GITHUB_RELEASE_API = "https://api.github.com/repos/codelabs-sk/litepipe/releases/latest";
+	private static final String GITHUB_RELEASE_API = "https://api.github.com/repos/CodeLab-SK/LitePipe/releases/latest";
+	
 	@Inject
 	OkHttpClient client;
 	@Inject
 	Gson gson;
+	
 	private TextView checkUpdateText;
 	private View checkUpdateLayout;
 
@@ -126,7 +128,7 @@ public class AboutActivity extends AppCompatActivity {
 		Request request = new Request.Builder()
 				.url(GITHUB_RELEASE_API)
 				.header("Accept", "application/vnd.github.v3+json")
-				.header("User-Agent", "YouTube-Lite-App")
+				.header("User-Agent", "LitePipe-App")
 				.build();
 
 		client.newCall(request).enqueue(new Callback() {
@@ -151,6 +153,11 @@ public class AboutActivity extends AppCompatActivity {
 
 					String body = Objects.requireNonNull(response.body()).string();
 					JsonObject json = gson.fromJson(body, JsonObject.class);
+					
+					if (json == null || !json.has("tag_name") || !json.has("html_url")) {
+						throw new IOException("Invalid JSON response from GitHub");
+					}
+					
 					String latest = json.get("tag_name").getAsString();
 					String url = json.get("html_url").getAsString();
 
@@ -187,14 +194,13 @@ public class AboutActivity extends AppCompatActivity {
 	private void clearAppCache() {
 		new Thread(() -> {
 			try {
-				// Clear WebView cache
+
 				runOnUiThread(() -> {
 					WebView webView = new WebView(AboutActivity.this);
 					webView.clearCache(true);
 					WebStorage.getInstance().deleteAllData();
 				});
 
-				// Clear app cache directories
 				deleteDir(getCacheDir());
 				deleteDir(getExternalCacheDir());
 
@@ -258,7 +264,6 @@ public class AboutActivity extends AppCompatActivity {
 	private boolean isNewerVersion(String current, String latest) {
 		if (current == null || latest == null) return false;
 
-		// Remove 'v' prefix if exists
 		String c = current.startsWith("v") ? current.substring(1) : current;
 		String l = latest.startsWith("v") ? latest.substring(1) : latest;
 
@@ -267,12 +272,23 @@ public class AboutActivity extends AppCompatActivity {
 		int length = Math.max(currentParts.length, latestParts.length);
 
 		for (int i = 0; i < length; i++) {
-			int cPart = i < currentParts.length ? Integer.parseInt(currentParts[i].replaceAll("\\D", "")) : 0;
-			int lPart = i < latestParts.length ? Integer.parseInt(latestParts[i].replaceAll("\\D", "")) : 0;
+			int cPart = i < currentParts.length ? parseSafeInt(currentParts[i]) : 0;
+			int lPart = i < latestParts.length ? parseSafeInt(latestParts[i]) : 0;
 			if (lPart > cPart) return true;
 			if (lPart < cPart) return false;
 		}
 		return false;
+	}
+
+	private int parseSafeInt(String part) {
+		if (part == null) return 0;
+		String digits = part.replaceAll("\\D", "");
+		if (digits.isEmpty()) return 0;
+		try {
+			return Integer.parseInt(digits);
+		} catch (NumberFormatException e) {
+			return 0;
+		}
 	}
 
 }
