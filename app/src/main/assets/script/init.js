@@ -1,21 +1,16 @@
-/**
- * @description basic script to YouTube page
- * @author halcyon
- * @version 1.1.0
- * @license MIT
- */
+/** * @description basic script to YouTube page */
 try {
     if (!window.injected) {
         const getLocalizedText = (key) => {
             const languages = {
-                'zh': { 'download': '下载', 'downloads': '下载', 'extension': 'LitePipe 设置', 'chat': '聊天室', 'about': '关于' },
-                'zt': { 'download': '下載', 'downloads': '下載', 'extension': 'LitePipe 設置', 'chat': '聊天室', 'about': '關於' },
-                'en': { 'download': 'Download', 'downloads': 'Downloads', 'extension': 'LitePipe Settings', 'chat': 'Chat', 'about': 'About' },
-                'ja': { 'download': 'ダウンロード', 'downloads': 'ダウンロード', 'extension': 'LitePipe 設定', 'chat': 'チャット', 'about': '詳細' },
-                'ko': { 'download': '다운로드', 'downloads': '다운로드', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
-                'fr': { 'download': 'Télécharger', 'downloads': 'Téléchargements', 'extension': 'Paramètres LitePipe', 'chat': 'Chat', 'about': 'À propos' },
-                'ru': { 'download': 'Скачать', 'downloads': 'Загрузки', 'extension': 'Настройки LitePipe', 'chat': 'Чат', 'about': 'О программе' },
-                'tr': { 'download': 'İndir', 'downloads': 'İndirilenler', 'extension': 'LitePipe Ayarları', 'chat': 'Sohbet', 'about': 'Hakkında' },
+                'zh': { 'download': '下载', 'downloads': '下载', 'extension': 'LitePipe 设置', 'chat': '聊天室', 'about': '关于', 'pip': '画中画' },
+                'zt': { 'download': '下載', 'downloads': '下載', 'extension': 'LitePipe 設置', 'chat': '聊天室', 'about': '關於', 'pip': '畫中畫' },
+                'en': { 'download': 'Download', 'downloads': 'Downloads', 'extension': 'LitePipe Settings', 'chat': 'Chat', 'about': 'About', 'pip': 'PiP' },
+                'ja': { 'download': 'ダウンロード', 'downloads': 'ダウンロード', 'extension': 'LitePipe 設定', 'chat': 'チャット', 'about': '詳細', 'pip': 'PiP' },
+                'ko': { 'download': '다운로드', 'downloads': '다운로드', 'extension': 'LitePipe 플러그인', 'chat': '채팅', 'about': '정보', 'pip': 'PiP' },
+                'fr': { 'download': 'Télécharger', 'downloads': 'Téléchargements', 'extension': 'Paramètres LitePipe', 'chat': 'Chat', 'about': 'À propos', 'pip': 'PiP' },
+                'ru': { 'download': 'Скачать', 'downloads': 'Загрузки', 'extension': 'Настройки LitePipe', 'chat': 'Чат', 'about': 'О программе', 'pip': 'PiP' },
+                'tr': { 'download': 'İndir', 'downloads': 'İndirilenler', 'extension': 'LitePipe Ayarları', 'chat': 'Sohbet', 'about': 'Hakkında', 'pip': 'PiP' },
             };
             const lang = (document.documentElement.lang || 'en').toLowerCase();
             let keyLang = lang.substring(0, 2);
@@ -58,7 +53,7 @@ try {
                             const visitorData = json?.context?.client?.visitorData;
                             if (poToken) android.setPoToken(poToken, visitorData);
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
                 return window.originalFetch(...args);
             };
@@ -78,6 +73,19 @@ try {
             return (match && match[7].length == 11) ? match[7] : null;
         };
 
+        const stopNativePlayer = (target) => {
+            if (!target) return;
+            try {
+                target.mute?.();
+                target.setVolume?.(0);
+                const video = target.querySelector?.('video') || document.querySelector('video');
+                if (video) {
+                    video.muted = true;
+                    video.volume = 0;
+                }
+            } catch (e) { }
+        };
+
         window.addEventListener('onRefresh', () => location.reload());
 
         window.addEventListener('doUpdateVisitedHistory', () => {
@@ -94,7 +102,7 @@ try {
         window.addEventListener('popstate', handlePlayerVisibility);
         const wrapState = (name) => {
             const orig = history[name];
-            history[name] = function() {
+            history[name] = function () {
                 orig.apply(this, arguments);
                 handlePlayerVisibility();
             };
@@ -107,17 +115,22 @@ try {
             const p = document.querySelector('#movie_player');
             if (p) android.setPlayerHeight(p.clientHeight);
         };
-        const ro = new ResizeObserver(window.changePlayerHeight);
 
+        const ro = new ResizeObserver(window.changePlayerHeight);
         document.addEventListener('animationstart', (e) => {
             if (e.animationName !== 'nodeInserted') return;
             const node = e.target;
             const pc = getPageClass(location.href);
             if (node.id === 'movie_player') {
                 if (pc === 'watch') {
-                    node.mute();
+                    stopNativePlayer(node);
                     node.seekTo(node.getDuration() / 2);
-                    node.addEventListener('onStateChange', s => { if (s === 1) node.pauseVideo(); });
+                    node.addEventListener('onStateChange', s => {
+                        if (s === 1) {
+                            node.pauseVideo();
+                            stopNativePlayer(node);
+                        }
+                    });
                 }
                 ro.disconnect();
                 ro.observe(node);
@@ -133,27 +146,16 @@ try {
         }, false);
 
         const removeChevrons = (parent) => {
-
-            const selectors = [
-                '.ytm-settings-item-chevron',
-                '.chevron',
-                '[class*="chevron"]',
-                '[id*="chevron"]',
-                'yt-icon:last-child',
-                '.yt-spec-icon-shape:last-child',
-                'svg:last-child'
-            ];
+            const selectors = ['.ytm-settings-item-chevron', '.chevron', '[class*="chevron"]', '[id*="chevron"]', 'yt-icon:last-child', '.yt-spec-icon-shape:last-child', 'svg:last-child'];
             selectors.forEach(s => {
                 const elements = parent.querySelectorAll(s);
                 elements.forEach(el => {
-
                     const icons = parent.querySelectorAll('yt-icon, .yt-spec-icon-shape, svg');
                     if (icons.length > 1 && Array.from(icons).indexOf(el) > 0) {
                         el.remove();
                     }
                 });
             });
-
             const allIcons = parent.querySelectorAll('yt-icon, .yt-spec-icon-shape, svg');
             for (let i = 1; i < allIcons.length; i++) {
                 allIcons[i].style.display = 'none';
@@ -165,11 +167,8 @@ try {
             const btn = baseItem.cloneNode(true);
             btn.id = id;
             btn.removeAttribute('href');
-
             const textEl = btn.querySelector('.yt-core-attributed-string');
             if (textEl) textEl.innerText = getLocalizedText(textKey);
-
-
             const ns = 'http://www.w3.org/2000/svg';
             const svg = document.createElementNS(ns, 'svg');
             svg.setAttribute('viewBox', '0 -960 960 960');
@@ -181,26 +180,46 @@ try {
             const path = document.createElementNS(ns, 'path');
             path.setAttribute('d', iconD);
             svg.appendChild(path);
-
             const oldIcon = btn.querySelector('yt-icon, .ytm-settings-item-icon, img, .ytm-avatar, .yt-spec-icon-shape, svg');
             if (oldIcon) oldIcon.parentNode.replaceChild(svg, oldIcon);
             else {
                 const content = btn.querySelector('.ytm-settings-item-content') || btn;
                 content.insertBefore(svg, content.firstChild);
             }
-
             removeChevrons(btn);
-
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 clickFn();
             }, true);
-
             return btn;
         };
 
+        const pipIconD = "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-480H160v480Zm360-120h240v-160H520v160Zm-360 120v-480 480Z";
+
         setInterval(() => {
+            const prefsJson = android.getPreferences ? android.getPreferences() : '{}';
+            const prefs = JSON.parse(prefsJson);
+
+
+            if (prefs.hide_shorts) {
+                const shortsSelectors = [
+                    'ytm-reel-shelf-renderer',
+                    'ytm-shorts-lockup-view-model',
+                    'ytm-pivot-bar-item-renderer[aria-label*="Shorts"]',
+                    'a[href*="/shorts/"]',
+                    'ytm-shorts-shelf-renderer',
+                    '.reel-shelf-header',
+                    'ytm-item-section-renderer:has(ytm-reel-shelf-renderer)',
+                    'ytm-shorts'
+                ];
+                shortsSelectors.forEach(selector => {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.setProperty('display', 'none', 'important');
+                    });
+                });
+            }
+
             if (getPageClass(location.href) === 'watch') {
                 const ad = document.querySelector('.ad-showing video');
                 if (ad) ad.currentTime = ad.duration;
@@ -236,7 +255,7 @@ try {
                                     container.style.cssText = 'position:fixed;top:calc(56.25vw + 48px);bottom:0;left:0;right:0;z-index:4;display:flex;flex-direction:column;background:var(--yt-spec-brand-background-solid);overflow:hidden;';
                                     const vid = getVideoId(location.href);
                                     if (vid) {
-                                        container.innerHTML = `<div style="display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid var(--yt-spec-10-percent-layer)"><b>${getLocalizedText('chat')}</b><span onclick="this.parentElement.parentElement.style.display='none';document.body.style.overflow=''">✕</span></div><iframe src="https://www.youtube.com/live_chat?v=${vid}&embed_domain=${location.hostname}" style="flex:1;border:none"></iframe>`;
+                                        container.innerHTML = `${getLocalizedText('chat')}✕`;
                                         panel.insertBefore(container, panel.firstChild);
                                         document.body.style.overflow = 'hidden';
                                     }
@@ -264,61 +283,150 @@ try {
                 }
             }
 
+            if (getPageClass(location.href) === 'watch' && !document.getElementById('pipButton') && prefs.enable_pip !== false) {
+                const saveBtn = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
+                if (saveBtn) {
+                    const pipBtn = saveBtn.cloneNode(true);
+                    pipBtn.id = 'pipButton';
+                    const txt = pipBtn.querySelector('.yt-spec-button-shape-next__button-text-content');
+                    if (txt) txt.innerText = getLocalizedText('pip');
+                    const svg = pipBtn.querySelector('svg');
+                    if (svg) {
+                        svg.setAttribute("viewBox", "0 -960 960 960");
+                        const path = svg.querySelector('path');
+                        if (path) path.setAttribute("d", pipIconD);
+                    }
+                    pipBtn.onclick = () => android.pip();
+                    const dlBtn = document.getElementById('downloadButton');
+                    if (dlBtn && dlBtn.parentElement) {
+                        dlBtn.parentElement.insertBefore(pipBtn, dlBtn.nextSibling);
+                    } else {
+                        saveBtn.parentElement?.insertBefore(pipBtn, saveBtn);
+                    }
+                }
+            }
+
+            if (getPageClass(location.href) === 'watch') {
+                const actionBarContainer = document.querySelector('ytm-slim-video-action-bar-renderer') || document.querySelector('.slim-video-action-bar-actions') || document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button')?.parentNode;
+                if (actionBarContainer) {
+                    const btnSelectors = ['.ytSpecButtonViewModelHost', 'ytm-toggle-button-renderer', 'ytm-button-renderer', '.slim_video_action_bar_renderer_button'];
+                    actionBarContainer.querySelectorAll(btnSelectors.join(', ')).forEach((btn) => {
+                        if (btn.closest && btn.closest('ytm-segmented-like-dislike-button-renderer')) return;
+                        const label = (btn.getAttribute('aria-label') || btn.textContent || '').toLowerCase().trim();
+                        const id = btn.id || '';
+                        let hide = false;
+                        if (prefs.action_bar_show_share === false && label.includes('share')) hide = true;
+                        if (prefs.action_bar_show_remix === false && label.includes('remix')) hide = true;
+                        if (prefs.action_bar_show_download === false && (label.includes('download') || id === 'downloadButton')) hide = true;
+                        if (prefs.action_bar_show_thanks === false && label.includes('thanks')) hide = true;
+                        if (prefs.action_bar_show_clip === false && label.includes('clip')) hide = true;
+                        if (prefs.action_bar_show_save === false && (label.includes('save') || label.includes('playlist'))) hide = true;
+                        if (prefs.action_bar_show_report === false && label.includes('report')) hide = true;
+                        if (prefs.action_bar_show_ask_ai === false && (label.includes('ask') || label.includes('ai'))) hide = true;
+                        if (prefs.enable_pip === false && id === 'pipButton') hide = true;
+                        if (hide) {
+                            btn.style.setProperty('display', 'none', 'important');
+                        } else {
+                            btn.style.removeProperty('display');
+                            if (id.endsWith('Button')) {
+                                btn.style.setProperty('display', 'flex', 'important');
+                            }
+                        }
+                    });
+                }
+
+                if (prefs.hide_comments) {
+                    const commentSelectors = [
+                        'ytm-item-section-renderer[section-identifier="comments-entry-point"]',
+                        'ytm-comments-entry-point-header-renderer',
+                        'ytm-comment-thread-renderer',
+                        'ytm-comments-entry-point-teaser-renderer',
+                        '#comments',
+                        '.comment-section',
+                        'ytm-comments-renderer'
+                    ];
+                    commentSelectors.forEach(selector => {
+                        document.querySelectorAll(selector).forEach(el => {
+                            if (el) {
+                                el.style.setProperty('display', 'none', 'important');
+                                el.style.setProperty('visibility', 'hidden', 'important');
+                            }
+                        });
+                    });
+                }
+
+                if (prefs.hide_recommendations) {
+                    const recommendationSelectors = [
+                        '.watch-below-the-player > ytm-item-section-renderer:not([section-identifier="comments-entry-point"])',
+                        'ytm-watch > ytm-item-section-renderer:not([section-identifier="comments-entry-point"])',
+                        'ytm-single-column-watch-next-results-renderer ytm-item-section-renderer:not([section-identifier="comments-entry-point"])',
+                        'ytm-related-videos-renderer'
+                    ];
+                    recommendationSelectors.forEach(selector => {
+                        document.querySelectorAll(selector).forEach(el => {
+                            if (el) {
+                                el.style.setProperty('display', 'none', 'important');
+                                el.style.setProperty('visibility', 'hidden', 'important');
+                            }
+                        });
+                    });
+                }
+            }
+
             if (getPageClass(location.href) === 'select_site') {
                 const settings = document.querySelector('ytm-settings');
                 if (settings) {
                     const base = settings.firstElementChild;
                     if (base) {
-                        const aboutBtn = createCustomSettingBtn(base, 'aboutButton', 'about', 'M444-288h72v-240h-72v240Zm35.79-312q15.21 0 25.71-10.29t10.5-25.5q0-15.21-10.29-25.71t-25.5-10.5q-15.21 0-25.71 10.29t-10.5 25.5q0 15.21 10.29 25.71t25.5 10.5Zm.49 504Q401-96 331-126t-122.5-82.5Q156-261 126-330.96t-30-149.5Q96-560 126-629.5q30-69.5 82.5-122T330.96-834q69.96-30 149.5-30t149.04 30q69.5 30 122 82.5T834-629.28q30 69.73 30 149Q864-401 834-331t-82.5 122.5Q699-156 629.28-126q-69.73 30-149 30Zm-.28-72q130 0 221-91t91-221q0-130-91-221t-221-91q-130 0-221 91t-91 221q0 130 91 221t221 91Zm0-312Z', () => android.about());
+                        const aboutBtn = createCustomSettingBtn(base, 'aboutButton', 'about', '...', () => android.about());
                         if (aboutBtn) settings.appendChild(aboutBtn);
-
-                        const dlBtn = createCustomSettingBtn(base, 'downloadButton', 'downloads', 'M480-336 288-528l51-51 105 105v-342h72v342l105-105 51 51-192 192ZM263.72-192Q234-192 213-213.15T192-264v-72h72v72h432v-72h72v72q0 29.7-21.16 50.85Q725.68-192 695.96-192H263.72Z', () => android.download());
+                        const dlBtn = createCustomSettingBtn(base, 'downloadButton', 'downloads', '...', () => android.download());
                         if (dlBtn) settings.insertBefore(dlBtn, settings.firstElementChild);
-
-                        const extBtn = createCustomSettingBtn(base, 'extensionButton', 'extension', 'M497-120l-33-124q-15-7-30-16t-28-20l-116 50-70-121 98-88q-2-10-3-20t-1-20q0-10 1-20t3-20l-98-88 70-121 116 50q13-11 28-20t30-16l33-124h140l33 124q15 7 30 16t28 20l116-50 70 121-98 88q2 10 3 20t1 20q0 10-1 20t-3 20l98 88-70 121-116-50q-13 11-28 20t-30 16l-33 124H497Zm70-227q55 0 94-39t39-94q0-55-39-94t-94-39q-55 0-94 39t-39 94q0 55 39 94t94 39Z', () => android.extension());
+                        const extBtn = createCustomSettingBtn(base, 'extensionButton', 'extension', '...', () => android.extension());
                         if (extBtn) settings.insertBefore(extBtn, settings.firstElementChild);
                     }
                 }
             }
         }, 1000);
 
+        // ... Keep existing event listeners for Tap, Long Press, Skip, etc.
         let longPressTimer;
         let lastUrl;
-        const handleLongPress = (url) => {
-            if (!url || url === lastUrl) return;
-            lastUrl = url;
-            android.showVideoOptions(url);
-            setTimeout(() => { lastUrl = null; }, 1000);
-        };
-
-        const findLink = (el) => {
+        const findLinkElement = (el) => {
             let curr = el;
             while (curr && curr !== document) {
-                if (curr.tagName === 'A' && curr.href) return curr.href;
-                if (curr.getAttribute('href')) return new URL(curr.getAttribute('href'), location.origin).href;
+                if (curr.tagName === 'A' && curr.href) return curr;
+                if (curr.getAttribute('href')) return curr;
                 curr = curr.parentElement;
             }
             return null;
         };
-
+        const handleLongPress = (url, title) => {
+            if (!url || (url === lastUrl && !title)) return;
+            lastUrl = url;
+            android.showVideoOptions(url, title || null);
+            setTimeout(() => { lastUrl = null; }, 1000);
+        };
         document.addEventListener('touchstart', e => {
-            const url = findLink(e.target);
-            if (url && (url.includes('/watch') || url.includes('/shorts/'))) {
-                clearTimeout(longPressTimer);
-                longPressTimer = setTimeout(() => handleLongPress(url), 600);
+            const link = findLinkElement(e.target);
+            if (link) {
+                const url = link.href || new URL(link.getAttribute('href'), location.origin).href;
+                if (url && (url.includes('/watch') || url.includes('/shorts/') || url.includes('list='))) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = setTimeout(() => {
+                        let title = '';
+                        const titleEl = link.querySelector('h3, span#video-title, #video-title');
+                        if (titleEl) title = titleEl.innerText;
+                        handleLongPress(url, title);
+                    }, 600);
+                }
             }
         }, { passive: true });
-
         document.addEventListener('touchend', () => clearTimeout(longPressTimer), { passive: true });
         document.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
-        document.addEventListener('contextmenu', e => {
-            const url = findLink(e.target);
-            if (url && (url.includes('/watch') || url.includes('/shorts/'))) {
-                e.preventDefault();
-                handleLongPress(url);
-            }
-        }, true);
 
         window.injected = true;
     }
-} catch (e) { console.error(e); }
+} catch (e) {
+    console.error(e);
+}
