@@ -20,12 +20,15 @@ media = "1.7.1"
 newpipeextractor = "v0.25.2"
 photoview = "2.0.0"
 glide = "4.16.0"
+r8 = "9.1.31"
 swiperefreshlayout = "1.2.0"
 webkit = "1.15.0"
 okhttp = "5.3.2"
 okio = "3.16.4"
 recyclerview = "1.4.0"
 coreSplashscreen = "1.0.1"
+commonsIo = "2.16.1"
+documentfile = "1.0.1"
 
 [libraries]
 desugar_jdk_libs_nio = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar_jdk_libs_nio" }
@@ -54,6 +57,7 @@ newpipeextractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version
 photoview = { module = "com.github.chrisbanes:PhotoView", version.ref = "photoview" }
 glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
 glide-compiler = { module = "com.github.bumptech.glide:compiler", version.ref = "glide" }
+r8 = { module = "com.android.tools:r8", version.ref = "r8" }
 swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
 webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version = "1.1.0" }
@@ -61,6 +65,8 @@ recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+commons-io = { module = "commons-io:commons-io", version.ref = "commonsIo" }
+documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

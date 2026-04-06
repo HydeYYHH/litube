@@ -7,6 +7,10 @@ android {
     namespace = "com.hhst.youtubelite"
     compileSdk = 36
 
+    installation {
+        installOptions.add("-t")
+    }
+
     lint {
         disable.add("MissingTranslation")
         disable.add("ExtraTranslation")
@@ -14,16 +18,17 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.hhst.litube"
+        applicationId = "com.google.LitePipe"
         minSdk = 26
         targetSdk = 36
         versionCode = 202
-        versionName = "2.0.2"
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
         }
+
     }
 
     buildTypes {
@@ -62,14 +67,15 @@ android {
 }
 
 dependencies {
+    implementation(libs.core.splashscreen)
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     implementation(libs.newpipeextractor)
     implementation(libs.isoparser)
     implementation(libs.gson)
-    implementation(libs.commons.io)
-    implementation(libs.picasso)
+    implementation(libs.glide)
+    annotationProcessor(libs.glide.compiler)
     implementation(libs.media)
     implementation(libs.photoview)
     implementation(libs.appcompat)
@@ -90,6 +96,8 @@ dependencies {
     implementation(libs.recyclerview)
     implementation(libs.hilt.android)
     annotationProcessor(libs.hilt.compiler)
+    implementation(libs.commons.io)
+    implementation(libs.documentfile)
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
     androidTestImplementation(libs.ext.junit)

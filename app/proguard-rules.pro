@@ -1,84 +1,97 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# Optimization and Obfuscation
+# ----------------------------
 
-# Keep Generic signatures
--keepattributes Signature
--keepattributes EnclosingMethod
--keepattributes InnerClasses
--keepattributes *Annotation*
+# Enable aggressive optimizations
+-optimizationpasses 5
+-allowaccessmodification
+-mergeinterfacesaggressively
+-repackageclasses ''
+-overloadaggressively
+
+# General keeps
+-keepattributes Signature,EnclosingMethod,InnerClasses,*Annotation*,JavascriptInterface
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
+# Suppress Kotlin Metadata warnings
+-dontwarn kotlin.Metadata
+-dontwarn kotlin.jvm.JvmDefault
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
 
 # Gson
+# ----
 -keep class com.google.gson.** { *; }
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
 -keepclassmembers class * extends com.google.gson.reflect.TypeToken { *; }
 
-# Keep models used for JSON serialization
--keep class com.hhst.youtubelite.downloader.core.history.** { *; }
--keep enum com.hhst.youtubelite.downloader.core.history.** { *; }
+# Data Models (Keep fields for Gson serialization)
+-keepclassmembers class com.hhst.youtubelite.extractor.** { <fields>; }
+-keepclassmembers class com.hhst.youtubelite.downloader.core.history.** { <fields>; }
+-keep class com.hhst.youtubelite.extension.Extension { *; }
+-keepclassmembers class com.hhst.youtubelite.extension.Extension { <fields>; }
 
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# JavaScript Interface
+# --------------------
+-keepclassmembers class com.hhst.youtubelite.browser.JavascriptInterface {
+   @android.webkit.JavascriptInterface <methods>;
+}
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# NewPipe Extractor
+# -----------------
+-keep class org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+-keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
-# Please add these rules to your existing keep rules in order to suppress warnings.
-# This is generated automatically by the Android Gradle plugin.
--dontwarn com.google.common.collect.ArrayListMultimap
--dontwarn com.google.common.collect.Multimap
--dontwarn java.awt.Color
--dontwarn java.awt.Font
--dontwarn java.awt.Point
--dontwarn java.awt.Rectangle
--dontwarn javax.money.CurrencyUnit
--dontwarn javax.money.Monetary
--dontwarn org.javamoney.moneta.Money
--dontwarn org.joda.time.DateTime
--dontwarn org.joda.time.DateTimeZone
--dontwarn org.joda.time.Duration
--dontwarn org.joda.time.Instant
--dontwarn org.joda.time.LocalDate
--dontwarn org.joda.time.LocalDateTime
--dontwarn org.joda.time.LocalTime
--dontwarn org.joda.time.Period
--dontwarn org.joda.time.ReadablePartial
--dontwarn org.joda.time.format.DateTimeFormat
--dontwarn org.joda.time.format.DateTimeFormatter
--dontwarn springfox.documentation.spring.web.json.Json
--dontwarn java.beans.BeanDescriptor
--dontwarn java.beans.BeanInfo
--dontwarn java.beans.IntrospectionException
--dontwarn java.beans.Introspector
--dontwarn java.beans.PropertyDescriptor
-
--dontobfuscate
--keepclassmembers class com.hhst.youtubelite.extractor.VideoDetails { *; }
--keep class com.googlecode.mp4parser.** { *; }
--keep class com.coremedia.iso.** { *; }
--keep class com.mp4parser.** { *; }
--dontwarn java.awt.image.BufferedImage
--dontwarn javax.imageio.ImageIO
-
+# OkHttp / Okio
+# -------------
 -dontwarn okio.**
 -dontwarn okhttp3.**
 -dontwarn com.squareup.okhttp3.**
 -keep class com.squareup.okhttp3.** { *; }
 -keep interface com.squareup.okhttp3.** { *; }
 
-## Rules for NewPipeExtractor
--keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
--dontwarn com.google.re2j.**
+# Mp4Parser / IsoParser
+# ---------------------
+-keep class com.googlecode.mp4parser.** { *; }
+-keep class com.coremedia.iso.** { *; }
+-keep class com.mp4parser.** { *; }
+-dontwarn java.awt.**
+-dontwarn javax.imageio.**
+
+# Glide
+# -----
+-keep public class * extends com.bumptech.glide.module.AppGlideModule
+-keep public class * extends com.bumptech.glide.module.LibraryGlideModule
+-dontwarn com.bumptech.glide.GeneratedAppGlideModuleImpl
+-keep class com.bumptech.glide.*GeneratedAppGlideModuleImpl { *; }
+-dontwarn com.bumptech.glide.load.resource.bitmap.VideoDecoder
+
+# Dagger Hilt
+# -----------
+-keep class dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
+-keep class * extends androidx.lifecycle.ViewModel
+-keep @dagger.hilt.android.AndroidEntryPoint class *
+-keep @dagger.hilt.android.lifecycle.HiltViewModel class *
+
+# MMKV
+# ----
+-keep class com.tencent.mmkv.** { *; }
+
+# Media3 / ExoPlayer
+# ------------------
+-keep class androidx.media3.common.util.UnstableApi
+-keep class androidx.media3.exoplayer.dash.DashMediaSource$Factory
+-dontwarn androidx.media3.**
+
+# Suppress common library warnings
+# --------------------------------
+-dontwarn com.google.common.collect.ArrayListMultimap
+-dontwarn com.google.common.collect.Multimap
+-dontwarn javax.money.**
+-dontwarn org.javamoney.**
+-dontwarn org.joda.time.**
+-dontwarn springfox.documentation.**
+-dontwarn java.beans.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
