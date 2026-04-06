@@ -30,6 +30,7 @@ import com.hhst.youtubelite.downloader.core.history.DownloadType;
 import com.hhst.youtubelite.extractor.StreamDetails;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.ui.MainActivity;
+import com.hhst.youtubelite.util.DownloadStorageUtils;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
@@ -37,6 +38,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -48,316 +50,386 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 public class DownloadService extends Service {
 
-    public static final String ACTION_DOWNLOAD_RECORD_UPDATED = "com.hhst.youtubelite.action.DOWNLOAD_RECORD_UPDATED";
-    public static final String EXTRA_TASK_ID = "extra_task_id";
+	public static final String ACTION_DOWNLOAD_RECORD_UPDATED = "com.hhst.youtubelite.action.DOWNLOAD_RECORD_UPDATED";
+	public static final String EXTRA_TASK_ID = "extra_task_id";
 
-    private static final String CHANNEL_ID = "download_channel";
-    private static final int NOTIFICATION_ID = 1001;
-    private static final long FAILED_TEMP_CLEANUP_THRESHOLD = TimeUnit.DAYS.toMillis(1);
+	private static final String CHANNEL_ID = "download_channel";
+	private static final int NOTIFICATION_ID = 1001;
+	private static final long FAILED_TEMP_CLEANUP_THRESHOLD = TimeUnit.DAYS.toMillis(1);
 
-    @Inject LiteDownloader liteDL;
-    @Inject DownloadHistoryRepository historyRepository;
-    @Inject YoutubeExtractor youtubeExtractor;
+	private final Set<String> activeTaskIds = ConcurrentHashMap.newKeySet();
+	private final Map<String, String> activeTaskNames = new ConcurrentHashMap<>();
+	private final Map<String, Task> activeTasks = new ConcurrentHashMap<>();
+	private SharedPreferences itagPrefs;
 
-    private NotificationManager notificationManager;
-    private NotificationCompat.Builder notificationBuilder;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Map<String, Task> activeTasks = new ConcurrentHashMap<>();
-    private SharedPreferences itagPrefs;
+	@Inject
+	LiteDownloader liteDL;
+	@Inject
+	DownloadHistoryRepository historyRepository;
+	@Inject
+	YoutubeExtractor youtubeExtractor;
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        itagPrefs = getSharedPreferences("download_itags", Context.MODE_PRIVATE);
-        createNotificationChannel();
-        cleanupOldFailedTemps();
-    }
+	private NotificationManager notificationManager;
+	private NotificationCompat.Builder notificationBuilder;
+	private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private void cleanupOldFailedTemps() {
-        new Thread(() -> {
-            long now = System.currentTimeMillis();
-            List<DownloadRecord> all = historyRepository.getAllSorted();
-            for (DownloadRecord r : all) {
-                if (r.getStatus() == DownloadStatus.FAILED && (now - r.getUpdatedAt() > FAILED_TEMP_CLEANUP_THRESHOLD)) {
-                    liteDL.cancel(r.getTaskId());
-                    String baseName = r.getFileName();
-                    File cacheDir = getCacheDir();
-                    deleteFile(new File(cacheDir, baseName + "_v.tmp"));
-                    deleteFile(new File(cacheDir, baseName + "_a.tmp"));
-                    deleteFile(new File(cacheDir, baseName + "_m.tmp"));
-                }
-            }
-        }).start();
-    }
+	@Override
+	public void onCreate() {
+		super.onCreate();
+		notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+		itagPrefs = getSharedPreferences("download_itags", Context.MODE_PRIVATE);
+		createNotificationChannel();
+		cleanupOldFailedTemps();
+	}
 
-    private void deleteFile(File file) {
-        if (file.exists()) file.delete();
-    }
+	private void cleanupOldFailedTemps() {
+		new Thread(() -> {
+			long now = System.currentTimeMillis();
+			List<DownloadRecord> all = historyRepository.getAllSorted();
+			for (DownloadRecord r : all) {
+				if (r.getStatus() == DownloadStatus.FAILED && (now - r.getUpdatedAt() > FAILED_TEMP_CLEANUP_THRESHOLD)) {
+					liteDL.cancel(r.getTaskId());
+					String baseName = r.getFileName();
+					File cacheDir = getCacheDir();
+					deleteFile(new File(cacheDir, baseName + "_v.tmp"));
+					deleteFile(new File(cacheDir, baseName + "_a.tmp"));
+					deleteFile(new File(cacheDir, baseName + "_m.tmp"));
+				}
+			}
+		}).start();
+	}
 
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_LOW);
-            channel.setSound(null, null);
-            notificationManager.createNotificationChannel(channel);
-        }
-    }
+	private void deleteFile(File file) {
+		if (file.exists()) file.delete();
+	}
 
-    @Nullable
-    @Override
-    public IBinder onBind(@NonNull final Intent intent) {
-        return new DownloadBinder();
-    }
+	private void createNotificationChannel() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_LOW);
+			channel.setSound(null, null);
+			if (notificationManager != null) notificationManager.createNotificationChannel(channel);
+		}
+	}
 
-    public void download(@NonNull List<Task> tasks) {
-        ensureForeground();
-        for (Task task : tasks) startTask(task);
-    }
+	@Nullable
+	@Override
+	public IBinder onBind(@NonNull final Intent intent) {
+		return new DownloadBinder();
+	}
 
-    private void startTask(@NonNull Task task) {
-        activeTasks.put(task.vid(), task);
-        saveItags(task);
-        DownloadRecord record = historyRepository.findByTaskId(task.vid());
-        long now = System.currentTimeMillis();
-        
-        DownloadType type;
-        String ext;
-        if (task.video() != null) {
-            type = DownloadType.VIDEO;
-            ext = ".mp4";
-        } else if (task.audio() != null) {
-            type = DownloadType.AUDIO;
-            ext = ".m4a";
-        } else if (task.subtitle() != null) {
-            type = DownloadType.SUBTITLE;
-            ext = ".vtt";
-        } else {
-            type = DownloadType.THUMBNAIL;
-            ext = ".jpg";
-        }
-        
-        String outPath = new File(task.desDir(), task.fileName() + ext).getAbsolutePath();
-        
-        if (record == null) {
-            record = new DownloadRecord(task.vid(), task.vid(), type, DownloadStatus.RUNNING, 0,
-                    task.fileName(), outPath, now, now, null, 0L, 0L, task.quality());
-        } else {
-            record.setStatus(DownloadStatus.RUNNING);
-            record.setUpdatedAt(now);
-            record.setFileName(task.fileName());
-            record.setOutputPath(outPath);
-            record.setType(type);
-            record.setQuality(task.quality());
-        }
-        historyRepository.upsert(record);
+	public void download(@NonNull List<Task> tasks) {
+		if (tasks.isEmpty()) return;
+		ensureForeground();
+		for (Task task : tasks) {
+			startTask(task);
+		}
+	}
 
-        attachCallback(task.vid());
-        liteDL.download(task);
-        broadcastRecordUpdated(task.vid());
-    }
+	private void startTask(@NonNull Task task) {
+		final String taskId = task.vid();
+		activeTasks.put(taskId, task);
+		activeTaskIds.add(taskId);
+		activeTaskNames.put(taskId, task.fileName());
+		saveItags(task);
 
-    private void attachCallback(final String taskId) {
-        liteDL.setCallback(taskId, new ProgressCallback2() {
-            @Override public void onProgress(int progress, long d, long t) {
-                updateRecordProgress(taskId, progress, d, t, DownloadStatus.RUNNING);
-                updateNotificationProgress(getTaskFileName(taskId), progress);
-            }
-            @Override public void onComplete(File file) {
-                activeTasks.remove(taskId);
-                updateRecordProgress(taskId, 100, -1, -1, DownloadStatus.COMPLETED);
-                finalizeNotification(file.getName(), true);
-                MediaScannerConnection.scanFile(DownloadService.this, new String[]{file.getAbsolutePath()}, null, null);
-            }
-            @Override public void onError(Exception e) {
-                if (historyRepository.findByTaskId(taskId) != null) {
-                    updateRecordStatus(taskId, DownloadStatus.FAILED);
-                    finalizeNotification(getTaskFileName(taskId), false);
-                }
-            }
-            @Override public void onCancel() {
-                activeTasks.remove(taskId);
-                updateRecordStatus(taskId, DownloadStatus.CANCELED);
-                killNotification();
-            }
-            @Override public void onMerge() {
-                updateRecordStatus(taskId, DownloadStatus.MERGING);
-                updateNotificationMerging(getTaskFileName(taskId));
-            }
-        });
-    }
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		long now = System.currentTimeMillis();
 
-    private void updateRecordProgress(String taskId, int p, long d, long t, DownloadStatus status) {
-        DownloadRecord record = historyRepository.findByTaskId(taskId);
-        long now = System.currentTimeMillis();
-        if (record == null && activeTasks.containsKey(taskId)) {
-            Task task = activeTasks.get(taskId);
-            
-            DownloadType type;
-            if (task.video() != null) type = DownloadType.VIDEO;
-            else if (task.audio() != null) type = DownloadType.AUDIO;
-            else if (task.subtitle() != null) type = DownloadType.SUBTITLE;
-            else type = DownloadType.THUMBNAIL;
+		DownloadType type;
+		String ext;
+		if (task.video() != null) {
+			type = DownloadType.VIDEO;
+			ext = ".mp4";
+		} else if (task.audio() != null) {
+			type = DownloadType.AUDIO;
+			ext = ".m4a";
+		} else if (task.subtitle() != null) {
+			type = DownloadType.SUBTITLE;
+			ext = "." + task.subtitle().getExtension();
+		} else {
+			type = DownloadType.THUMBNAIL;
+			ext = ".jpg";
+		}
 
-            record = new DownloadRecord(taskId, taskId, type,
-                    status, p, task.fileName(), new File(task.desDir(), task.fileName()).getAbsolutePath(), now, now, null, d, t, task.quality());
-        }
-        if (record != null) {
-            if (p >= 0) record.setProgress(p);
-            if (d >= 0) record.setDownloadedSize(d);
-            if (t >= 0) record.setTotalSize(t);
-            record.setStatus(status);
-            record.setUpdatedAt(now);
-            historyRepository.upsert(record);
-            broadcastRecordUpdated(taskId);
-        }
-    }
+		String outPath = new File(task.desDir(), task.fileName() + ext).getAbsolutePath();
 
-    private void updateRecordStatus(String taskId, DownloadStatus status) {
-        DownloadRecord record = historyRepository.findByTaskId(taskId);
-        if (record != null) {
-            record.setStatus(status);
-            record.setUpdatedAt(System.currentTimeMillis());
-            historyRepository.upsert(record);
-            broadcastRecordUpdated(taskId);
-        }
-    }
+		if (record == null) {
+			record = new DownloadRecord(taskId, taskId, type, DownloadStatus.RUNNING, 0,
+							task.fileName(), outPath, now, now, null, 0L, 0L, task.quality());
+		} else {
+			record.setStatus(DownloadStatus.RUNNING);
+			record.setUpdatedAt(now);
+			record.setFileName(task.fileName());
+			record.setOutputPath(outPath);
+			record.setType(type);
+			record.setQuality(task.quality());
+		}
+		historyRepository.upsert(record);
+		broadcastRecordUpdated(taskId);
 
-    public void pause(@NonNull String vid) {
-        liteDL.pause(vid);
-        updateRecordStatus(vid, DownloadStatus.PAUSED);
-        updateNotificationPaused(vid);
-    }
+		attachCallback(taskId);
+		liteDL.download(task);
+	}
 
-    public void resume(@NonNull String vid) {
-        ensureForeground();
-        updateRecordStatus(vid, DownloadStatus.QUEUED);
-        DownloadRecord record = historyRepository.findByTaskId(vid);
-        if (record != null) {
-            new Thread(() -> reExtractAndResume(record)).start();
-        }
-    }
+	private void attachCallback(final String taskId) {
+		liteDL.setCallback(taskId, new ProgressCallback2() {
+			@Override
+			public void onProgress(int progress, long d, long t) {
+				updateRecordProgress(taskId, progress, d, t, DownloadStatus.RUNNING);
+				updateNotificationProgress(getTaskFileName(taskId), progress);
+			}
 
-    private void reExtractAndResume(DownloadRecord record) {
-        try {
-            StreamDetails si = youtubeExtractor.getStreamInfo("https://www.youtube.com/watch?v=" + record.getVid().split(":")[0]);
-            int vItag = itagPrefs.getInt(record.getTaskId() + "_v_itag", -1);
-            int aItag = itagPrefs.getInt(record.getTaskId() + "_a_itag", -1);
+			@Override
+			public void onComplete(File file) {
+				final long fileSize = file.length();
+				try {
+					final String outputReference = DownloadStorageUtils.publishToDownloads(DownloadService.this, file, file.getName());
+					markRecordCompleted(taskId, outputReference, fileSize);
+					onTaskCompleted(taskId, file.getName(), true);
+				} catch (Exception e) {
+					updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
+					onTaskCompleted(taskId, getTaskFileName(taskId), false);
+				}
+			}
 
-            VideoStream video = si.getVideoStreams().stream()
-                    .filter(s -> s.getItag() == vItag)
-                    .findFirst()
-                    .orElse(si.getVideoStreams().get(0));
+			@Override
+			public void onError(Exception error) {
+				updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
+				onTaskCompleted(taskId, getTaskFileName(taskId), false);
+			}
 
-            AudioStream audio = si.getAudioStreams().stream()
-                    .filter(s -> s.getItag() == aItag)
-                    .findFirst()
-                    .orElse(si.getAudioStreams().get(0));
+			@Override
+			public void onCancel() {
+				updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.CANCELED);
+				onTaskCancelled(taskId);
+			}
 
-            Task newTask = new Task(record.getTaskId(), video, audio, null, null, record.getFileName(),
-                    new File(record.getOutputPath()).getParentFile(), 4, record.getQuality());
+			@Override
+			public void onMerge() {
+				updateRecordStatus(taskId, DownloadStatus.MERGING);
+				updateNotificationMerging(getTaskFileName(taskId));
+			}
+		});
+	}
 
-            mainHandler.post(() -> startTask(newTask));
-        } catch (Exception e) {
-            mainHandler.post(() -> updateRecordStatus(record.getTaskId(), DownloadStatus.FAILED));
-        }
-    }
+	private void updateRecordProgress(String taskId, int p, long d, long t, DownloadStatus status) {
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		if (record != null) {
+			if (p >= 0) record.setProgress(p);
+			if (d >= 0) record.setDownloadedSize(d);
+			if (t >= 0) record.setTotalSize(t);
+			record.setStatus(status);
+			record.setUpdatedAt(System.currentTimeMillis());
+			historyRepository.upsert(record);
+			broadcastRecordUpdated(taskId);
+		}
+	}
 
-    public void cancel(@NonNull String vid) {
-        liteDL.cancel(vid);
-        activeTasks.remove(vid);
-        killNotification();
-        broadcastRecordUpdated(vid);
-    }
+	private void markRecordCompleted(@NonNull final String taskId, @NonNull final String outputReference, final long fileSize) {
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		if (record == null) return;
+		record.setProgress(100);
+		record.setDownloadedSize(fileSize);
+		record.setTotalSize(fileSize);
+		record.setOutputPath(outputReference);
+		record.setStatus(DownloadStatus.COMPLETED);
+		record.setUpdatedAt(System.currentTimeMillis());
+		historyRepository.upsert(record);
+		broadcastRecordUpdated(taskId);
+	}
 
-    public void cancelByPrefix(String prefix) {
-        for (String vid : activeTasks.keySet()) {
-            Task t = activeTasks.get(vid);
-            if (t != null && t.fileName().startsWith(prefix)) {
-                cancel(vid);
-            }
-        }
-    }
+	private void updateRecordStatus(String taskId, DownloadStatus status) {
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		if (record != null) {
+			record.setStatus(status);
+			record.setUpdatedAt(System.currentTimeMillis());
+			historyRepository.upsert(record);
+			broadcastRecordUpdated(taskId);
+		}
+	}
 
-    private void killNotification() {
-        if (activeTasks.isEmpty()) {
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            notificationManager.cancel(NOTIFICATION_ID);
-        }
-    }
+	public void pause(@NonNull String vid) {
+		liteDL.pause(vid);
+		updateRecordStatus(vid, DownloadStatus.PAUSED);
+		updateNotificationPaused(vid);
+	}
 
-    private void ensureForeground() {
-        if (notificationBuilder == null) {
-            notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_download)
-                    .setContentTitle("YouTube Lite Downloader")
-                    .setContentIntent(createContentIntent())
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setOngoing(true);
-        }
-        startForeground(NOTIFICATION_ID, notificationBuilder.build());
-    }
+	public void resume(@NonNull String vid) {
+		ensureForeground();
+		updateRecordStatus(vid, DownloadStatus.QUEUED);
+		DownloadRecord record = historyRepository.findByTaskId(vid);
+		if (record != null) {
+			new Thread(() -> reExtractAndResume(record)).start();
+		}
+	}
 
-    private void updateNotificationProgress(String fileName, int progress) {
-        if (notificationBuilder != null) {
-            notificationBuilder.setContentTitle("Downloading: " + fileName).setContentText(progress + "%").setProgress(100, progress, false).setOngoing(true);
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
-        }
-    }
+	private void reExtractAndResume(DownloadRecord record) {
+		try {
+			StreamDetails si = youtubeExtractor.getStreamInfo("https://www.youtube.com/watch?v=" + record.getVid().split(":")[0]);
+			int vItag = itagPrefs.getInt(record.getTaskId() + "_v_itag", -1);
+			int aItag = itagPrefs.getInt(record.getTaskId() + "_a_itag", -1);
 
-    private void updateNotificationPaused(String vid) {
-        if (notificationBuilder != null) {
-            notificationBuilder.setContentTitle("Paused: " + getTaskFileName(vid)).setContentText("Tap to view").setProgress(0, 0, false).setOngoing(false);
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
-            stopForeground(STOP_FOREGROUND_DETACH);
-        }
-    }
+			VideoStream video = si.getVideoStreams().stream()
+							.filter(s -> s.getItag() == vItag)
+							.findFirst()
+							.orElse(si.getVideoStreams().isEmpty() ? null : si.getVideoStreams().get(0));
 
-    private void updateNotificationMerging(String fileName) {
-        if (notificationBuilder != null) {
-            notificationBuilder.setContentTitle("Merging: " + fileName).setContentText("Please wait...").setProgress(100, 0, true);
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
-        }
-    }
+			AudioStream audio = si.getAudioStreams().stream()
+							.filter(s -> s.getItag() == aItag)
+							.findFirst()
+							.orElse(si.getAudioStreams().isEmpty() ? null : si.getAudioStreams().get(0));
 
-    private void finalizeNotification(String fileName, boolean success) {
-        if (notificationBuilder != null) {
-            notificationBuilder.setOngoing(false).setAutoCancel(true).setProgress(0, 0, false)
-                    .setContentTitle(success ? "Download Finished" : "Download Failed").setContentText(fileName);
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
-            killNotification();
-        }
-    }
+			Task newTask = new Task(record.getTaskId(), video, audio, null, null, record.getFileName(),
+							new File(record.getOutputPath()).getParentFile(), 4, record.getQuality());
 
-    private void saveItags(Task t) {
-        SharedPreferences.Editor e = itagPrefs.edit();
-        if (t.video() != null) e.putInt(t.vid() + "_v_itag", t.video().getItag());
-        if (t.audio() != null) e.putInt(t.vid() + "_a_itag", t.audio().getItag());
-        e.apply();
-    }
+			mainHandler.post(() -> startTask(newTask));
+		} catch (Exception e) {
+			mainHandler.post(() -> updateRecordStatus(record.getTaskId(), DownloadStatus.FAILED));
+		}
+	}
 
-    private String getTaskFileName(String id) {
-        Task t = activeTasks.get(id);
-        if (t != null) return t.fileName();
-        DownloadRecord record = historyRepository.findByTaskId(id);
-        return record != null ? record.getFileName() : "Download";
-    }
+	public void cancel(@NonNull String vid) {
+		liteDL.cancel(vid);
+		onTaskCancelled(vid);
+		broadcastRecordUpdated(vid);
+	}
 
-    private void broadcastRecordUpdated(String tid) {
-        Intent intent = new Intent(ACTION_DOWNLOAD_RECORD_UPDATED);
-        intent.putExtra(EXTRA_TASK_ID, tid);
-        intent.setPackage(getPackageName());
-        sendBroadcast(intent);
-    }
+	public void cancelByPrefix(String prefix) {
+		for (String vid : activeTasks.keySet()) {
+			Task t = activeTasks.get(vid);
+			if (t != null && t.fileName().startsWith(prefix)) {
+				cancel(vid);
+			}
+		}
+	}
 
-    private PendingIntent createContentIntent() {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setAction("OPEN_DOWNLOADS");
-        return PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
-    }
+	private synchronized void ensureForeground() {
+		if (notificationBuilder == null) {
+			notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
+							.setSmallIcon(R.drawable.ic_download)
+							.setContentTitle("LitePipe Downloader")
+							.setContentIntent(createContentIntent())
+							.setPriority(NotificationCompat.PRIORITY_LOW)
+							.setOngoing(true);
+		}
+		startForeground(NOTIFICATION_ID, notificationBuilder.build());
+	}
 
-    public class DownloadBinder extends Binder {
-        public DownloadService getService() {
-            return DownloadService.this;
-        }
-    }
+	private synchronized void updateNotificationProgress(String fileName, int progress) {
+		if (notificationBuilder != null) {
+			notificationBuilder.setContentTitle("Downloading: " + fileName)
+							.setContentText(progress + "%")
+							.setOngoing(true)
+							.setProgress(100, progress, false);
+			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+		}
+	}
+
+	private synchronized void updateNotificationMerging(String fileName) {
+		if (notificationBuilder != null) {
+			notificationBuilder.setContentTitle("Merging: " + fileName)
+							.setContentText("Please wait...")
+							.setOngoing(true)
+							.setProgress(100, 0, true);
+			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+		}
+	}
+
+	private synchronized void updateNotificationPaused(String vid) {
+		if (notificationBuilder != null) {
+			notificationBuilder.setContentTitle("Paused: " + getTaskFileName(vid))
+							.setContentText("Tap to view")
+							.setProgress(0, 0, false)
+							.setOngoing(false);
+			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+			stopForeground(STOP_FOREGROUND_DETACH);
+		}
+	}
+
+	private synchronized void updateNotificationForRemainingTasks() {
+		if (notificationBuilder == null || activeTaskIds.isEmpty()) return;
+		final int remaining = activeTaskIds.size();
+		final String fileName = activeTaskNames.values().stream().findFirst().orElse("Download");
+		notificationBuilder.setOngoing(true)
+						.setAutoCancel(false)
+						.setProgress(0, 0, remaining > 1)
+						.setContentTitle(remaining == 1
+										? "Downloading: " + fileName
+										: remaining + " downloads running")
+						.setContentText(remaining == 1
+										? "Queued"
+										: "Tap to view all");
+		notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+	}
+
+	private synchronized void onTaskCompleted(@NonNull final String taskId, @NonNull final String fileName, final boolean success) {
+		activeTaskIds.remove(taskId);
+		activeTaskNames.remove(taskId);
+		activeTasks.remove(taskId);
+		if (activeTaskIds.isEmpty()) {
+			finalizeNotification(fileName, success);
+		} else {
+			updateNotificationForRemainingTasks();
+		}
+	}
+
+	private synchronized void onTaskCancelled(@NonNull final String taskId) {
+		activeTaskIds.remove(taskId);
+		activeTaskNames.remove(taskId);
+		activeTasks.remove(taskId);
+		if (activeTaskIds.isEmpty()) {
+			stopForeground(STOP_FOREGROUND_REMOVE);
+			if (notificationManager != null) notificationManager.cancel(NOTIFICATION_ID);
+			notificationBuilder = null;
+		} else {
+			updateNotificationForRemainingTasks();
+		}
+	}
+
+	private synchronized void finalizeNotification(String fileName, boolean success) {
+		if (notificationBuilder != null) {
+			notificationBuilder.setOngoing(false)
+							.setAutoCancel(true)
+							.setProgress(0, 0, false)
+							.setContentTitle(success ? "Download Finished" : "Download Failed")
+							.setContentText(fileName);
+			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+
+			stopForeground(STOP_FOREGROUND_DETACH);
+			notificationBuilder = null;
+		}
+	}
+
+	private void saveItags(Task t) {
+		SharedPreferences.Editor e = itagPrefs.edit();
+		if (t.video() != null) e.putInt(t.vid() + "_v_itag", t.video().getItag());
+		if (t.audio() != null) e.putInt(t.vid() + "_a_itag", t.audio().getItag());
+		e.apply();
+	}
+
+	private String getTaskFileName(String id) {
+		String name = activeTaskNames.get(id);
+		if (name != null) return name;
+		DownloadRecord record = historyRepository.findByTaskId(id);
+		return record != null ? record.getFileName() : "Download";
+	}
+
+	private void broadcastRecordUpdated(String tid) {
+		Intent intent = new Intent(ACTION_DOWNLOAD_RECORD_UPDATED);
+		intent.putExtra(EXTRA_TASK_ID, tid);
+		intent.setPackage(getPackageName());
+		sendBroadcast(intent);
+	}
+
+	private PendingIntent createContentIntent() {
+		Intent intent = new Intent(this, MainActivity.class);
+		intent.setAction("OPEN_DOWNLOADS");
+		return PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+	}
+
+	public class DownloadBinder extends Binder {
+		public DownloadService getService() {
+			return DownloadService.this;
+		}
+	}
 }
