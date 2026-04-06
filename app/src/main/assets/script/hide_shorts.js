@@ -1,5 +1,5 @@
 (function () {
-    if (!JSON.parse(android.getPreferences()).enable_hide_shorts) return;
+    if (!JSON.parse(lite.getPreferences()).enable_hide_shorts) return;
     if (window.hideShortsInjected) return;
 
     function hideElement(element) {
