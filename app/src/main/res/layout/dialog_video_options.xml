@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -22,14 +23,20 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/close"
             android:src="@drawable/ic_arrow_back"
-            app:tint="?attr/colorOnSurface" />
+            app:tint="?attr/colorOnSurface"
+            tools:ignore="TouchTargetSizeCheck" />
 
         <TextView
             android:id="@+id/dialog_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerInParent="true"
+            android:layout_toEndOf="@id/btn_close"
+            android:layout_marginEnd="48dp"
+            android:ellipsize="end"
             android:fontFamily="sans-serif-black"
+            android:maxLines="1"
+            android:paddingHorizontal="12dp"
             android:text="@string/more_options"
             android:textAppearance="?attr/textAppearanceTitleMedium"
             android:textColor="?attr/colorOnSurface"
@@ -42,12 +49,30 @@
         style="@style/AppCard"
         android:layout_marginHorizontal="12dp"
         android:layout_marginVertical="2dp"
-        app:cardElevation="0dp">
+        app:cardElevation="0dp"
+        tools:ignore="TouchTargetSizeCheck">
+
         <androidx.appcompat.widget.AppCompatTextView
             style="@style/AppCardItem"
             android:padding="12dp"
             android:text="Download Video"
-            app:drawableStartCompat="@drawable/ic_download" />
+            tools:ignore="HardcodedText" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_enqueue"
+        style="@style/AppCard"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="2dp"
+        app:cardElevation="0dp"
+        tools:ignore="TouchTargetSizeCheck">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_enqueue"
+            style="@style/AppCardItem"
+            android:padding="12dp"
+            android:text="Add to Queue"
+            tools:ignore="HardcodedText" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
@@ -61,7 +86,7 @@
             style="@style/AppCardItem"
             android:padding="12dp"
             android:text="Download Playlist"
-            app:drawableStartCompat="@drawable/ic_add" />
+            tools:ignore="HardcodedText" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
@@ -69,25 +94,14 @@
         style="@style/AppCard"
         android:layout_marginHorizontal="12dp"
         android:layout_marginVertical="2dp"
-        app:cardElevation="0dp">
+        app:cardElevation="0dp"
+        tools:ignore="TouchTargetSizeCheck">
+
         <androidx.appcompat.widget.AppCompatTextView
             style="@style/AppCardItem"
             android:padding="12dp"
             android:text="Share Link"
-            app:drawableStartCompat="@drawable/ic_export" />
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/option_open_downloads"
-        style="@style/AppCard"
-        android:layout_marginHorizontal="12dp"
-        android:layout_marginVertical="2dp"
-        app:cardElevation="0dp">
-        <androidx.appcompat.widget.AppCompatTextView
-            style="@style/AppCardItem"
-            android:padding="12dp"
-            android:text="Open Downloads"
-            app:drawableStartCompat="@drawable/ic_track" />
+            tools:ignore="HardcodedText" />
     </com.google.android.material.card.MaterialCardView>
 
 </LinearLayout>
