@@ -3,6 +3,7 @@ package com.hhst.youtubelite.extractor;
 import android.webkit.CookieManager;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.hhst.youtubelite.Constant;
 
@@ -54,7 +55,6 @@ public final class DownloaderImpl extends Downloader {
 				.method(httpMethod, requestBody)
 				.header("User-Agent", Constant.USER_AGENT);
 
-		// Optimized cookie handling
 		final String webViewCookies = CookieManager.getInstance().getCookie(url);
 		StringBuilder cookieBuilder = new StringBuilder();
 		if (webViewCookies != null) {
@@ -97,5 +97,29 @@ public final class DownloaderImpl extends Downloader {
 					url
 			);
 		}
+	}
+
+	public <T> T withExtractionSession(@NonNull final ExtractionTask<T> task, @Nullable final ExtractionSession session) throws IOException, org.schabi.newpipe.extractor.exceptions.ExtractionException, InterruptedException {
+		return task.execute();
+	}
+
+	public boolean canUsePlaybackMemoryCache(@NonNull final String url) {
+		return true;
+	}
+
+	@NonNull
+	public String buildRequestContextFingerprint(@NonNull final String url) {
+		return "default";
+	}
+
+	public boolean canPopulatePlaybackMemoryCache(@Nullable final ExtractionSession session) {
+		return true;
+	}
+
+	public void clearPlaybackMemoryCacheSession(@Nullable final ExtractionSession session) {
+	}
+
+	public interface ExtractionTask<T> {
+		T execute() throws IOException, org.schabi.newpipe.extractor.exceptions.ExtractionException, InterruptedException;
 	}
 }
