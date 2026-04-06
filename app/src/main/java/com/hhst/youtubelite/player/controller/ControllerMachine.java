@@ -35,6 +35,7 @@ public final class ControllerMachine {
 	}
 
 	private ControllerState state = ControllerState.initial();
+	private boolean lockButtonHiddenByUser = false;
 
 	public State getState() {
 		return toState(state.mode());
@@ -76,6 +77,10 @@ public final class ControllerMachine {
 		state = state.toggleLock();
 	}
 
+	public void hideLockButton(boolean hide) {
+		this.lockButtonHiddenByUser = hide;
+	}
+
 	public void enterMiniPlayer() {
 		state = state.enterMiniPlayer();
 	}
@@ -91,16 +96,17 @@ public final class ControllerMachine {
 	public RenderState buildRenderState(final boolean controlsVisible,
 	                                    final boolean isBuffering,
 	                                    final boolean isZoomed) {
-		return toRenderState(state.withControlsVisible(controlsVisible), isBuffering, isZoomed);
+		return toRenderState(state.withControlsVisible(controlsVisible), isBuffering, isZoomed, lockButtonHiddenByUser);
 	}
 
 	public RenderState currentRenderState(final boolean isBuffering, final boolean isZoomed) {
-		return toRenderState(state, isBuffering, isZoomed);
+		return toRenderState(state, isBuffering, isZoomed, lockButtonHiddenByUser);
 	}
 
 	private static RenderState toRenderState(final ControllerState state,
 	                                         final boolean isBuffering,
-	                                         final boolean isZoomed) {
+	                                         final boolean isZoomed,
+	                                         final boolean lockButtonHiddenByUser) {
 		final ControllerState.UiState uiState = state.toUiState(isBuffering, isZoomed);
 		return new RenderState(
 						state.controlsVisible(),
@@ -108,7 +114,7 @@ public final class ControllerMachine {
 						uiState.otherControlsVisible(),
 						uiState.progressVisible(),
 						uiState.resetVisible(),
-						uiState.lockButtonVisible(),
+						uiState.lockButtonVisible() && !lockButtonHiddenByUser,
 						uiState.miniControlsVisible(),
 						uiState.miniScrimVisible(),
                         uiState.miniCloseRestoreVisible(),
