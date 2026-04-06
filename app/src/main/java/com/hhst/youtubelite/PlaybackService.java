@@ -27,6 +27,7 @@ import androidx.media.app.NotificationCompat.MediaStyle;
 import androidx.media.session.MediaButtonReceiver;
 import androidx.media3.common.util.UnstableApi;
 
+import com.hhst.youtubelite.player.queue.QueueNav;
 import com.hhst.youtubelite.player.engine.Engine;
 import com.hhst.youtubelite.ui.MainActivity;
 
@@ -50,6 +51,8 @@ public class PlaybackService extends Service {
 	private static final int SEEK_RESET_DELAY = 1000;
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	@NonNull
+	private QueueNav queueNavigationAvailability = QueueNav.INACTIVE;
 	private MediaSessionCompat mediaSession;
 	private NotificationManager notificationManager;
 	private boolean isSeeking = false;
@@ -66,18 +69,22 @@ public class PlaybackService extends Service {
 	public void onCreate() {
 		super.onCreate();
 		notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			final NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_LOW);
-			channel.setDescription("Media playback controls");
-			channel.setShowBadge(false);
-			channel.setSound(null, null);
-			channel.enableLights(false);
-			channel.enableVibration(false);
-			channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-			if (notificationManager != null) notificationManager.createNotificationChannel(channel);
-		}
+		
+		final NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_LOW);
+		channel.setDescription("Media playback controls");
+		channel.setShowBadge(false);
+		channel.setSound(null, null);
+		channel.enableLights(false);
+		channel.enableVibration(false);
+		channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+		if (notificationManager != null) notificationManager.createNotificationChannel(channel);
+
 		mediaSession = new MediaSessionCompat(this, TAG);
-		final PlaybackStateCompat initialState = new PlaybackStateCompat.Builder().setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SEEK_TO).setState(PlaybackStateCompat.STATE_NONE, 0, 1.0f).build();
+		final PlaybackStateCompat initialState = buildPlaybackState(
+				PlaybackStateCompat.STATE_NONE,
+				0L,
+				1.0f,
+				queueNavigationAvailability);
 		mediaSession.setPlaybackState(initialState);
 	}
 
@@ -122,12 +129,13 @@ public class PlaybackService extends Service {
 	}
 
 	@Nullable
-	private Bitmap fetchThumbnail(@Nullable final String url) {
-		if (url == null || url.isEmpty()) return null;
+	private Bitmap fetchThumbnail(@Nullable final String urlStr) {
+		if (urlStr == null || urlStr.isEmpty()) return null;
 		Bitmap bitmap = null;
 		HttpURLConnection conn = null;
 		try {
-			conn = (HttpURLConnection) new URL(url).openConnection();
+			final URL url = new URL(urlStr);
+			conn = (HttpURLConnection) url.openConnection();
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
 			conn.connect();
@@ -165,15 +173,59 @@ public class PlaybackService extends Service {
 		if (launchIntent == null) launchIntent = new Intent(this, MainActivity.class);
 		launchIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 		final PendingIntent contentIntent = PendingIntent.getActivity(this, 101, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-		return new NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_monochrome).setContentTitle(title).setContentText(artist).setLargeIcon(largeIcon).setContentIntent(contentIntent).setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(isPlaying).setSilent(true).addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevIntent).addAction(playPauseIcon, playPauseTitle, playPauseIntent).addAction(R.drawable.ic_next, getString(R.string.action_next), nextIntent).setStyle(new MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).setGroup("playback_notification").setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY).build();
+
+		final NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+				.setSmallIcon(R.drawable.ic_launcher_monochrome)
+				.setContentTitle(title)
+				.setContentText(artist)
+				.setLargeIcon(largeIcon)
+				.setContentIntent(contentIntent)
+				.setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP))
+				.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+				.setOngoing(isPlaying)
+				.setSilent(true)
+				.setGroup("playback_notification")
+				.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY);
+
+		final MediaStyle style = new MediaStyle().setMediaSession(mediaSession.getSessionToken());
+		final boolean includePrevious = shouldIncludePreviousAction(queueNavigationAvailability);
+		final boolean includeNext = shouldIncludeNextAction(queueNavigationAvailability);
+
+		if (includePrevious && includeNext) {
+			builder.addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevIntent);
+			builder.addAction(playPauseIcon, playPauseTitle, playPauseIntent);
+			builder.addAction(R.drawable.ic_next, getString(R.string.action_next), nextIntent);
+			style.setShowActionsInCompactView(0, 1, 2);
+		} else if (includePrevious) {
+			builder.addAction(R.drawable.ic_previous, getString(R.string.action_previous), prevIntent);
+			builder.addAction(playPauseIcon, playPauseTitle, playPauseIntent);
+			style.setShowActionsInCompactView(0, 1);
+		} else if (includeNext) {
+			builder.addAction(playPauseIcon, playPauseTitle, playPauseIntent);
+			builder.addAction(R.drawable.ic_next, getString(R.string.action_next), nextIntent);
+			style.setShowActionsInCompactView(0, 1);
+		} else {
+			builder.addAction(playPauseIcon, playPauseTitle, playPauseIntent);
+			style.setShowActionsInCompactView(0);
+		}
+		return builder.setStyle(style).build();
 	}
 
 	public void showNotification(@Nullable final String title, @Nullable final String author, @Nullable final String thumbnail, final long duration) {
 		executorService.execute(() -> {
 			final Bitmap largeIcon = fetchThumbnail(thumbnail);
-			final MediaMetadataCompat metadata = new MediaMetadataCompat.Builder().putString(MediaMetadataCompat.METADATA_KEY_TITLE, title).putString(MediaMetadataCompat.METADATA_KEY_ARTIST, author).putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, largeIcon).putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration).build();
+			final MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
+					.putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+					.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, author)
+					.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, largeIcon)
+					.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+					.build();
 			mediaSession.setMetadata(metadata);
-			final PlaybackStateCompat initialState = new PlaybackStateCompat.Builder().setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SEEK_TO).setState(PlaybackStateCompat.STATE_PAUSED, 0L, 1.0f).build();
+			final PlaybackStateCompat initialState = buildPlaybackState(
+					PlaybackStateCompat.STATE_PAUSED,
+					0L,
+					1.0f,
+					queueNavigationAvailability);
 			mediaSession.setPlaybackState(initialState);
 			final Notification notification = buildNotification(false);
 			if (notification != null) {
@@ -191,14 +243,14 @@ public class PlaybackService extends Service {
 	}
 
 	public void hideNotification() {
-		stopForeground(true);
+		stopForeground(STOP_FOREGROUND_REMOVE);
 		if (notificationManager != null) notificationManager.cancel(NOTIFICATION_ID);
 	}
 
 	public void updateProgress(final long pos, final float speed, final boolean isPlaying) {
 		if (isSeeking) return;
 		final int stateCompat = isPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
-		final PlaybackStateCompat playbackState = new PlaybackStateCompat.Builder().setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SEEK_TO).setState(stateCompat, pos, speed).build();
+		final PlaybackStateCompat playbackState = buildPlaybackState(stateCompat, pos, speed, queueNavigationAvailability);
 		mediaSession.setPlaybackState(playbackState);
 		if (isPlaying != lastIsPlayingState) {
 			final Notification updatedNotification = buildNotification(isPlaying);
@@ -208,17 +260,64 @@ public class PlaybackService extends Service {
 		lastIsPlayingState = isPlaying;
 	}
 
+	public void updateQueueNavigationAvailability(@NonNull final QueueNav availability) {
+		queueNavigationAvailability = availability;
+		if (mediaSession == null) return;
+		final PlaybackStateCompat currentState = mediaSession.getController().getPlaybackState();
+		final int state = currentState != null ? currentState.getState() : PlaybackStateCompat.STATE_NONE;
+		final long position = currentState != null ? currentState.getPosition() : 0L;
+		final float speed = currentState != null ? currentState.getPlaybackSpeed() : 1.0f;
+		mediaSession.setPlaybackState(buildPlaybackState(state, position, speed, queueNavigationAvailability));
+		final Notification updatedNotification = buildNotification(state == PlaybackStateCompat.STATE_PLAYING);
+		if (updatedNotification != null && notificationManager != null) {
+			notificationManager.notify(NOTIFICATION_ID, updatedNotification);
+		}
+	}
+
+	static long playbackActionsFor(@NonNull final QueueNav availability) {
+		long actions = PlaybackStateCompat.ACTION_PLAY
+				| PlaybackStateCompat.ACTION_PAUSE
+				| PlaybackStateCompat.ACTION_PLAY_PAUSE
+				| PlaybackStateCompat.ACTION_SEEK_TO;
+		if (shouldIncludeNextAction(availability)) {
+			actions |= PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
+		}
+		if (shouldIncludePreviousAction(availability)) {
+			actions |= PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS;
+		}
+		return actions;
+	}
+
+	static boolean shouldIncludePreviousAction(@NonNull final QueueNav availability) {
+		return availability.isPreviousActionEnabled();
+	}
+
+	static boolean shouldIncludeNextAction(@NonNull final QueueNav availability) {
+		return availability.isNextActionEnabled();
+	}
+
+	@NonNull
+	private static PlaybackStateCompat buildPlaybackState(final int state,
+	                                                      final long position,
+	                                                      final float speed,
+	                                                      @NonNull final QueueNav availability) {
+		return new PlaybackStateCompat.Builder()
+				.setActions(playbackActionsFor(availability))
+				.setState(state, position, speed)
+				.build();
+	}
+
 	@Override
 	public void onTaskRemoved(final Intent rootIntent) {
 		super.onTaskRemoved(rootIntent);
-		stopForeground(true);
+		stopForeground(STOP_FOREGROUND_REMOVE);
 		stopSelf();
 	}
 
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
-		stopForeground(true);
+		stopForeground(STOP_FOREGROUND_REMOVE);
 		if (mediaSession != null) {
 			mediaSession.setActive(false);
 			mediaSession.release();
