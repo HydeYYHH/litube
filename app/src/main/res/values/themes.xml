@@ -46,6 +46,7 @@
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="elevationOverlayEnabled">false</item>
         <item name="android:windowBackground">@color/surface</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.YoutubeLite.Dialog</item>
     </style>
 
     <style name="Theme.YoutubeLite.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
@@ -62,10 +63,15 @@
 
     <style name="ShapeAppearance.YoutubeLite.BottomSheet" parent="ShapeAppearance.Material3.LargeComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSizeTopLeft">16dp</item>
-        <item name="cornerSizeTopRight">16dp</item>
+        <item name="cornerSizeTopLeft">28dp</item>
+        <item name="cornerSizeTopRight">28dp</item>
         <item name="cornerSizeBottomLeft">0dp</item>
         <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="ShapeAppearance.YoutubeLite.Dialog" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
     </style>
 
     <!-- Professional Card Style -->
