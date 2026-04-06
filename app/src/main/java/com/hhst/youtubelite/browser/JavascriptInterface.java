@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.browser;
 
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,13 +12,16 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.extension.ExtensionManager;
-import com.hhst.youtubelite.extractor.PoTokenProviderImpl;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
 import com.hhst.youtubelite.player.LitePlayer;
+import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.player.queue.QueueRepository;
+import com.hhst.youtubelite.player.queue.QueueWarmer;
 import com.hhst.youtubelite.ui.AboutActivity;
 import com.hhst.youtubelite.ui.MainActivity;
 import com.hhst.youtubelite.ui.SettingsActivity;
@@ -36,10 +40,19 @@ public final class JavascriptInterface {
     @NonNull private final ExtensionManager extensionManager;
     @NonNull private final TabManager tabManager;
     @NonNull private final PoTokenProviderImpl poTokenProvider;
+    @NonNull private final QueueRepository queueRepository;
+    @NonNull private final QueueWarmer queueWarmer;
     @NonNull private final Gson gson = new Gson();
     @NonNull private final Handler handler = new Handler(Looper.getMainLooper());
 
-    public JavascriptInterface(@NonNull final YoutubeWebview webview, @NonNull final YoutubeExtractor youtubeExtractor, @NonNull final LitePlayer player, @NonNull final ExtensionManager extensionManager, @NonNull final TabManager tabManager, @NonNull final PoTokenProviderImpl poTokenProvider) {
+    public JavascriptInterface(@NonNull final YoutubeWebview webview,
+                               @NonNull final YoutubeExtractor youtubeExtractor,
+                               @NonNull final LitePlayer player,
+                               @NonNull final ExtensionManager extensionManager,
+                               @NonNull final TabManager tabManager,
+                               @NonNull final PoTokenProviderImpl poTokenProvider,
+                               @NonNull final QueueRepository queueRepository,
+                               @NonNull final QueueWarmer queueWarmer) {
         this.context = webview.getContext();
         this.webview = webview;
         this.youtubeExtractor = youtubeExtractor;
@@ -47,6 +60,8 @@ public final class JavascriptInterface {
         this.extensionManager = extensionManager;
         this.tabManager = tabManager;
         this.poTokenProvider = poTokenProvider;
+        this.queueRepository = queueRepository;
+        this.queueWarmer = queueWarmer;
     }
 
     @android.webkit.JavascriptInterface
@@ -82,10 +97,41 @@ public final class JavascriptInterface {
     }
 
     @android.webkit.JavascriptInterface
+    public void download() {
+        handler.post(() -> {
+            Intent intent = new Intent(context, DownloadActivity.class);
+            context.startActivity(intent);
+        });
+    }
+
+    @android.webkit.JavascriptInterface
+    public void pip() {
+        handler.post(player::enterPictureInPicture);
+    }
+
+    @android.webkit.JavascriptInterface
     public void showVideoOptions(@Nullable final String url) {
-        if (url != null && context instanceof MainActivity) {
-            handler.post(() -> ((MainActivity) context).showVideoOptionsDialog(url));
+        showVideoOptions(url, null);
+    }
+
+    @android.webkit.JavascriptInterface
+    public void showVideoOptions(@Nullable final String url, @Nullable final String title) {
+        if (url != null) {
+            handler.post(() -> {
+                MainActivity mainActivity = findMainActivity(context);
+                if (mainActivity != null) {
+                    mainActivity.showVideoOptionsDialog(url, title);
+                }
+            });
         }
+    }
+
+    private MainActivity findMainActivity(Context context) {
+        if (context instanceof MainActivity) return (MainActivity) context;
+        if (context instanceof ContextWrapper) {
+            return findMainActivity(((ContextWrapper) context).getBaseContext());
+        }
+        return null;
     }
 
     @android.webkit.JavascriptInterface
@@ -102,10 +148,48 @@ public final class JavascriptInterface {
     }
 
     @android.webkit.JavascriptInterface
-    public void download() {
+    public void addToQueue(@Nullable final String itemJson) {
+        if (itemJson == null) return;
         handler.post(() -> {
-            Intent intent = new Intent(context, DownloadActivity.class);
-            context.startActivity(intent);
+            try {
+                final QueueItem item = gson.fromJson(itemJson, QueueItem.class);
+                if (item == null || item.getUrl() == null) return;
+                final String vid = item.getVideoId();
+                if (vid == null || vid.isBlank()
+                        || item.getTitle() == null || item.getTitle().isBlank()
+                        || item.getAuthor() == null || item.getAuthor().isBlank()) {
+                    Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                item.setVideoId(vid);
+                queueRepository.add(item);
+                queueWarmer.warmItem(item);
+                player.refreshQueueNavigationAvailability();
+                Toast.makeText(context, R.string.queue_item_added, Toast.LENGTH_SHORT).show();
+            } catch (final Exception ignored) {
+            }
+        });
+    }
+
+    @android.webkit.JavascriptInterface
+    public void showQueueItemUnavailable() {
+        handler.post(() -> Toast.makeText(context, R.string.queue_item_unavailable, Toast.LENGTH_SHORT).show());
+    }
+
+    @android.webkit.JavascriptInterface
+    public boolean isQueueEnabled() {
+        return queueRepository.isEnabled();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void hidePlayer() {
+        handler.post(() -> {
+            if (extensionManager.isEnabled(com.hhst.youtubelite.Constant.ENABLE_IN_APP_MINI_PLAYER) && player.getLoadedVideoId() != null) {
+                player.enterInAppMiniPlayer();
+            } else {
+                player.hide();
+                tabManager.hidePlayer();
+            }
         });
     }
 
@@ -123,8 +207,18 @@ public final class JavascriptInterface {
     }
 
     @android.webkit.JavascriptInterface
-    public void hidePlayer() {
-        handler.post(player::hide);
+    public boolean seekLoadedVideo(@Nullable final String url, final long positionMs) {
+        return player.seekLoadedVideo(url, positionMs);
+    }
+
+    @android.webkit.JavascriptInterface
+    public void enqueue(@Nullable final String url) {
+        enqueue(url, null);
+    }
+
+    @android.webkit.JavascriptInterface
+    public void enqueue(@Nullable final String url, @Nullable final String title) {
+        if (url != null) handler.post(() -> player.addToQueue(url, title));
     }
 
     @android.webkit.JavascriptInterface
@@ -152,10 +246,17 @@ public final class JavascriptInterface {
         }
     }
 
-    @NonNull
     @android.webkit.JavascriptInterface
     public String getPreferences() {
         return gson.toJson(extensionManager.getAllPreferences());
+    }
+
+    @android.webkit.JavascriptInterface
+    public void onSkipByOffset(final int offset) {
+        handler.post(() -> {
+            if (offset > 0) player.skipToNext();
+            else if (offset < 0) player.skipToPrevious();
+        });
     }
 
     @android.webkit.JavascriptInterface

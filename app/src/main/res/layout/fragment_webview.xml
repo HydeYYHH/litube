@@ -7,6 +7,15 @@
     <com.hhst.youtubelite.browser.YoutubeWebview
         android:id="@+id/webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent">
+
+        <com.hhst.youtubelite.ui.widget.LoadingProgressBar
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:visibility="gone" />
+
+    </com.hhst.youtubelite.browser.YoutubeWebview>
 
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
