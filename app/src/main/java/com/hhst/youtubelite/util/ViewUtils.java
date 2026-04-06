@@ -1,7 +1,11 @@
 package com.hhst.youtubelite.util;
 
 import android.content.Context;
+import android.os.Build;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 
 import androidx.annotation.NonNull;
 
@@ -36,6 +40,9 @@ public final class ViewUtils {
 			v.animate().cancel();
 			v.setAlpha(ALPHA_VISIBLE);
 			v.setVisibility(View.VISIBLE);
+		} else if (v.getVisibility() != View.VISIBLE) {
+			v.setAlpha(ALPHA_INVISIBLE);
+			v.setVisibility(visibilityIfGone);
 		} else {
 			v.setVisibility(View.VISIBLE);
 			v.animate().alpha(alpha).setDuration(ANIMATION_DURATION_MS).withEndAction(() -> {
@@ -48,22 +55,31 @@ public final class ViewUtils {
 
 	/**
 	 * Sets the system UI visibility for fullscreen mode.
-	 *
-	 * @param view       The view to apply the visibility to.
-	 * @param fullscreen True to enter fullscreen, false to exit.
 	 */
 	public static void setFullscreen(@NonNull final View view, final boolean fullscreen) {
-		if (fullscreen) {
-			view.setSystemUiVisibility(
-							View.SYSTEM_UI_FLAG_LOW_PROFILE
-											| View.SYSTEM_UI_FLAG_FULLSCREEN
-											| View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-											| View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-											| View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-											| View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-			);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			WindowInsetsController controller = view.getWindowInsetsController();
+			if (controller != null) {
+				if (fullscreen) {
+					controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+					controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+				} else {
+					controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+				}
+			}
 		} else {
-			view.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+			if (fullscreen) {
+				view.setSystemUiVisibility(
+						View.SYSTEM_UI_FLAG_LOW_PROFILE
+								| View.SYSTEM_UI_FLAG_FULLSCREEN
+								| View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+								| View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+								| View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+								| View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+				);
+			} else {
+				view.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+			}
 		}
 	}
 }

@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.media.AudioManager;
+import android.provider.Settings;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -27,6 +28,10 @@ public final class DeviceUtils {
 	 */
 	public static boolean isInPictureInPictureMode(@NonNull final Activity activity) {
 		return activity.isInPictureInPictureMode();
+	}
+
+	public static boolean isRotateOn(@NonNull final Context context) {
+		return Settings.System.getInt(context.getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0) == 1;
 	}
 
 	/**
@@ -81,3 +86,4 @@ public final class DeviceUtils {
 		return Math.round(brightness * PERCENT_MULTIPLIER);
 	}
 }
+
