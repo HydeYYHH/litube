@@ -5,6 +5,7 @@ import androidx.annotation.NonNull;
 import com.google.common.collect.ForwardingMap;
 import com.google.common.collect.ForwardingSet;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -68,13 +69,18 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		@NonNull
 		@Override
 		public Object[] toArray() {
-			return standardToArray();
+			return filteredElements().toArray();
 		}
 
 		@NonNull
 		@Override
 		public <T> T[] toArray(@NonNull final T[] array) {
-			return standardToArray(array);
+			return filteredElements().toArray(array);
+		}
+
+		@NonNull
+		private List<String> filteredElements() {
+			return new ArrayList<>(this);
 		}
 	}
 
@@ -100,13 +106,18 @@ public final class NullFilteringHeadersMap extends ForwardingMap<String, List<St
 		@NonNull
 		@Override
 		public Object[] toArray() {
-			return standardToArray();
+			return filteredElements().toArray();
 		}
 
 		@NonNull
 		@Override
 		public <T> T[] toArray(@NonNull final T[] array) {
-			return standardToArray(array);
+			return filteredElements().toArray(array);
+		}
+
+		@NonNull
+		private List<Entry<String, List<String>>> filteredElements() {
+			return new ArrayList<>(this);
 		}
 	}
 

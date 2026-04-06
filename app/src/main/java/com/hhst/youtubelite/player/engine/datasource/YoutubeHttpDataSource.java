@@ -49,10 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
-/**
- * An {@link HttpDataSource} that uses Android's {@link HttpURLConnection}, based on
- * {@link DefaultHttpDataSource}, for YouTube streams.
- */
 @UnstableApi
 public final class YoutubeHttpDataSource extends BaseDataSource implements HttpDataSource {
 
@@ -254,7 +250,6 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		try {
 			final InputStream connectionInputStream = this.inputStream;
 			if (connectionInputStream != null) {
-				// bytesRemaining calculation removed as it's no longer needed
 				maybeTerminateInputStream();
 
 				try {
