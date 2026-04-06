@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.util.TypedValue;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -35,6 +34,7 @@ import com.hhst.youtubelite.player.sponsor.SponsorBlockManager;
 import com.hhst.youtubelite.player.sponsor.SponsorOverlayView;
 import com.hhst.youtubelite.ui.ErrorDialog;
 import com.hhst.youtubelite.util.DeviceUtils;
+import com.hhst.youtubelite.util.ToastUtils;
 import com.tencent.mmkv.MMKV;
 
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -229,7 +229,7 @@ public class LitePlayer {
         item.setTitle(title != null ? title : "Loading...");
         item.setVideoId(YoutubeExtractor.getVideoId(url));
         queueRepository.add(item);
-        Toast.makeText(activity, "Added to queue", Toast.LENGTH_SHORT).show();
+        ToastUtils.show(activity, R.string.queue_item_added);
     }
 
     public List<QueueItem> getQueue() {
@@ -512,7 +512,7 @@ public class LitePlayer {
         playerView.enterPiP();
     }
 
-    public boolean isSuspendableWatchSession() {
+    public boolean canSuspendWatch() {
         return playerView.getVisibility() == View.VISIBLE;
     }
 

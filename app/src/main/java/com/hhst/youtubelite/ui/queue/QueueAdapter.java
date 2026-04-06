@@ -11,9 +11,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
 import com.hhst.youtubelite.R;
 import com.hhst.youtubelite.player.queue.QueueItem;
+import com.hhst.youtubelite.util.ImageUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -157,14 +157,7 @@ public final class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHo
 					? itemView.getContext().getString(R.string.queue_unknown_author)
 					: item.getAuthor());
 			
-			if (item.getThumbnailUrl() != null && !item.getThumbnailUrl().isBlank()) {
-				Glide.with(itemView)
-						.load(item.getThumbnailUrl())
-						.centerCrop()
-						.into(thumbnailView);
-			} else {
-				thumbnailView.setImageDrawable(null);
-			}
+			ImageUtils.loadThumb(thumbnailView, item.getThumbnailUrl());
 
 			final boolean playing = isPlaying(item.getVideoId(), playingId);
 			itemView.setActivated(playing);

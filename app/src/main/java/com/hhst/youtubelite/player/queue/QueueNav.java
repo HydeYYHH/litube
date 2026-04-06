@@ -39,6 +39,10 @@ public record QueueNav(boolean queue,
 		return from(enabled, hasItems, inQueue, atHead, atTail).withPrev(prev);
 	}
 
+	public QueueNav withNext(final boolean next) {
+		return this.next == next ? this : new QueueNav(queue, next, shuffle, qPrev, prev);
+	}
+
 	public QueueNav withPrev(final boolean prev) {
 		return this.prev == prev ? this : new QueueNav(queue, next, shuffle, qPrev, prev);
 	}
@@ -55,15 +59,15 @@ public record QueueNav(boolean queue,
 		return queue && qPrev;
 	}
 
-	public boolean hasPrevWatch() {
+	public boolean hasPreviousFallback() {
 		return prev;
 	}
 
 	public boolean isNextActionEnabled() {
-		return !queue || next;
+		return next;
 	}
 
 	public boolean isPreviousActionEnabled() {
-		return !queue || qPrev || prev;
+		return qPrev || prev;
 	}
 }

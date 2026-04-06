@@ -413,48 +413,90 @@ public class Engine {
 
 	public void skipToNext() {
 		final QueueNav availability = getQueueNavigationAvailability();
-		if (availability.usesQueueForNext()) {
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		if (shouldUseQueueForNext(availability)) {
 			navigateWithinQueue(1);
 			return;
 		}
-		skipByPlaylistOffset(1);
+		if (shouldUsePlaylistForNext(localQueueEnabled, hasPlaylist)) {
+			skipByPlaylistOffset(1, null);
+		}
 	}
 
 	public void skipToPrevious() {
 		final QueueNav availability = getQueueNavigationAvailability();
-		if (availability.usesQueueForPrevious()) {
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean inQueue = queueRepository.containsVideo(vid);
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		final boolean canGoBack = tabManager.canGoBackInWatch();
+		if (shouldUseQueueForPrevious(availability)) {
 			navigateWithinQueue(-1);
 			return;
 		}
-		skipByPlaylistOffset(-1);
-	}
-
-	private void playRandomPlaylistItem() {
-		final QueueNav availability = getQueueNavigationAvailability();
-		if (availability.usesQueueForShuffle()) {
-			final QueueItem random = queueRepository.findRandom(vid);
-			if (random != null && random.getUrl() != null) {
-				tabManager.playInPlaybackSession(random.getUrl());
-			}
+		if (shouldUsePlaylistForPrevious(localQueueEnabled, hasPlaylist)) {
+			tabManager.evaluateJavascriptForWatch(
+					buildPlaylistNavigationScript(-1),
+					value -> {
+						if (didNavigate(value)) return;
+						if (shouldFallbackToBackAfterPlaylistMiss(value)) {
+							navigateBack();
+						}
+					});
+			return;
+		}
+		if (shouldUseBackForPrevious(localQueueEnabled, inQueue, hasPlaylist, canGoBack)) {
+			navigateBack();
 		}
 	}
 
-	private void navigateWithinQueue(final int offset) {
-		final QueueItem item = queueRepository.findRelative(vid, offset);
-		if (item == null || item.getUrl() == null) return;
-		tabManager.playInPlaybackSession(item.getUrl());
+	public void playRandomPlaylistItem() {
+		final QueueNav availability = getQueueNavigationAvailability();
+		final boolean localQueueEnabled = queueRepository.isEnabled();
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		if (shouldUseQueueForShuffle(availability)) {
+			navigateRandomQueueItem();
+			return;
+		}
+		if (shouldUsePlaylistForShuffle(localQueueEnabled, hasPlaylist)) {
+			this.tabManager.evaluateJavascriptForWatch(buildRandomPlaylistNavigationScript(), null);
+		}
 	}
 
-	private void skipByPlaylistOffset(final int offset) {
-		tabManager.evaluateJavascriptForPlayback(String.format(Locale.US, "window.dispatchEvent(new CustomEvent(\u0027onSkipByOffset\u0027, { detail: { offset: %d, url: %s } }));", offset, "null"), null);
+	private void skipByPlaylistOffset(final int playlistOffset, @Nullable final Runnable miss) {
+		this.tabManager.evaluateJavascriptForWatch(
+				buildPlaylistNavigationScript(playlistOffset),
+				miss == null ? null : value -> {
+					if (!didNavigate(value)) miss.run();
+				});
+	}
+
+	private void navigateWithinQueue(final int offset) {
+		if (!queueRepository.isEnabled()) return;
+		final QueueItem item = queueRepository.findRelative(vid, offset);
+		if (item == null || item.getUrl() == null) return;
+		tabManager.playInWatch(item.getUrl());
+	}
+
+	private void navigateRandomQueueItem() {
+		if (!queueRepository.isEnabled()) return;
+		final QueueItem item = queueRepository.findRandom(vid);
+		if (item == null || item.getUrl() == null) return;
+		tabManager.playInWatch(item.getUrl());
+	}
+
+	private void navigateBack() {
+		tabManager.goBackInWatch();
 	}
 
 	@NonNull
 	public QueueNav getQueueNavigationAvailability() {
-		final List<QueueItem> items = queueRepository.getItems();
-		final boolean enabled = queueRepository.isEnabled();
+		final boolean queueEnabled = queueRepository.isEnabled();
 		final boolean inQueue = queueRepository.containsVideo(vid);
+		final boolean hasPlaylist = tabManager.watchHasPlaylist();
+		final boolean canGoBack = tabManager.canGoBackInWatch();
 		
+		final List<QueueItem> items = queueRepository.getItems();
 		int index = -1;
 		if (vid != null) {
 			for (int i = 0; i < items.size(); i++) {
@@ -465,14 +507,84 @@ public class Engine {
 			}
 		}
 
-		return QueueNav.from(
-				enabled,
+		final QueueNav availability = resolveQueueNavigationAvailability(
+				queueEnabled,
 				!items.isEmpty(),
 				inQueue,
 				index == 0,
-				index == items.size() - 1,
-				tabManager.hasPrevWatch()
-		);
+				index == items.size() - 1);
+
+		return availability
+				.withNext(queueEnabled ? availability.next() : shouldUsePlaylistForNext(false, hasPlaylist))
+				.withPrev(shouldUseBackForPrevious(queueEnabled, inQueue, hasPlaylist, canGoBack)
+						|| shouldUsePlaylistForPrevious(queueEnabled, hasPlaylist));
+	}
+
+	@NonNull
+	public static QueueNav resolveQueueNavigationAvailability(final boolean enabled,
+	                                                         final boolean hasItems,
+	                                                         final boolean inQueue,
+	                                                         final boolean atHead,
+	                                                         final boolean atTail) {
+		return QueueNav.from(enabled, hasItems, inQueue, atHead, atTail);
+	}
+
+	static boolean shouldUseQueueForNext(@NonNull final QueueNav availability) {
+		return availability.usesQueueForNext();
+	}
+
+	static boolean shouldUseQueueForShuffle(@NonNull final QueueNav availability) {
+		return availability.usesQueueForShuffle();
+	}
+
+	static boolean shouldUseQueueForPrevious(@NonNull final QueueNav availability) {
+		return availability.usesQueueForPrevious();
+	}
+
+	static boolean shouldUsePlaylistForNext(final boolean localQueueEnabled,
+	                                        final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
+	}
+
+	static boolean shouldUsePlaylistForShuffle(final boolean localQueueEnabled,
+	                                           final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
+	}
+
+	static boolean shouldUsePlaylistForPrevious(final boolean localQueueEnabled,
+	                                            final boolean hasPlaylistContext) {
+		return !localQueueEnabled && hasPlaylistContext;
+	}
+
+	static boolean shouldUseBackForPrevious(final boolean localQueueEnabled,
+	                                        final boolean inQueue,
+	                                        final boolean hasPlaylistContext,
+	                                        final boolean canGoBack) {
+		if (!canGoBack) return false;
+		if (localQueueEnabled) {
+			return !inQueue && !hasPlaylistContext;
+		}
+		return !hasPlaylistContext;
+	}
+
+	static boolean shouldFallbackToBackAfterPlaylistMiss(@Nullable final String value) {
+		return "\"missing-playlist\"".equals(value)
+				|| "\"missing-current-video-id\"".equals(value)
+				|| "\"missing-current-video\"".equals(value);
+	}
+
+	static boolean didNavigate(@Nullable final String value) {
+		return value != null && value.contains("videoId");
+	}
+
+	@NonNull
+	private static String buildPlaylistNavigationScript(final int offset) {
+		return String.format(Locale.US, "window.dispatchEvent(new CustomEvent(\u0027onSkipByOffset\u0027, { detail: { offset: %d } }));", offset);
+	}
+
+	@NonNull
+	private static String buildRandomPlaylistNavigationScript() {
+		return "window.dispatchEvent(new CustomEvent(\u0027onSkipRandom\u0027));";
 	}
 
 	public void setLoopMode(@NonNull final PlayerLoopMode loopMode) {

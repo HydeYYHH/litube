@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Outline;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Rational;
@@ -12,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageButton;
@@ -56,6 +58,7 @@ public class LitePlayerView extends PlayerView {
 
     private static final float SUBTITLE_LINE_FRACTION = 0.92f;
     private static final float SUBTITLE_POSITION_FRACTION = 0.5f;
+    private static final int MINI_PLAYER_CORNER_RADIUS_DP = 16;
     private static final long MINI_TRANSITION_MS = 260L;
     private static final int[] MINI_PLAYER_TAP_TARGET_IDS = {
             R.id.btn_mini_close,
@@ -108,6 +111,14 @@ public class LitePlayerView extends PlayerView {
     private int miniAnimToken;
     private boolean wasInPiP;
 
+    @NonNull
+    private final ViewOutlineProvider miniPlayerOutlineProvider = new ViewOutlineProvider() {
+        @Override
+        public void getOutline(final View view, final Outline outline) {
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), ViewUtils.dpToPx(activity, MINI_PLAYER_CORNER_RADIUS_DP));
+        }
+    };
+
     public LitePlayerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }
@@ -125,6 +136,8 @@ public class LitePlayerView extends PlayerView {
         setControllerHideOnTouch(false);
         setControllerAutoShow(false);
         setControllerShowTimeoutMs(0);
+        setOutlineProvider(miniPlayerOutlineProvider);
+        setClipToOutline(false);
         setResizeMode(prefs.getResizeMode());
 
         final int screenWidth = ViewUtils.getScreenWidth(activity);
@@ -136,6 +149,7 @@ public class LitePlayerView extends PlayerView {
                 playerWidth = right - left;
                 playerHeight = bottom - top;
             }
+            if (inAppMiniPlayer) invalidateOutline();
         });
     }
 
@@ -168,6 +182,7 @@ public class LitePlayerView extends PlayerView {
                 applyMiniPlayerLayout(params);
                 restoreMini();
                 miniPlayerTranslationStashedForFullscreen = false;
+                updateMiniPlayerCornerClipping();
                 return;
             }
             if (fullscreen && inAppMiniPlayer) {
@@ -205,7 +220,15 @@ public class LitePlayerView extends PlayerView {
                 params.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
             }
             setLayoutParams(params);
+            updateMiniPlayerCornerClipping();
         }
+    }
+
+    private void updateMiniPlayerCornerClipping() {
+        final boolean shouldClipMiniPlayerCorners =
+                inAppMiniPlayer && !activity.isInPictureInPictureMode();
+        setClipToOutline(shouldClipMiniPlayerCorners);
+        invalidateOutline();
     }
 
     public void enterPiP() {

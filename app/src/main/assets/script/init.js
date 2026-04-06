@@ -39,6 +39,28 @@ try {
             } catch (e) { return 'unknown'; }
         };
 
+        // Polling optimization (Backoff strategy)
+        const backoff = () => {
+            const delays = [128, 256, 512, 1024, 2048];
+            let tmr = null;
+            let ver = 0;
+            return (fn) => {
+                const v = ++ver;
+                let k = 0;
+                if (tmr) clearTimeout(tmr);
+                const run = () => {
+                    if (v !== ver) return;
+                    const done = fn() === true;
+                    if (done) return;
+                    tmr = setTimeout(run, delays[k] ?? 2048);
+                    k += 1;
+                };
+                run();
+            };
+        };
+
+        const runBackoff = backoff();
+
         if (!window.originalFetch) {
             window.originalFetch = fetch;
             window.fetch = async (...args) => {
@@ -95,14 +117,23 @@ try {
         });
 
         const handlePlayerVisibility = () => {
-            if (getPageClass(location.href) === 'watch') android.play(location.href);
+            const pc = getPageClass(location.href);
+            if (pc === 'watch') android.play(location.href);
             else android.hidePlayer();
         };
 
         window.addEventListener('popstate', handlePlayerVisibility);
         const wrapState = (name) => {
             const orig = history[name];
-            history[name] = function () {
+            history[name] = function (data, title, url) {
+                const pc = getPageClass(location.href);
+                const targetUrl = url ? new URL(url, location.href).href : location.href;
+                const nextPc = getPageClass(targetUrl);
+
+                if (nextPc && nextPc !== pc) {
+                    android.openTab(targetUrl, nextPc);
+                    return;
+                }
                 orig.apply(this, arguments);
                 handlePlayerVisibility();
             };
@@ -389,7 +420,6 @@ try {
             }
         }, 1000);
 
-        // ... Keep existing event listeners for Tap, Long Press, Skip, etc.
         let longPressTimer;
         let lastUrl;
         const findLinkElement = (el) => {

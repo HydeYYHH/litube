@@ -57,6 +57,7 @@
     <string name="player">Player</string>
     <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
+    <string name="action_replay">Replay</string>
     <string name="action_previous">Previous Video</string>
     <string name="action_next">Next Video</string>
     <string name="action_fullscreen">Fullscreen</string>
