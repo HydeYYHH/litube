@@ -130,8 +130,8 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		View mainView = findViewById(R.id.main);
 		ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
 			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-			// FIX: Set bottom padding to 0 to ensure the Nav Bar sticks to the bottom edge
-			v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
+			Insets tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement());
+			v.setPadding(systemBars.left, systemBars.top, systemBars.right, tappable.bottom);
 			return insets;
 		});
 

@@ -1,5 +1,7 @@
 package com.hhst.youtubelite.extractor;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -37,6 +39,7 @@ import okhttp3.ResponseBody;
 @Singleton
 public final class DownloaderImpl extends Downloader {
 	private static final String YOUTUBE_RESTRICTED_MODE_COOKIE = "PREF=f2=8000000";
+	private static final String TAG = "DownloaderImpl";
 
 	private final OkHttpClient client;
 	private final ExtractionSessionScope scope;
@@ -77,9 +80,10 @@ public final class DownloaderImpl extends Downloader {
 
 		final Request.Builder builder = new Request.Builder().url(url).method(httpMethod, requestBody).header("User-Agent", Constant.USER_AGENT);
 		ExtractionSession session = scope.get();
+		AuthContext auth = session != null ? session.getAuth() : null;
 		String mergedCookies = mergeCookiesForUrl(
 						url,
-						session != null ? session.getAuth().cookies() : null);
+						auth != null ? auth.cookies() : null);
 
 		// Override with headers from request
 		if (headers != null) {
@@ -96,6 +100,16 @@ public final class DownloaderImpl extends Downloader {
 					builder.addHeader(headerName, value);
 				}
 			}
+		}
+		YoutubeAuth.Result authHeaders = YoutubeAuth.headers(url, auth, System.currentTimeMillis());
+		if (authHeaders.note() != null) {
+			Log.d(TAG, "Skipped YouTube auth headers: " + authHeaders.note());
+		}
+		for (Map.Entry<String, String> entry : authHeaders.headers().entrySet()) {
+			if (hasHeader(headers, entry.getKey())) {
+				continue;
+			}
+			builder.header(entry.getKey(), entry.getValue());
 		}
 		if (!mergedCookies.isEmpty()) {
 			builder.header("Cookie", mergedCookies);
@@ -176,6 +190,19 @@ public final class DownloaderImpl extends Downloader {
 		return lowerHost.equals("youtu.be")
 						|| lowerHost.equals(Constant.YOUTUBE_DOMAIN)
 						|| lowerHost.endsWith("." + Constant.YOUTUBE_DOMAIN);
+	}
+
+	private boolean hasHeader(@Nullable Map<String, List<String>> headers,
+	                          @NonNull String name) {
+		if (headers == null) {
+			return false;
+		}
+		for (String key : headers.keySet()) {
+			if (name.equalsIgnoreCase(key)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 /**

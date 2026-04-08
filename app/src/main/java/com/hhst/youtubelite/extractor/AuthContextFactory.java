@@ -36,6 +36,7 @@ public final class AuthContextFactory {
 						firstNonBlank(page != null ? page.visitorData() : null, getCookieValue(cookies, "VISITOR_INFO1_LIVE")),
 						page != null ? page.dataSyncId() : null,
 						page != null ? page.clientVersion() : null,
+						page != null ? page.sessionIndex() : null,
 						page != null && page.loggedIn(),
 						page != null && page.premium(),
 						System.currentTimeMillis());

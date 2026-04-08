@@ -105,6 +105,7 @@ public class YoutubeWebview extends WebView {
 					visitorData:getCfg('VISITOR_DATA')||(client?client.visitorData:null),
 					dataSyncId:getCfg('DATASYNC_ID')||getCfg('DELEGATED_SESSION_ID')||null,
 					clientVersion:getCfg('INNERTUBE_CLIENT_VERSION')||getCfg('INNERTUBE_CONTEXT_CLIENT_VERSION')||(client?client.clientVersion:null),
+					sessionIndex:getCfg('SESSION_INDEX')||null,
 					serializedExperimentFlags:serializedExperimentFlags,
 					loggedIn:!!(getCfg('LOGGED_IN')||getCfg('DATASYNC_ID')||getCfg('DELEGATED_SESSION_ID')),
 					premium:premium
