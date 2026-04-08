@@ -16,7 +16,7 @@ public final class ExtractionSession {
 	private boolean cancelled = false;
 
 	public ExtractionSession() {
-		this(new AuthContext("none", null, null, null, null, false, false, 0L));
+		this(new AuthContext("none", null, null, null, null, null, false, false, 0L));
 	}
 
 	public ExtractionSession(@NonNull AuthContext auth) {

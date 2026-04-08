@@ -12,6 +12,7 @@ public record AuthContext(
 				@Nullable String visitorData,
 				@Nullable String dataSyncId,
 				@Nullable String clientVersion,
+				@Nullable String sessionIndex,
 				boolean loggedIn,
 				boolean premium,
 				long createdAtMs) {
