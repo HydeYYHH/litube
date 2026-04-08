@@ -1,0 +1,4 @@
+- Fixed a crash that could occur when exiting playback (#216)
+- Fixed YouTube extractor authentication headers to improve playback reliability
+- Fixed web navbar is overlaid by system (#213)
+- Fixed suggestion blocking. It only blocks on the watch page to avoid overlap (#223)
