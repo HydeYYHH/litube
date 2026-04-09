@@ -344,8 +344,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="80dp"
-        android:background="#B3000000"
-        android:padding="8dp"
+        android:background="@drawable/bg_gesture_hint"
         android:text="@string/reset"
         android:textColor="@android:color/white"
         android:visibility="gone" />
