@@ -13,7 +13,8 @@ a.yt-spec-button-shape-next.yt-spec-button-shape-next--overlay,
 ytm-companion-ad-renderer,
 .playlist-engagement-panel-top-level-buttons,
 .yt-mini-app-container-view-model__background-blur,
-.yt-mini-app-container-view-model__background-scrim
+.yt-mini-app-container-view-model__background-scrim,
+button-view-model:has(svg path[d^="m4 2.999"])
 {
     display: none !important;
 }

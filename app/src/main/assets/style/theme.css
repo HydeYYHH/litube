@@ -28,7 +28,7 @@ a.yt-simple-endpoint {
     color: inherit !important;
 }
 
-ytm-mobile-topbar-renderer#header-bar header.mobile-topbar-header.cbox.cairo-settings-topbar {
+header-bar ytm-mobile-topbar-renderer#header-bar header.mobile-topbar-header.cbox.cairo-settings-topbar {
     background-color: inherit !important;
     color: inherit !important;
     border-color: inherit !important;
