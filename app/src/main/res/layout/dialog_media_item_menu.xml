@@ -20,7 +20,7 @@
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
             android:scaleType="centerCrop"
-            android:src="@drawable/ic_broken_image" />
+            android:src="@drawable/ic_thumbnail_placeholder" />
 
         <ImageButton
             android:id="@+id/media_item_close"

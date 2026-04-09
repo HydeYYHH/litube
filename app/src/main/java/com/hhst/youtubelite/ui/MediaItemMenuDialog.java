@@ -71,8 +71,8 @@ public final class MediaItemMenuDialog {
 
 		Picasso.get()
 						.load(thumbUrl)
-						.placeholder(R.drawable.ic_broken_image)
-						.error(R.drawable.ic_broken_image)
+						.placeholder(R.drawable.ic_thumbnail_placeholder)
+						.error(R.drawable.ic_thumbnail_placeholder)
 						.into(thumb);
 
 		thumb.setOnClickListener(v -> openGallery(thumbUrl));
