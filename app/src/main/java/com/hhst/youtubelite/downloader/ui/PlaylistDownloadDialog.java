@@ -10,7 +10,10 @@ import android.os.Looper;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.WindowManager;
+import android.widget.ScrollView;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
@@ -22,6 +25,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.R.attr;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.Insets;
+import androidx.core.widget.NestedScrollView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
@@ -411,6 +415,29 @@ public final class PlaylistDownloadDialog {
 		dialog.show();
 		AlertDialog activeDialog = dialog;
 		if (activeDialog != null) {
+			// Keep the custom view and any wrapping scroll container filling the dialog body
+			// so weighted content can push actions to the bottom.
+			View parent = (View) dialogView.getParent();
+			while (parent != null) {
+				if (parent instanceof ScrollView) {
+					((ScrollView) parent).setFillViewport(true);
+				}
+				if (parent instanceof NestedScrollView) {
+					((NestedScrollView) parent).setFillViewport(true);
+				}
+				ViewGroup.LayoutParams params = parent.getLayoutParams();
+				if (params != null && params.height == ViewGroup.LayoutParams.WRAP_CONTENT) {
+					params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+					parent.setLayoutParams(params);
+				}
+				ViewParent next = parent.getParent();
+				parent = next instanceof View ? (View) next : null;
+			}
+			ViewGroup.LayoutParams dialogViewParams = dialogView.getLayoutParams();
+			if (dialogViewParams != null) {
+				dialogViewParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
+				dialogView.setLayoutParams(dialogViewParams);
+			}
 			int originalLeft = dialogView.getPaddingLeft();
 			int originalTop = dialogView.getPaddingTop();
 			int originalRight = dialogView.getPaddingRight();
@@ -423,9 +450,11 @@ public final class PlaylistDownloadDialog {
 			ViewCompat.requestApplyInsets(dialogView);
 			dialogView.post(() -> {
 				if (resourcesDisposed || dialog != activeDialog || activeDialog.getWindow() == null) return;
-				final WindowManager.LayoutParams layoutParams = activeDialog.getWindow().getAttributes();
-				layoutParams.height = context.getResources().getDisplayMetrics().heightPixels
+				int targetHeight = context.getResources().getDisplayMetrics().heightPixels
 								- ViewUtils.dpToPx(context, 72f);
+				dialogView.setMinimumHeight(targetHeight);
+				final WindowManager.LayoutParams layoutParams = activeDialog.getWindow().getAttributes();
+				layoutParams.height = targetHeight;
 				activeDialog.getWindow().setAttributes(layoutParams);
 			});
 		}

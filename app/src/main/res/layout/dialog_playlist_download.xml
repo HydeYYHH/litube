@@ -148,11 +148,17 @@
             android:visibility="gone" />
     </FrameLayout>
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="6dp"
+        android:background="@color/outline" />
+
     <LinearLayout
         android:id="@+id/playlist_actions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="end"
         android:orientation="horizontal">
 
