@@ -29,7 +29,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/queue"
-            android:textSize="18sp"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <ImageButton
@@ -39,13 +40,14 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/close"
             android:padding="7dp"
-            android:src="@drawable/ic_close" />
+            android:src="@drawable/ic_close"
+            app:tint="?attr/colorOnSurface" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="1dp"
+        android:layout_marginTop="4dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -57,50 +59,50 @@
 
             <ImageButton
                 android:id="@+id/btn_queue_download"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/download"
-                android:maxWidth="38dp"
-                android:maxHeight="38dp"
-                android:minWidth="38dp"
-                android:minHeight="38dp"
-                android:padding="5dp"
+                android:maxWidth="40dp"
+                android:maxHeight="40dp"
+                android:minWidth="40dp"
+                android:minHeight="40dp"
+                android:padding="6dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_download"
-                app:tint="?attr/colorControlNormal" />
+                app:tint="?attr/colorOnSurface" />
 
             <ImageButton
                 android:id="@+id/btn_queue_order"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/playback_end_next"
-                android:maxWidth="38dp"
-                android:maxHeight="38dp"
-                android:minWidth="38dp"
-                android:minHeight="38dp"
-                android:padding="5dp"
+                android:maxWidth="40dp"
+                android:maxHeight="40dp"
+                android:minWidth="40dp"
+                android:minHeight="40dp"
+                android:padding="6dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_playback_end_next"
-                app:tint="?attr/colorControlNormal" />
+                app:tint="?attr/colorOnSurface" />
 
             <ImageButton
                 android:id="@+id/btn_queue_clear"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/clear_queue"
-                android:maxWidth="38dp"
-                android:maxHeight="38dp"
-                android:minWidth="38dp"
-                android:minHeight="38dp"
-                android:padding="5dp"
+                android:maxWidth="40dp"
+                android:maxHeight="40dp"
+                android:minWidth="40dp"
+                android:minHeight="40dp"
+                android:padding="6dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_clear"
-                app:tint="?attr/colorControlNormal" />
+                app:tint="?attr/colorOnSurface" />
         </LinearLayout>
 
         <View
@@ -118,11 +120,17 @@
             app:trackTint="@color/queue_switch_track_tint" />
     </LinearLayout>
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:background="@color/outline" />
+
     <TextView
         android:id="@+id/queue_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="2dp"
         android:gravity="center"
         android:text="@string/no_queue_items"
         android:textSize="15sp"
@@ -132,7 +140,7 @@
         android:id="@+id/queue_items_recycler"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="2dp"
         android:layout_weight="1"
         android:clipToPadding="false"
         android:nestedScrollingEnabled="true"
