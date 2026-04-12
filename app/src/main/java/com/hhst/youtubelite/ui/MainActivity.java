@@ -77,6 +77,7 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 @UnstableApi
 public final class MainActivity extends AppCompatActivity implements LifecycleEventObserver, DownloadPermissionHost {
+	private static final String STATE_LAST_URL = "main.last_url";
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	@Inject
 	ExtensionManager extensionManager;
@@ -106,6 +107,8 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	private boolean suppressPiP;
 	@Nullable
 	private Runnable pendingPermissionAction;
+	@Nullable
+	private String restoredUrl;
 
 	static boolean shouldEnterPictureInPicture(@Nullable LitePlayer player,
 	                                           @Nullable ExtensionManager extensionManager,
@@ -122,6 +125,7 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		EdgeToEdge.enable(this);
 		setContentView(R.layout.activity_main);
 		super.onCreate(savedInstanceState);
+		restoredUrl = savedInstanceState != null ? savedInstanceState.getString(STATE_LAST_URL) : null;
 		viewModel = new ViewModelProvider(this).get(MainActivityViewModel.class);
 		viewModel.getState().observe(this, this::renderQueueSheet);
 
@@ -213,7 +217,11 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 				}
 				poTokenHost.prewarm();
 				if (tabManager.getWebView() == null) {
-					tabManager.openTab(Constant.HOME_URL, UrlUtils.getPageClass(Constant.HOME_URL));
+					String initialUrl = restoredUrl;
+					if (initialUrl == null || initialUrl.isBlank()) {
+						initialUrl = Constant.HOME_URL;
+					}
+					tabManager.openTab(initialUrl, UrlUtils.getPageClass(initialUrl));
 				}
 				if (!poTokenHost.isReady() && SystemClock.uptimeMillis() < startupDeadlineMs) {
 					handler.postDelayed(this, 100L);
@@ -252,10 +260,6 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	@Override
 	public void onStateChanged(@NonNull androidx.lifecycle.LifecycleOwner source,
 	                           @NonNull Lifecycle.Event event) {
-		if (event == Lifecycle.Event.ON_STOP
-						&& shouldEnterPictureInPicture(player, extensionManager, isInPictureInPictureMode())) {
-			player.enterPictureInPicture();
-		}
 	}
 
 	@Override
@@ -561,6 +565,14 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		return tabManager != null ? tabManager.getWebView() : null;
 	}
 
+	@Nullable
+	private String currentUrl() {
+		YoutubeWebview webView = getWebView();
+		if (webView == null) return null;
+		String url = webView.getUrl();
+		return url == null || url.isBlank() ? null : url;
+	}
+
 	public void showHint(@NonNull String text, long durationMs) {
 		if (hintText == null || DeviceUtils.isInPictureInPictureMode(this)) return;
 		hintText.setText(text);
@@ -634,6 +646,15 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	}
 
 	@Override
+	protected void onSaveInstanceState(@NonNull Bundle outState) {
+		super.onSaveInstanceState(outState);
+		String url = currentUrl();
+		if (url != null) {
+			outState.putString(STATE_LAST_URL, url);
+		}
+	}
+
+	@Override
 	public void requestDownloadStoragePermission(@NonNull Runnable onGranted) {
 		if (!PermissionUtils.needsLegacyStoragePermission()
 						|| PermissionUtils.hasDownloadStoragePermission(this)) {
@@ -648,7 +669,8 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	}
 
 	private boolean shouldSuppressPiPForStartedActivity(@Nullable Intent intent) {
-		if (intent == null || intent.getComponent() == null) return false;
+		if (intent == null) return false;
+		if (intent.getComponent() == null) return true;
 		return getPackageName().equals(intent.getComponent().getPackageName());
 	}
 

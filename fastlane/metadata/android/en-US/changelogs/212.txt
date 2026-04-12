@@ -1,0 +1,7 @@
+- Fixed background playback issues
+- Added an “Open with” option on the watch page
+- Fixed an issue with the Mix download button
+- Fixed an issue with the mini-player close button color
+- Fixed header bar transparency and overlap issues
+- Improved the queue bottom sheet and playlist download dialog
+- Improved the fullscreen reset button and thumbnail placeholder
