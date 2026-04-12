@@ -459,22 +459,16 @@ try {
             if (!(item instanceof Element)) return false;
             if (item.dataset.liteMixDownloadReady === 'true') return true;
 
-            const menuItemContainer = item.querySelector('.yt-list-item-view-model__container') || item;
-            const textWrapper = item.querySelector('.yt-list-item-view-model__text-wrapper');
-            const menuButton = item.querySelector('button.yt-list-item-view-model__button-or-anchor')
-                || item.querySelector('button.menu-item-button')
-                || item.querySelector('button');
+            const menuItemContainer = item.querySelector('.ytListItemViewModelContainer') || item;
+            const textWrapper = item.querySelector('.ytListItemViewModelTextWrapper');
+            const menuButton = item.querySelector('.ytListItemViewModelMainContainer');
             const label = getLocalizedText('download');
 
             if (menuItemContainer instanceof Element) {
-                menuItemContainer.classList.remove('yt-list-item-view-model__container--disabled');
-                menuItemContainer.classList.add('yt-list-item-view-model__container--tappable');
+                menuItemContainer.classList.remove('ytListItemViewModelDisabled');
             }
             if (textWrapper instanceof Element) {
-                const menuText = textWrapper.querySelector('.yt-core-attributed-string')
-                    || textWrapper.querySelector('[role="text"]')
-                    || textWrapper.querySelector('.menu-item-text')
-                    || textWrapper.querySelector('.button-text');
+                const menuText = textWrapper.querySelector('.ytListItemViewModelTitle');
                 if (menuText instanceof Element) {
                     menuText.textContent = label;
                 }
@@ -483,13 +477,6 @@ try {
             item.setAttribute('tabindex', '0');
             item.setAttribute('role', 'listitem');
             item.setAttribute('aria-pressed', 'false');
-            if (menuButton instanceof Element) {
-                menuButton.removeAttribute('disabled');
-                menuButton.setAttribute('aria-disabled', 'false');
-                menuButton.setAttribute('tabindex', '0');
-                menuButton.setAttribute('aria-label', label);
-                menuButton.setAttribute('aria-pressed', 'false');
-            }
 
             if (item.dataset.liteMixDownloadBound !== 'true') {
                 bindListener(item, 'click', (event) => {
