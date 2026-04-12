@@ -23,6 +23,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.media.app.NotificationCompat.MediaStyle;
 import androidx.media.session.MediaButtonReceiver;
 import androidx.media3.common.util.UnstableApi;
@@ -61,6 +62,10 @@ public class PlaybackService extends Service {
 	private final Runnable resetSeekFlagRunnable = () -> isSeeking = false;
 	private boolean lastIsPlayingState = false;
 	private volatile boolean destroyed = false;
+
+	public static void start(@NonNull Context context) {
+		ContextCompat.startForegroundService(context, new Intent(context, PlaybackService.class));
+	}
 
 	static long playbackActionsFor(@NonNull QueueNav availability) {
 		long actions = PlaybackStateCompat.ACTION_PLAY
@@ -124,7 +129,7 @@ public class PlaybackService extends Service {
 	public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
 		MediaSessionCompat session = mediaSession;
 		if (intent != null && session != null) MediaButtonReceiver.handleIntent(session, intent);
-		return super.onStartCommand(intent, flags, startId);
+		return START_STICKY;
 	}
 
 	public void initialize(@NonNull Engine engine) {
@@ -288,6 +293,7 @@ public class PlaybackService extends Service {
 	public void hideNotification() {
 		stopForeground(true);
 		if (notificationManager != null) notificationManager.cancel(NOTIFICATION_ID);
+		stopSelf();
 	}
 
 	public void updateProgress(long pos, float speed, boolean isPlaying) {

@@ -147,6 +147,7 @@ public class Engine {
 										.setUsage(C.USAGE_MEDIA)
 										.setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
 										.build(), true)
+						.setWakeMode(C.WAKE_MODE_NETWORK)
 						.setHandleAudioBecomingNoisy(true)
 						.setUsePlatformDiagnostics(false)
 						.setMediaSourceFactory(

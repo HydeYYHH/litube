@@ -264,6 +264,7 @@ public class LitePlayer {
 							stateStore.setVideoId(videoId);
 
 							if (playbackSvc != null) {
+								PlaybackService.start(activity);
 								playbackSvc.showNotification(er.video().getTitle(), er.video().getAuthor(), er.video().getThumbnailUrl(), er.video().getDuration() * 1000);
 							}
 							refreshQueueNav();
