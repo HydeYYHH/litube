@@ -289,6 +289,17 @@ public final class JavascriptInterface {
 		});
 	}
 
+	@android.webkit.JavascriptInterface
+	public void openWith(@Nullable String url) {
+		if (url == null || url.isBlank()) return;
+		handler.post(() -> {
+			Intent send = new Intent(Intent.ACTION_SEND);
+			send.putExtra(Intent.EXTRA_TEXT, url);
+			send.setType("text/plain");
+			context.startActivity(Intent.createChooser(send, context.getString(R.string.open_with)));
+		});
+	}
+
 	void launchMediaItemMenu(@NonNull MediaItemMenuPayload payload) {
 		if (context instanceof Activity activity && (activity.isFinishing() || activity.isDestroyed())) {
 			return;

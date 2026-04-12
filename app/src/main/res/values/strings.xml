@@ -31,6 +31,7 @@
     <string name="close">Close</string>
     <string name="save">Save</string>
     <string name="share">Share</string>
+    <string name="open_with">Open with</string>
     <string name="share_thumbnail">Share Thumbnail</string>
     <string name="extension">Extensions</string>
     <string name="request_restart">Restart to apply changes</string>

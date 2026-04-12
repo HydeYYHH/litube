@@ -44,14 +44,14 @@ try {
         const getLocalizedText = (key) => {
             // Automatically translated by AI
             const languages = {
-                'zh': { 'download': '下载', 'add_to_queue': '加入队列', 'extension': '扩展', 'chat': '聊天室', 'about': '关于' },
-                'zt': { 'download': '下載', 'add_to_queue': '加入佇列', 'extension': '擴充功能', 'chat': '聊天室', 'about': '關於' },
-                'en': { 'download': 'Download', 'add_to_queue': 'Add to queue', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
-                'ja': { 'download': 'ダウンロード', 'add_to_queue': 'キューに追加', 'extension': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
-                'ko': { 'download': '다운로드', 'add_to_queue': '대기열에 추가', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
-                'fr': { 'download': 'Télécharger', 'add_to_queue': 'Ajouter à la file', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
-                'ru': { 'download': 'Скачать', 'add_to_queue': 'Добавить в очередь', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
-                'tr': { 'download': 'İndir', 'add_to_queue': 'Kuyruğa ekle', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
+                'zh': { 'download': '下载', 'add_to_queue': '加入队列', 'open_with': '打开方式', 'extension': '扩展', 'chat': '聊天室', 'about': '关于' },
+                'zt': { 'download': '下載', 'add_to_queue': '加入佇列', 'open_with': '開啟方式', 'extension': '擴充功能', 'chat': '聊天室', 'about': '關於' },
+                'en': { 'download': 'Download', 'add_to_queue': 'Add to queue', 'open_with': 'Open with', 'extension': 'Extension', 'chat': 'Chat', 'about': 'About' },
+                'ja': { 'download': 'ダウンロード', 'add_to_queue': 'キューに追加', 'open_with': 'アプリで開く', 'extension': '拡張機能', 'chat': 'チャット', 'about': 'このアプリについて' },
+                'ko': { 'download': '다운로드', 'add_to_queue': '대기열에 추가', 'open_with': '다른 앱으로 열기', 'extension': '플러그인', 'chat': '채팅', 'about': '정보' },
+                'fr': { 'download': 'Télécharger', 'add_to_queue': 'Ajouter à la file', 'open_with': 'Ouvrir avec', 'extension': 'Extension', 'chat': 'Chat', 'about': 'À propos' },
+                'ru': { 'download': 'Скачать', 'add_to_queue': 'Добавить в очередь', 'open_with': 'Открыть с помощью', 'extension': 'Расширение', 'chat': 'Чат', 'about': 'О программе' },
+                'tr': { 'download': 'İndir', 'add_to_queue': 'Kuyruğa ekle', 'open_with': 'Birlikte aç', 'extension': 'Uzantı', 'chat': 'Sohbet', 'about': 'Hakkında' },
             };
             const lang = (document.documentElement.lang || 'en').toLowerCase();
             let keyLang = lang.substring(0, 2);
@@ -1348,11 +1348,14 @@ try {
             // Add download and queue buttons
             const oldDownloadButton = document.getElementById('downloadButton');
             const oldQueueButton = document.getElementById('queueButton');
+            const oldOpenWithButton = document.getElementById('openWithButton');
             const downloadButton = oldDownloadButton;
             const queueButton = oldQueueButton;
+            const openWithButton = oldOpenWithButton;
             if (isLive || pageClass !== 'watch') {
                 if (oldDownloadButton) oldDownloadButton.remove();
                 if (oldQueueButton) queueButton.remove();
+                if (oldOpenWithButton) openWithButton.remove();
             } else {
                 const saveButton = document.querySelector('.ytSpecButtonViewModelHost.slim_video_action_bar_renderer_button');
                 if (saveButton && saveButton.parentElement) {
@@ -1362,6 +1365,9 @@ try {
                     }
                     if (oldQueueButton && (oldQueueButton.parentElement !== actionBar || !oldQueueButton.isConnected)) {
                         queueButton.remove();
+                    }
+                    if (oldOpenWithButton && (oldOpenWithButton.parentElement !== actionBar || !oldOpenWithButton.isConnected)) {
+                        openWithButton.remove();
                     }
                     if (!actionBar.querySelector('#downloadButton')) {
                         const downloadButton = saveButton.cloneNode(true);
@@ -1412,6 +1418,30 @@ try {
                                 }
                             }, true);
                             actionBar.insertBefore(queueButton, saveButton);
+                        }
+                    }
+                    if (!actionBar.querySelector('#openWithButton')) {
+                        const openWithButton = saveButton.cloneNode(true);
+                        openWithButton.id = 'openWithButton';
+                        removeActionButtonBehavior(openWithButton);
+                        const openWithText = openWithButton.querySelector('.yt-spec-button-shape-next__button-text-content');
+                        if (openWithText) {
+                            openWithText.innerText = getLocalizedText('open_with');
+                        }
+                        const openWithSvg = openWithButton.querySelector('svg');
+                        if (openWithSvg) {
+                            openWithSvg.setAttribute("viewBox", "0 -960 960 960");
+                            const openWithPath = openWithSvg.querySelector('path');
+                            if (openWithPath) {
+                                openWithPath.setAttribute("d", "M720-80q-50 0-85-35t-35-85q0-8 1-15.5t3-14.5L320-378q-14 13-32 20.5t-38 7.5q-50 0-85-35t-35-85t35-85t85-35q20 0 38 7.5t32 20.5l284-162q-2-7-3-14.5t-1-15.5q0-50 35-85t85-35t85 35t35 85t-35 85t-85 35q-20 0-38-7.5T650-602L396-456l254 146q14-13 32-20.5t38-7.5q50 0 85 35t35 85t-35 85t-85 35Z");
+                            }
+                            resizeIcon(openWithButton);
+                            bindListener(openWithButton, 'click', (event) => {
+                                event.preventDefault();
+                                event.stopImmediatePropagation();
+                                lite.openWith?.(location.href);
+                            }, true);
+                            actionBar.insertBefore(openWithButton, saveButton);
                         }
                     }
                 }

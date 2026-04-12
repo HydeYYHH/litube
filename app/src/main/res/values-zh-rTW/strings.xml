@@ -15,6 +15,7 @@
     <string name="close">關閉</string>
     <string name="save">保存</string>
     <string name="share">分享</string>
+    <string name="open_with">開啟方式</string>
     <string name="share_thumbnail">分享封面</string>
     <string name="extension">擴充功能</string>
     <string name="request_restart">重啟以應用更改</string>
