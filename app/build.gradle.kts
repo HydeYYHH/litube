@@ -21,8 +21,8 @@ android {
         applicationId = "com.hhst.litube"
         minSdk = 26
         targetSdk = 36
-        versionCode = 211
-        versionName = "v2.1.1"
+        versionCode = 212
+        versionName = "v2.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
