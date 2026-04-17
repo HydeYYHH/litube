@@ -250,6 +250,19 @@ public final class JavascriptInterface {
 		});
 	}
 
+	@android.webkit.JavascriptInterface
+	public void goBack() {
+		handler.post(() -> {
+			MainActivity activity = getMainActivity();
+			if (activity != null) {
+				activity.handleAppBack();
+				return;
+			}
+			tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
+			tabManager.goBack();
+		});
+	}
+
 	@Nullable
 	private MainActivity getMainActivity() {
 		Context ctx = context;

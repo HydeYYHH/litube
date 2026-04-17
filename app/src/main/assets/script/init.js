@@ -505,6 +505,11 @@ try {
             lite.openTab(nextUrl, nextPageClass);
         };
 
+        const requestGoBack = () => {
+            if (!isLiteActive()) return;
+            lite.goBack?.();
+        };
+
         const isBottomSheetMenuItemCandidate = (element) => {
             if (!(element instanceof Element)) return false;
             if (element.matches?.('ytm-menu-service-item-renderer, yt-list-item-view-model, toggleable-list-item-view-model')) {
@@ -1445,6 +1450,16 @@ try {
                         }
                     }
                 }
+            }
+
+            const settingsBackArrow = document.querySelector('[data-mode="settings"] > .mobile-topbar-back-arrow');
+            if (settingsBackArrow instanceof Element && settingsBackArrow.dataset.liteGoBackBound !== 'true') {
+                bindListener(settingsBackArrow, 'click', event => {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    requestGoBack();
+                }, true);
+                settingsBackArrow.dataset.liteGoBackBound = 'true';
             }
 
             if (pageClass !== 'select_site') {

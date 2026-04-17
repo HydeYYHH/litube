@@ -102,6 +102,8 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	private MainActivityViewModel viewModel;
 	@Nullable
 	private QueueSheet queueSheet;
+	@Nullable
+	private OnBackPressedCallback appBackCallback;
 	private long lastBackTime;
 	private boolean bootstrapped;
 	private boolean suppressPiP;
@@ -173,37 +175,13 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		};
 		bindService(new Intent(this, PlaybackService.class), serviceConnection, Context.BIND_AUTO_CREATE);
 		ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
-		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+		appBackCallback = new OnBackPressedCallback(true) {
 			@Override
 			public void handleOnBackPressed() {
-				if (DeviceUtils.isInPictureInPictureMode(MainActivity.this)) {
-					setEnabled(false);
-					getOnBackPressedDispatcher().onBackPressed();
-					setEnabled(true);
-					return;
-				}
-				if (player != null && player.isFullscreen()) {
-					player.exitFullscreen();
-					return;
-				}
-				YoutubeWebview webview = getWebView();
-				if (webview != null && tabManager != null) {
-					tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
-					if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
-						tabManager.evaluateJavascript("document.exitFullscreen()", null);
-						return;
-					}
-				}
-				if (tabManager != null && !tabManager.goBack()) {
-					long time = System.currentTimeMillis();
-					if (time - lastBackTime < 2_000L) finish();
-					else {
-						lastBackTime = time;
-						ToastUtils.show(MainActivity.this, R.string.press_back_again_to_exit);
-					}
-				}
+				handleAppBack();
 			}
-		});
+		};
+		getOnBackPressedDispatcher().addCallback(this, appBackCallback);
 
 		// Initialize potoken dependency and open home page.
 		long startupDeadlineMs = SystemClock.uptimeMillis() + 4_000L;
@@ -571,6 +549,39 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		if (webView == null) return null;
 		String url = webView.getUrl();
 		return url == null || url.isBlank() ? null : url;
+	}
+
+	public void handleAppBack() {
+		if (DeviceUtils.isInPictureInPictureMode(this)) {
+			if (appBackCallback != null) {
+				appBackCallback.setEnabled(false);
+			}
+			getOnBackPressedDispatcher().onBackPressed();
+			if (appBackCallback != null) {
+				appBackCallback.setEnabled(true);
+			}
+			return;
+		}
+		if (player != null && player.isFullscreen()) {
+			player.exitFullscreen();
+			return;
+		}
+		YoutubeWebview webview = getWebView();
+		if (webview != null && tabManager != null) {
+			tabManager.evaluateJavascript("window.dispatchEvent(new Event('onGoBack'));", null);
+			if (webview.fullscreen != null && webview.fullscreen.getVisibility() == View.VISIBLE) {
+				tabManager.evaluateJavascript("document.exitFullscreen()", null);
+				return;
+			}
+		}
+		if (tabManager != null && !tabManager.goBack()) {
+			long time = System.currentTimeMillis();
+			if (time - lastBackTime < 2_000L) finish();
+			else {
+				lastBackTime = time;
+				ToastUtils.show(this, R.string.press_back_again_to_exit);
+			}
+		}
 	}
 
 	public void showHint(@NonNull String text, long durationMs) {
