@@ -100,6 +100,10 @@ public class PlaybackService extends Service {
 						.build();
 	}
 
+	private static boolean isPlayingState(@Nullable PlaybackStateCompat playback) {
+		return playback != null && playback.getState() == PlaybackStateCompat.STATE_PLAYING;
+	}
+
 	@Nullable
 	@Override
 	public IBinder onBind(@NonNull Intent intent) {
@@ -111,7 +115,7 @@ public class PlaybackService extends Service {
 		super.onCreate();
 		destroyed = false;
 		notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-		NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_DEFAULT);
+		NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Player Controls", NotificationManager.IMPORTANCE_LOW);
 		channel.setDescription("Media playback controls");
 		channel.setShowBadge(false);
 		channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
@@ -225,6 +229,7 @@ public class PlaybackService extends Service {
 						.setContentIntent(contentIntent)
 						.setDeleteIntent(MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP))
 						.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+						.setOnlyAlertOnce(true)
 						.setOngoing(isPlaying);
 		MediaStyle style = new MediaStyle().setMediaSession(session.getSessionToken());
 		boolean includePrevious = shouldIncludePreviousAction(queueNavigationAvailability);
@@ -251,13 +256,50 @@ public class PlaybackService extends Service {
 
 	public void showNotification(@Nullable String title, @Nullable String author, @Nullable String thumbnail, long duration) {
 		if (shouldAbort()) return;
+		MediaSessionCompat session = mediaSession;
+		if (session == null) return;
+		PlaybackStateCompat playback = session.getController().getPlaybackState();
+		if (playback != null && playback.getState() != PlaybackStateCompat.STATE_NONE) {
+			playback = buildPlaybackState(
+							playback.getState(),
+							playback.getPosition(),
+							playback.getPlaybackSpeed(),
+							queueNavigationAvailability);
+		} else {
+			playback = buildPlaybackState(
+							PlaybackStateCompat.STATE_PAUSED,
+							0L,
+							1.0f,
+							queueNavigationAvailability);
+		}
+		session.setPlaybackState(playback);
+		lastIsPlayingState = isPlayingState(playback);
+		MediaMetadataCompat initialMetadata = new MediaMetadataCompat.Builder()
+						.putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+						.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, author)
+						.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+						.build();
+		session.setMetadata(initialMetadata);
+		Notification initialNotification = buildNotification(lastIsPlayingState);
+		if (initialNotification != null && !shouldAbort()) {
+			try {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+					startForeground(NOTIFICATION_ID, initialNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+				} else {
+					startForeground(NOTIFICATION_ID, initialNotification);
+				}
+			} catch (Exception e) {
+				Log.e(TAG, "startForeground failed: " + e.getMessage());
+			}
+		}
 		try {
 			executorService.execute(() -> {
 				if (shouldAbort()) return;
 				Bitmap largeIcon = fetchThumbnail(thumbnail);
-				if (shouldAbort()) return;
-				MediaSessionCompat session = mediaSession;
-				if (session == null) return;
+				if (shouldAbort() || largeIcon == null) return;
+				MediaSessionCompat currentSession = mediaSession;
+				NotificationManager manager = notificationManager;
+				if (currentSession == null || manager == null) return;
 				MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
 								.putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
 								.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, author)
@@ -265,25 +307,11 @@ public class PlaybackService extends Service {
 								.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
 								.build();
 				if (shouldAbort()) return;
-				session.setMetadata(metadata);
-				PlaybackStateCompat initialState = buildPlaybackState(
-								PlaybackStateCompat.STATE_PAUSED,
-								0L,
-								1.0f,
-								queueNavigationAvailability);
-				if (shouldAbort()) return;
-				session.setPlaybackState(initialState);
-				Notification notification = buildNotification(false);
+				currentSession.setMetadata(metadata);
+				PlaybackStateCompat updatedPlayback = currentSession.getController().getPlaybackState();
+				Notification notification = buildNotification(isPlayingState(updatedPlayback));
 				if (notification != null && !shouldAbort()) {
-					try {
-						if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-							startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-						} else {
-							startForeground(NOTIFICATION_ID, notification);
-						}
-					} catch (Exception e) {
-						Log.e(TAG, "startForeground failed: " + e.getMessage());
-					}
+					manager.notify(NOTIFICATION_ID, notification);
 				}
 			});
 		} catch (RejectedExecutionException ignored) {
