@@ -154,12 +154,14 @@ public class YoutubeWebview extends WebView {
 	}
 
 	static boolean canLoad(@NonNull String url) {
+		if (UrlUtils.externalUri(url) != null) return false;
 		if (UrlUtils.isAllowedUrl(url)) return true;
 		String scheme = scheme(url);
 		return isScheme(scheme, "file") || isScheme(scheme, "about") || isScheme(scheme, "data") || isScheme(scheme, "javascript");
 	}
 
 	static boolean canOpenExternal(@NonNull String url) {
+		if (UrlUtils.externalUri(url) != null) return true;
 		if (UrlUtils.isAllowedUrl(url)) return false;
 		String scheme = scheme(url);
 		return isScheme(scheme, "http") || isScheme(scheme, "https");
@@ -261,6 +263,11 @@ public class YoutubeWebview extends WebView {
 	@Override
 	public void loadUrl(@NonNull String url) {
 		String loadUrl = sanitizeLoadUrl(url);
+		Uri external = UrlUtils.externalUri(loadUrl);
+		if (external != null) {
+			openExternal(external);
+			return;
+		}
 		if (canLoad(loadUrl)) {
 			super.loadUrl(loadUrl);
 			return;
@@ -327,6 +334,11 @@ public class YoutubeWebview extends WebView {
 						Log.e(getContext().getString(R.string.application_not_found), e.toString());
 					}
 				} else {
+					Uri external = UrlUtils.externalUri(uri);
+					if (external != null) {
+						openExternal(external);
+						return true;
+					}
 					// restrict domain
 					if (UrlUtils.isAllowedDomain(uri)) return false;
 					openExternal(uri);

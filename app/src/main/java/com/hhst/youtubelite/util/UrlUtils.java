@@ -46,6 +46,41 @@ public final class UrlUtils {
 		}
 	}
 
+	@Nullable
+	public static Uri externalUri(@Nullable String url) {
+		if (url == null || url.isBlank()) return null;
+		try {
+			return externalUri(Uri.parse(url));
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+	}
+
+	@Nullable
+	public static Uri externalUri(@Nullable Uri uri) {
+		if (uri == null) return null;
+		String host = uri.getHost();
+		if (host == null) return null;
+		String lowerHost = host.toLowerCase(NORMAL_LOCALE);
+		if (!isYoutubeHost(lowerHost) || !"/redirect".equals(uri.getPath())) return null;
+
+		String target = uri.getQueryParameter("q");
+		if (target == null || target.isBlank()) {
+			target = uri.getQueryParameter("url");
+		}
+		if (target == null || target.isBlank()) return null;
+
+		Uri targetUri;
+		try {
+			targetUri = Uri.parse(target);
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+		String scheme = targetUri.getScheme();
+		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) return null;
+		return isAllowedHost(targetUri.getHost()) ? null : targetUri;
+	}
+
 	public static boolean isGoogleAccountsUrl(@Nullable String url) {
 		if (url == null || url.isEmpty()) return false;
 		try {
@@ -92,6 +127,11 @@ public final class UrlUtils {
 		if (isGoogleAccountsHost(lowerHost)) return true;
 		return ALLOWED_DOMAINS.stream().anyMatch(domain ->
 						lowerHost.equals(domain) || lowerHost.endsWith("." + domain));
+	}
+
+	private static boolean isYoutubeHost(@NonNull String lowerHost) {
+		return lowerHost.equals(Constant.YOUTUBE_DOMAIN)
+						|| lowerHost.endsWith("." + Constant.YOUTUBE_DOMAIN);
 	}
 
 	private static boolean isGoogleAccountsHost(@NonNull String lowerHost) {

@@ -2,6 +2,8 @@ package com.hhst.youtubelite.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.hhst.youtubelite.Constant;
@@ -63,6 +65,27 @@ public class UrlUtilsTest {
 		assertTrue(UrlUtils.isAllowedUrl("https://googlevideo.com/videoplayback"));
 		assertTrue(UrlUtils.isAllowedUrl("https://ytimg.com/img/placeholder.png"));
 		assertFalse(UrlUtils.isAllowedUrl("https://malicious.com/phishing"));
+	}
+
+	@Test
+	public void externalUri_extractsYoutubeRedirectTarget() {
+		var uri = UrlUtils.externalUri(
+						"https://www.youtube.com/redirect?event=video_description&q=https%3A%2F%2Fexample.com%2Fwatch%3Fa%3D1");
+		assertNotNull(uri);
+		assertEquals("https://example.com/watch?a=1", uri.toString());
+	}
+
+	@Test
+	public void externalUri_ignoresRedirectsBackIntoAllowedHosts() {
+		assertNull(UrlUtils.externalUri(
+						"https://www.youtube.com/redirect?q=https%3A%2F%2Fm.youtube.com%2Fwatch%3Fv%3Dabc"));
+	}
+
+	@Test
+	public void externalUri_rejectsMissingOrInvalidTargets() {
+		assertNull(UrlUtils.externalUri("https://www.youtube.com/redirect?event=video_description"));
+		assertNull(UrlUtils.externalUri("https://www.youtube.com/redirect?q=ftp%3A%2F%2Fexample.com%2Fdocs"));
+		assertNull(UrlUtils.externalUri("https://example.com/redirect?q=https%3A%2F%2Fmalicious.com"));
 	}
 
 	@Test
