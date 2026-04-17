@@ -215,18 +215,13 @@ public class LitePlayerView extends PlayerView {
 	public void enterPiP() {
 		if (activity.isInPictureInPictureMode()) return;
 		if (!isFs && !inAppMiniPlayer) normalHeight = playerHeight;
-		Rational aspectRatio = new Rational(16, 9);
-		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
-						.setAspectRatio(aspectRatio);
-		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-			builder.setAutoEnterEnabled(true);
-		}
-		Rect sourceRectHint = new Rect();
-		if (getGlobalVisibleRect(sourceRectHint)) {
-			builder.setSourceRectHint(sourceRectHint);
-		}
-		PictureInPictureParams params = builder.build();
+		PictureInPictureParams params = buildPiPParams(true);
 		activity.enterPictureInPictureMode(params);
+	}
+
+	public void disableAutoPiP() {
+		if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return;
+		activity.setPictureInPictureParams(buildPiPParams(false));
 	}
 
 	public void enterInAppMiniPlayer() {
@@ -751,6 +746,20 @@ public class LitePlayerView extends PlayerView {
 
 	private float dpToPx(float dp) {
 		return dp * getResources().getDisplayMetrics().density;
+	}
+
+	@NonNull
+	private PictureInPictureParams buildPiPParams(boolean autoEnter) {
+		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
+						.setAspectRatio(new Rational(16, 9));
+		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+			builder.setAutoEnterEnabled(autoEnter);
+		}
+		Rect sourceRectHint = new Rect();
+		if (getGlobalVisibleRect(sourceRectHint)) {
+			builder.setSourceRectHint(sourceRectHint);
+		}
+		return builder.build();
 	}
 
 	private void applyNormalState(int defaultResizeMode) {

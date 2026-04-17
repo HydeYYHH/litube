@@ -304,6 +304,7 @@ public class LitePlayer {
 		if (task != null) task.cancel(true);
 		activity.runOnUiThread(() -> {
 			controller.clearRotation();
+			playerView.disableAutoPiP();
 			exitInAppMiniPlayer();
 			setMiniPlayerCallbacks(null, null);
 			playerView.hide();
@@ -403,6 +404,7 @@ public class LitePlayer {
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
 		controller.onPictureInPictureModeChanged(isInPiP);
+		if (!isInPiP) playerView.disableAutoPiP();
 		if (wasInPip && !isInPiP && inMiniPlayer && onRestore != null) {
 			onRestore.run();
 		}
@@ -445,7 +447,10 @@ public class LitePlayer {
 		wasInPip = false;
 		onRestore = null;
 		onClose = null;
-		activity.runOnUiThread(() -> playerView.setMiniPlayerCallbacks(null, null));
+		activity.runOnUiThread(() -> {
+			playerView.disableAutoPiP();
+			playerView.setMiniPlayerCallbacks(null, null);
+		});
 		inMiniPlayer = false;
 		engine.release();
 	}
