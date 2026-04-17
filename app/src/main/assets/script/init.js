@@ -1461,7 +1461,7 @@ try {
             if (!document.getElementById('aboutButton')) {
                 const aboutButton = button.cloneNode(true);
                 aboutButton.id = 'aboutButton';
-                const textElement = aboutButton.querySelector('.yt-core-attributed-string');
+                const textElement = aboutButton.querySelector('.ytAttributedStringHost');
                 if (textElement) {
                     textElement.innerText = getLocalizedText('about');
                 }
@@ -1485,7 +1485,7 @@ try {
             if (!document.getElementById('downloadButton')) {
                 const downloadButton = button.cloneNode(true);
                 downloadButton.id = 'downloadButton';
-                const textElement = downloadButton.querySelector('.yt-core-attributed-string');
+                const textElement = downloadButton.querySelector('.ytAttributedStringHost');
                 if (textElement) {
                     textElement.innerText = getLocalizedText('download');
                 }
@@ -1508,7 +1508,7 @@ try {
             if (!document.getElementById('extensionButton')) {
                 const extensionButton = button.cloneNode(true);
                 extensionButton.id = 'extensionButton';
-                const textElement = extensionButton.querySelector('.yt-core-attributed-string');
+                const textElement = extensionButton.querySelector('.ytAttributedStringHost');
                 if (textElement) {
                     textElement.innerText = getLocalizedText('extension');
                 }
