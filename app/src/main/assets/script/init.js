@@ -1083,7 +1083,7 @@ try {
             if (player) {
                 if (isWatch) {
                     player.mute?.();
-                    player.seekTo?.(player.getDuration?.() / 2);
+                    player.seekTo?.(lite.getResumePosition(getVideoId(location.href)));
                     bindListener(player, 'onStateChange', (state) => {
                         if (state === 1) player.pauseVideo?.();
                     });
@@ -1204,7 +1204,7 @@ try {
             // Skip ads
             if (pageClass === 'watch') {
                 const video = document.querySelector('.ad-showing video');
-                if (video) video.currentTime = video.duration / 2;
+                if (video) video.currentTime = video.duration;
             }
             // Add chat button on live page
             const isLive = document.querySelector('#movie_player')?.getPlayerResponse?.()?.playabilityStatus?.liveStreamability &&

@@ -338,6 +338,10 @@ public class LitePlayer {
 		return true;
 	}
 
+	public long getResumePosition(@Nullable String videoId) {
+		return prefs.getResumePosition(videoId);
+	}
+
 	public boolean isFullscreen() {
 		return controller.isFullscreen();
 	}
@@ -468,12 +472,4 @@ public class LitePlayer {
 		extractSession = null;
 	}
 
-	@Nullable
-	public Runnable getOnClose() {
-		return onClose;
-	}
-
-	public void setOnClose(@Nullable Runnable onClose) {
-		this.onClose = onClose;
-	}
 }

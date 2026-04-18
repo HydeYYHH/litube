@@ -75,10 +75,6 @@ public final class JavascriptInterface {
 		this.queueRepository = queueRepository;
 	}
 
-	static boolean hasValidMediaItemPayload(@Nullable String payloadJson) {
-		return parseMediaItemMenuPayload(payloadJson) != null;
-	}
-
 	@Nullable
 	static MediaItemMenuPayload parseMediaItemMenuPayload(@Nullable String payloadJson) {
 		String normalized = normalizePayloadJson(payloadJson);
@@ -382,6 +378,11 @@ public final class JavascriptInterface {
 	public void openTab(@Nullable String url, @Nullable String tag) {
 		if (url == null || tag == null) return;
 		handler.post(() -> tabManager.openTab(url, tag));
+	}
+
+	@android.webkit.JavascriptInterface
+	public long getResumePosition(@Nullable String vid) {
+		return player.getResumePosition(vid);
 	}
 
 }
