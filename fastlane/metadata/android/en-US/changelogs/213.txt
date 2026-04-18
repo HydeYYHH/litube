@@ -1,0 +1,6 @@
+- Improved extension settings with a dedicated screen with more options (#219)
+- Fixed settings menu issues (#230)
+- Fixed WebView back navigation not working properly (#228)
+- Fixed external links in video descriptions opening inside the app (#243)
+- Fixed foreground playback notification timing (#239)
+- Fixed stale PiP auto-enter behavior after closing the mini-player

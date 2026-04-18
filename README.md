@@ -6,7 +6,7 @@ Litube is an advanced webview wrapper for YouTube.
 ## Releases
 See the following release notes for details.
 
-**Lastest Release: [v2.1.1](https://github.com/HydeYYHH/litube/releases/latest)**
+**Latest Release: [v2.1.3](https://github.com/HydeYYHH/litube/releases/latest)**
 
 **Important Releases: [v2.1.0](https://github.com/HydeYYHH/litube/releases/tag/v2.1.0), [v2.0.0](https://github.com/HydeYYHH/litube/releases/tag/v2.0.0)**
 
