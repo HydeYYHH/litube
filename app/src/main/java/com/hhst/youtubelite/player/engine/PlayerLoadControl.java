@@ -15,10 +15,11 @@ class PlayerLoadControl {
 	static DefaultLoadControl create() {
 		return new DefaultLoadControl.Builder()
 						.setBufferDurationsMs(
-										90_000,
-										300_000,
+										50_000,
+										60_000,
 										1_500,
-										15_000)
+										4_000
+						)
 						.setPrioritizeTimeOverSizeThresholds(true)
 						.build();
 	}
