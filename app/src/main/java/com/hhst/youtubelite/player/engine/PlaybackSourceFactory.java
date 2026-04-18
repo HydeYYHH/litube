@@ -40,10 +40,10 @@ import java.util.concurrent.TimeUnit;
  * Component that handles app logic.
  */
 @OptIn(markerClass = UnstableApi.class)
-class PlaybackRunner {
+class PlaybackSourceFactory {
 	private static final String TAG = "YTLPlayback";
 
-	private PlaybackRunner() {
+	private PlaybackSourceFactory() {
 	}
 
 	@NonNull
@@ -51,6 +51,7 @@ class PlaybackRunner {
 	                          @NonNull PlaybackDetails details,
 	                          @NonNull PlaybackPlan plan) {
 		VideoDetails video = details.video();
+		long duration = durationSeconds(video);
 		Log.d(TAG, "create mode=" + plan.getMode()
 						+ " streamType=" + plan.getStreamType()
 						+ " manifestUrl=" + plan.getManifestUrl()
@@ -61,17 +62,22 @@ class PlaybackRunner {
 			case LIVE_DASH -> sources.liveYoutubeDashFactory().createMediaSource(buildItem(plan, true));
 			case LIVE_HLS -> sources.liveHlsFactory().createMediaSource(buildItem(plan, true));
 			case ADAPTIVE -> merge(
-							createStreamSource(sources, plan.getVideoCandidate() != null ? plan.getVideoCandidate().getVideoStream() : null, video.getDuration(), false),
-							createStreamSource(sources, plan.getAudioCandidate() != null ? plan.getAudioCandidate().getAudioStream() : null, video.getDuration(), false));
+							createStreamSource(sources, plan.getVideoCandidate() != null ? plan.getVideoCandidate().getVideoStream() : null, duration, false),
+							createStreamSource(sources, plan.getAudioCandidate() != null ? plan.getAudioCandidate().getAudioStream() : null, duration, false));
 			case MUXED -> require(createStreamSource(sources,
 							plan.getMuxedCandidate() != null ? plan.getMuxedCandidate().getVideoStream() : null,
-							video.getDuration(), false));
+							duration, false));
 			case AUDIO_ONLY -> require(createStreamSource(sources,
 							plan.getAudioCandidate() != null ? plan.getAudioCandidate().getAudioStream() : null,
-							video.getDuration(), false));
+							duration, false));
 			default -> throw new IllegalArgumentException(Engine.NO_PLAYABLE_SOURCE_MESSAGE);
 		};
 		return mergeSubtitles(sources, base, details.subtitles());
+	}
+
+	private static long durationSeconds(@NonNull VideoDetails video) {
+		Long duration = video.getDuration();
+		return duration != null && duration > 0L ? duration : 0L;
 	}
 
 	@NonNull

@@ -78,12 +78,14 @@ public final class YoutubeFragment extends Fragment {
 
 	public void loadUrl(@Nullable String url) {
 		this.url = url;
+		YoutubeWebview webView = this.webView;
 		if (webView != null && url != null && !Objects.equals(webView.getUrl(), url)) {
 			webView.loadUrl(url);
 		}
 	}
 
 	private void takeHistorySnapshot() {
+		YoutubeWebview webView = this.webView;
 		if (webView != null) historySnapshot = webView.copyBackForwardList();
 	}
 
@@ -101,7 +103,8 @@ public final class YoutubeFragment extends Fragment {
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		View view = inflater.inflate(R.layout.fragment_webview, container, false);
-		webView = view.findViewById(R.id.webview);
+		YoutubeWebview webView = view.findViewById(R.id.webview);
+		this.webView = webView;
 		SwipeRefreshLayout swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
 		swipeRefreshLayout.setColorSchemeResources(R.color.yt_red);
@@ -133,7 +136,42 @@ public final class YoutubeFragment extends Fragment {
 	@Override
 	public void onResume() {
 		super.onResume();
-		if (webView != null && !isHidden()) {
+		YoutubeWebview webView = this.webView;
+		if (webView == null || isHidden()) return;
+		webView.setScriptActive(true);
+		webView.syncPreferences();
+		webView.onResume();
+		webView.resumeTimers();
+		webView.refreshPoTokenContext();
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		YoutubeWebview webView = this.webView;
+		if (webView == null || isHidden()) return;
+		if (Constant.PAGE_WATCH.equals(tag)) {
+			return;
+		}
+		if (getActivity() != null && getActivity().isInPictureInPictureMode()) return;
+		webView.setScriptActive(false);
+		webView.onPause();
+		webView.pauseTimers();
+	}
+
+	@Override
+	public void onHiddenChanged(boolean hidden) {
+		super.onHiddenChanged(hidden);
+		YoutubeWebview webView = this.webView;
+		if (webView == null) return;
+		if (hidden) {
+			if (Constant.PAGE_WATCH.equals(tag)) {
+				return;
+			}
+			webView.setScriptActive(false);
+			webView.onPause();
+			webView.pauseTimers();
+		} else {
 			webView.setScriptActive(true);
 			webView.syncPreferences();
 			webView.onResume();
@@ -143,55 +181,21 @@ public final class YoutubeFragment extends Fragment {
 	}
 
 	@Override
-	public void onPause() {
-		super.onPause();
-		if (webView != null && !isHidden()) {
-			if (Constant.PAGE_WATCH.equals(tag)) {
-				return;
-			}
-			if (getActivity() != null && getActivity().isInPictureInPictureMode()) return;
-			webView.setScriptActive(false);
-			webView.onPause();
-			webView.pauseTimers();
-		}
-	}
-
-	@Override
-	public void onHiddenChanged(boolean hidden) {
-		super.onHiddenChanged(hidden);
-		if (webView != null) {
-			if (hidden) {
-				if (Constant.PAGE_WATCH.equals(tag)) {
-					return;
-				}
-				webView.setScriptActive(false);
-				webView.onPause();
-				webView.pauseTimers();
-			} else {
-				webView.setScriptActive(true);
-				webView.syncPreferences();
-				webView.onResume();
-				webView.resumeTimers();
-				webView.refreshPoTokenContext();
-			}
-		}
-	}
-
-	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
-		if (webView != null) {
-			webView.stopLoading();
-			webView.clearHistory();
-			webView.removeAllViews();
-			webView.destroy();
-			webView = null;
-		}
+		YoutubeWebview webView = this.webView;
+		if (webView == null) return;
+		this.webView = null;
+		webView.stopLoading();
+		webView.clearHistory();
+		webView.removeAllViews();
+		webView.destroy();
 	}
 
 	@Override
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
+		YoutubeWebview webView = this.webView;
 		if (webView != null) webView.saveState(outState);
 	}
 
