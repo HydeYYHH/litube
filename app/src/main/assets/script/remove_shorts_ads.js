@@ -132,7 +132,7 @@
     if (state.installed) return state;
 
     if (options.patchFetch !== false) patchFetch();
-    if (options.patchDom !== false) patchDom();
+    if (options.patchDom === true) patchDom();
 
     state.installed = true;
     return state;
@@ -171,6 +171,6 @@
   global.removeShortsAds = api;
 
   if (global.document) {
-    install();
+    install({ patchDom: false });
   }
 })(typeof window !== 'undefined' ? window : globalThis);

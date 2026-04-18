@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -140,6 +141,7 @@ public class YoutubeWebview extends WebView {
 	private volatile String poTokenInflightKey;
 	@Nullable
 	private volatile String poTokenDoneKey;
+	private volatile long prefVersion = -1L;
 
 	public YoutubeWebview(@NonNull Context context) {
 		this(context, null);
@@ -533,7 +535,7 @@ public class YoutubeWebview extends WebView {
 	public void injectJavaScript(@NonNull InputStream jsInputStream) {
 		String js = StreamIOUtils.readInputStream(jsInputStream);
 		if (js != null) {
-			post(() -> scripts.add(js));
+			addScript(js);
 		}
 	}
 
@@ -550,7 +552,7 @@ public class YoutubeWebview extends WebView {
 							if (target) target.appendChild(style);
 							})()
 							""", encodedCss);
-			post(() -> scripts.add(js));
+			addScript(js);
 		}
 	}
 
@@ -558,9 +560,31 @@ public class YoutubeWebview extends WebView {
 		evaluateJavascript("(function(){window.__liteActive=" + active + ";if(window.__liteSetActive){window.__liteSetActive(" + active + ");}})();", null);
 	}
 
+	public void syncPreferences() {
+		if (extensionManager == null) return;
+		long version = extensionManager.version();
+		if (version == prefVersion) return;
+		prefVersion = version;
+		evaluateJavascript("window.dispatchEvent(new Event('litePreferencesChanged'));", null);
+	}
+
 	private void onNavStarted() {
 		poTokenInflightKey = null;
 		poTokenDoneKey = null;
+	}
+
+	private void addScript(@NonNull String js) {
+		Runnable task = () -> {
+			scripts.add(js);
+			if (frame.url != null && !UrlUtils.isGoogleAccountsUrl(frame.url)) {
+				evaluateJavascript(js, null);
+			}
+		};
+		if (Looper.myLooper() == Looper.getMainLooper()) {
+			task.run();
+			return;
+		}
+		post(task);
 	}
 
 /**

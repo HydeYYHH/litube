@@ -238,6 +238,13 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	@Override
 	public void onStateChanged(@NonNull androidx.lifecycle.LifecycleOwner source,
 	                           @NonNull Lifecycle.Event event) {
+		if (event != Lifecycle.Event.ON_STOP
+						|| player == null
+						|| DeviceUtils.isInPictureInPictureMode(this)
+						|| extensionManager.isEnabled(Constant.ENABLE_BACKGROUND_PLAY)) {
+			return;
+		}
+		player.suspendBackgroundPlayback();
 	}
 
 	@Override

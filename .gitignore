@@ -30,6 +30,7 @@
 /.codex/
 /.codex-tmp/
 /.sandbox-home/
+/.superpowers/
 
 /docs
 /findings.md

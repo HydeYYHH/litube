@@ -13,6 +13,7 @@ import javax.inject.Singleton;
  */
 @Singleton
 public class ExtensionManager {
+	private static final String KEY_VERSION = "preferences:version";
 
 	private final MMKV mmkv;
 
@@ -23,26 +24,60 @@ public class ExtensionManager {
 	}
 
 	private void initializeDefaultPreferences() {
-		// Set default preferences in MMKV if they don't exist
+		initializeGesturePreferences();
 		for (Map.Entry<String, Boolean> entry : Constant.DEFAULT_PREFERENCES.entrySet()) {
-			String mmkvKey = "preferences:" + entry.getKey();
-			if (!mmkv.contains(mmkvKey)) {
-				mmkv.encode(mmkvKey, entry.getValue());
+			String key = prefKey(entry.getKey());
+			if (!mmkv.contains(key)) {
+				mmkv.encode(key, entry.getValue());
 			}
 		}
 	}
 
+	private void initializeGesturePreferences() {
+		for (String key : Constant.GESTURE_KEYS) {
+			if (mmkv.contains(prefKey(key))) {
+				return;
+			}
+		}
+		boolean enabled = true;
+		String key = prefKey(Constant.ENABLE_PLAYER_GESTURES);
+		if (mmkv.contains(key)) {
+			enabled = mmkv.decodeBool(key, true);
+		}
+		for (String gesture : Constant.GESTURE_KEYS) {
+			mmkv.encode(prefKey(gesture), enabled);
+		}
+	}
+
+	private String prefKey(String key) {
+		return "preferences:" + key;
+	}
+
 	public void setEnabled(String key, boolean enable) {
-		mmkv.encode("preferences:" + key, enable);
+		String pref = prefKey(key);
+		boolean changed = !mmkv.contains(pref) || mmkv.decodeBool(pref, Boolean.TRUE.equals(Constant.DEFAULT_PREFERENCES.getOrDefault(key, false))) != enable;
+		mmkv.encode(pref, enable);
+		if (changed) {
+			bumpVersion();
+		}
 	}
 
 	public boolean isEnabled(String key) {
-		return mmkv.decodeBool("preferences:" + key, Constant.DEFAULT_PREFERENCES.getOrDefault(key, false));
+		return mmkv.decodeBool(prefKey(key), Boolean.TRUE.equals(Constant.DEFAULT_PREFERENCES.getOrDefault(key, false)));
 	}
 
 	public void resetToDefault() {
+		boolean changed = false;
 		for (Map.Entry<String, Boolean> entry : Constant.DEFAULT_PREFERENCES.entrySet()) {
-			mmkv.encode("preferences:" + entry.getKey(), entry.getValue());
+			String key = prefKey(entry.getKey());
+			boolean value = entry.getValue();
+			if (!mmkv.contains(key) || mmkv.decodeBool(key, value) != value) {
+				changed = true;
+			}
+			mmkv.encode(key, value);
+		}
+		if (changed) {
+			bumpVersion();
 		}
 	}
 
@@ -52,6 +87,14 @@ public class ExtensionManager {
 			allPreferences.put(key, isEnabled(key));
 		}
 		return allPreferences;
+	}
+
+	public long version() {
+		return mmkv.decodeLong(KEY_VERSION, 0L);
+	}
+
+	private void bumpVersion() {
+		mmkv.encode(KEY_VERSION, version() + 1L);
 	}
 
 }

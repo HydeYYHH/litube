@@ -1,12 +1,15 @@
 (function () {
-  const preferences = JSON.parse(lite.getPreferences() || "{}");
-  if (!preferences.enable_display_dislikes || window.returnDislikeInjected) return;
+  if (window.returnDislike?.syncPreferences) {
+    window.returnDislike.syncPreferences();
+    return;
+  }
 
   const STATE_LIKED = "LIKED_STATE";
   const STATE_DISLIKED = "DISLIKED_STATE";
   const STATE_NEUTRAL = "NEUTRAL_STATE";
 
   const isMobile = location.hostname === "m.youtube.com";
+  let enabled = false;
   let likesValue = 0;
   let dislikesValue = 0;
   let previousState = STATE_NEUTRAL;
@@ -16,6 +19,14 @@
   let lastDislikeButton = null;
   let activeDislikeObserver = null;
   let applyFrameId = 0;
+
+  function readEnabled() {
+    try {
+      return !!JSON.parse(lite.getPreferences() || "{}").enable_display_dislikes;
+    } catch {
+      return false;
+    }
+  }
 
   function isShorts() {
     return location.pathname.startsWith("/shorts");
@@ -98,6 +109,13 @@
     return textSpan;
   }
 
+  function clearDislikeCount() {
+    const container = getDislikeTextContainer();
+    if (container) {
+      container.textContent = "";
+    }
+  }
+
   function getVideoId() {
     const url = new URL(window.location.href);
     if (url.pathname.startsWith("/clip")) {
@@ -147,6 +165,7 @@
   }
 
   function applyDislikeCount() {
+    if (!enabled) return;
     const container = getDislikeTextContainer();
     if (!container) return;
     const nextText = formatCount(dislikesValue);
@@ -156,7 +175,7 @@
   }
 
   function scheduleApplyDislikeCount() {
-    if (applyFrameId) return;
+    if (!enabled || applyFrameId) return;
     applyFrameId = requestAnimationFrame(() => {
       applyFrameId = 0;
       applyDislikeCount();
@@ -193,7 +212,7 @@
   }
 
   function applyAction(action) {
-    if (!canOptimisticallyUpdate()) return;
+    if (!enabled || !canOptimisticallyUpdate()) return;
 
     if (action === "like") {
       if (previousState === STATE_LIKED) {
@@ -223,12 +242,14 @@
 
     scheduleApplyDislikeCount();
     setTimeout(() => {
+      if (!enabled) return;
       previousState = readVoteState();
       scheduleApplyDislikeCount();
     }, 120);
   }
 
   function bindButtons() {
+    if (!enabled) return false;
     const likeButton = getLikeButton();
     const dislikeButton = getDislikeButton();
     if (!likeButton || !dislikeButton) return false;
@@ -256,6 +277,7 @@
     }
 
     activeDislikeObserver = new MutationObserver(() => {
+      if (!enabled) return;
       scheduleApplyDislikeCount();
     });
     activeDislikeObserver.observe(dislikeButton, {
@@ -266,10 +288,11 @@
   }
 
   function fetchVotes(videoId, token) {
+    if (!enabled) return;
     fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${videoId}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((json) => {
-        if (!json || token !== initToken || videoId !== activeVideoId) return;
+        if (!enabled || !json || token !== initToken || videoId !== activeVideoId) return;
         likesValue = json.likes ?? 0;
         dislikesValue = json.dislikes ?? 0;
         previousState = readVoteState();
@@ -288,13 +311,28 @@
     }
   }
 
+  function resetState() {
+    initToken += 1;
+    likesValue = 0;
+    dislikesValue = 0;
+    previousState = STATE_NEUTRAL;
+    activeVideoId = null;
+    resetBindings();
+    if (applyFrameId) {
+      cancelAnimationFrame(applyFrameId);
+      applyFrameId = 0;
+    }
+    clearDislikeCount();
+  }
+
   function tryInitialize(token, retriesLeft) {
-    if (token !== initToken) return;
+    if (!enabled || token !== initToken) return;
 
     const videoId = getVideoId();
     if (!videoId) {
       activeVideoId = null;
       resetBindings();
+      clearDislikeCount();
       return;
     }
 
@@ -311,6 +349,7 @@
   }
 
   function scheduleInitialize() {
+    if (!enabled) return;
     initToken += 1;
     resetBindings();
     const token = initToken;
@@ -331,9 +370,25 @@
     return result;
   };
 
+  function syncPreferences() {
+    const next = readEnabled();
+    if (enabled === next) {
+      if (enabled) scheduleInitialize();
+      return;
+    }
+    enabled = next;
+    if (enabled) {
+      scheduleInitialize();
+      return;
+    }
+    resetState();
+  }
+
   window.addEventListener("yt-navigate-finish", scheduleInitialize, true);
   window.addEventListener("popstate", scheduleInitialize, true);
+  window.addEventListener("litePreferencesChanged", syncPreferences, true);
 
+  window.returnDislike = { syncPreferences };
   window.returnDislikeInjected = true;
-  scheduleInitialize();
+  syncPreferences();
 })();

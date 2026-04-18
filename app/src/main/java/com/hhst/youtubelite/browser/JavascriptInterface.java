@@ -23,7 +23,7 @@ import com.hhst.youtubelite.downloader.ui.DownloadActivity;
 import com.hhst.youtubelite.downloader.ui.DownloadDialog;
 import com.hhst.youtubelite.downloader.ui.PlaylistDownloadDialog;
 import com.hhst.youtubelite.downloader.ui.PlaylistDownloadItem;
-import com.hhst.youtubelite.extension.ExtensionDialog;
+import com.hhst.youtubelite.extension.ExtensionActivity;
 import com.hhst.youtubelite.extension.ExtensionManager;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.gallery.GalleryActivity;
@@ -211,7 +211,13 @@ public final class JavascriptInterface {
 
 	@android.webkit.JavascriptInterface
 	public void extension() {
-		handler.post(() -> new ExtensionDialog(context, extensionManager).build());
+		handler.post(() -> {
+			Intent intent = ExtensionActivity.intent(context);
+			if (!(context instanceof Activity)) {
+				intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			}
+			context.startActivity(intent);
+		});
 	}
 
 	@android.webkit.JavascriptInterface

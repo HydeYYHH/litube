@@ -642,6 +642,10 @@ public class Controller {
 				showResizeModeOptions();
 				bottomSheetDialog.dismiss();
 			});
+			View pipOption = bottomSheetView.findViewById(R.id.option_pip);
+			if (pipOption != null) {
+				pipOption.setVisibility(extensionManager.isEnabled(Constant.ENABLE_PIP) ? View.VISIBLE : View.GONE);
+			}
 			setupBottomSheetOption(bottomSheetView, R.id.option_audio_track, b -> {
 				showAudioTrackOptions();
 				bottomSheetDialog.dismiss();

@@ -14,6 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.media3.common.util.UnstableApi;
 
 import com.hhst.youtubelite.R;
+import com.hhst.youtubelite.extension.Constant;
 import com.hhst.youtubelite.player.LitePlayerView;
 import com.hhst.youtubelite.player.controller.Controller;
 import com.hhst.youtubelite.player.engine.Engine;
@@ -36,7 +37,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	private final Handler handler;
 	private final Runnable hideHint;
 
-	private int gestureMode;
+	private GestureMode gestureMode = GestureMode.NONE;
 	private float brightness = -1, longPressSpeed = 1.0f;
 	private boolean longPressing, gesturing, swipeTriggered;
 	private long seekStartPos;
@@ -62,12 +63,40 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		return DoubleTapAction.TOGGLE_PLAYBACK;
 	}
 
-	private boolean isEnabled() {
-		return controller.getExtensionManager().isEnabled(com.hhst.youtubelite.extension.Constant.ENABLE_PLAYER_GESTURES);
+	private boolean enabled(@NonNull Gesture gesture) {
+		boolean fullscreen = controller.isFullscreen();
+		String key = switch (gesture) {
+			case TAP -> fullscreen ? Constant.GESTURE_TAP_FULLSCREEN : Constant.GESTURE_TAP_WINDOWED;
+			case DOUBLE_TAP -> fullscreen ? Constant.GESTURE_DOUBLE_TAP_FULLSCREEN : Constant.GESTURE_DOUBLE_TAP_WINDOWED;
+			case LONG_PRESS -> fullscreen ? Constant.GESTURE_LONG_PRESS_FULLSCREEN : Constant.GESTURE_LONG_PRESS_WINDOWED;
+			case BRIGHTNESS -> fullscreen ? Constant.GESTURE_BRIGHTNESS_FULLSCREEN : Constant.GESTURE_BRIGHTNESS_WINDOWED;
+			case VOLUME -> fullscreen ? Constant.GESTURE_VOLUME_FULLSCREEN : Constant.GESTURE_VOLUME_WINDOWED;
+			case SEEK -> fullscreen ? Constant.GESTURE_SEEK_FULLSCREEN : Constant.GESTURE_SEEK_WINDOWED;
+			case FULLSCREEN -> fullscreen ? Constant.GESTURE_FULLSCREEN_FULLSCREEN : Constant.GESTURE_FULLSCREEN_WINDOWED;
+		};
+		return controller.getExtensionManager().isEnabled(key);
+	}
+
+	private boolean hasAnyEnabled() {
+		for (Gesture gesture : Gesture.values()) {
+			if (enabled(gesture)) return true;
+		}
+		return false;
+	}
+
+	@NonNull
+	private GestureMode verticalMode(float x, float width) {
+		if (width <= 0f) return GestureMode.NONE;
+		if (x < width * 0.35f) {
+			return enabled(Gesture.BRIGHTNESS) ? GestureMode.BRIGHTNESS : GestureMode.NONE;
+		}
+		if (x > width * 0.65f) {
+			return enabled(Gesture.VOLUME) ? GestureMode.VOLUME : GestureMode.NONE;
+		}
+		return enabled(Gesture.FULLSCREEN) ? GestureMode.FULLSCREEN : GestureMode.NONE;
 	}
 
 	public void onTouchRelease() {
-		if (!isEnabled()) return;
 		if (longPressing) {
 			engine.setPlaybackRate(longPressSpeed);
 			updateSpeedButtonUI(longPressSpeed);
@@ -82,9 +111,9 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 
 	@Override
 	public boolean onDown(@NonNull MotionEvent e) {
-		if (!isEnabled()) return false;
+		if (!hasAnyEnabled()) return false;
 		handler.removeCallbacks(hideHint);
-		gestureMode = 0;
+		gestureMode = GestureMode.NONE;
 		brightness = -1;
 		volume = -1;
 		gesturing = false;
@@ -95,7 +124,7 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 
 	@Override
 	public boolean onSingleTapUp(@NonNull MotionEvent e) {
-		if (!isEnabled()) return false;
+		if (!enabled(Gesture.DOUBLE_TAP)) return super.onSingleTapUp(e);
 		long now = System.currentTimeMillis();
 		float x = e.getX();
 		float width = playerView.getWidth();
@@ -114,13 +143,14 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 
 	@Override
 	public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
+		if (!enabled(Gesture.TAP)) return false;
 		controller.setControlsVisible(!controller.isControlsVisible());
 		return true;
 	}
 
 	@Override
 	public boolean onDoubleTap(@NonNull MotionEvent e) {
-		if (!isEnabled()) return false;
+		if (!enabled(Gesture.DOUBLE_TAP)) return false;
 		switch (getDoubleTapAction(e.getX(), playerView.getWidth())) {
 			case SEEK_BACKWARD:
 				processSeek(true);
@@ -159,25 +189,34 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 
 	@Override
 	public boolean onScroll(MotionEvent e1, @NonNull MotionEvent e2, float dx, float dy) {
-		if (!isEnabled() || e1 == null || e2.getPointerCount() > 1 || longPressing) return false;
-		if (gestureMode == 0) {
-			if (Math.abs(dy) > Math.abs(dx)) gestureMode = 1;
-			else if (Math.abs(dx) > Math.abs(dy)) gestureMode = 2;
+		if (e1 == null || e2.getPointerCount() > 1 || longPressing) return false;
+		if (gestureMode == GestureMode.NONE) {
+			if (Math.abs(dy) > Math.abs(dx)) {
+				gestureMode = verticalMode(e1.getX(), playerView.getWidth());
+			} else if (Math.abs(dx) > Math.abs(dy) && enabled(Gesture.SEEK)) {
+				gestureMode = GestureMode.SEEK;
+			}
+			if (gestureMode == GestureMode.NONE) return false;
 		}
-		if (gestureMode == 1) {
-			gesturing = true;
-			handler.removeCallbacks(hideHint);
-			float x = e1.getX(), width = playerView.getWidth();
-			if (x < width * 0.35f) adjustBrightness(dy);
-			else if (x > width * 0.65f) adjustVolume(dy);
-			else handleCenterVerticalGesture(e1, e2);
-			handler.postDelayed(hideHint, AUTO_HIDE_DELAY_MS);
-		} else if (gestureMode == 2) {
-			gesturing = true;
-			handler.removeCallbacks(hideHint);
-			adjustSeek(e1, e2);
-			handler.postDelayed(hideHint, AUTO_HIDE_DELAY_MS);
+		gesturing = true;
+		handler.removeCallbacks(hideHint);
+		switch (gestureMode) {
+			case BRIGHTNESS:
+				adjustBrightness(dy);
+				break;
+			case VOLUME:
+				adjustVolume(dy);
+				break;
+			case FULLSCREEN:
+				handleCenterVerticalGesture(e1, e2);
+				break;
+			case SEEK:
+				adjustSeek(e1, e2);
+				break;
+			case NONE:
+				return false;
 		}
+		handler.postDelayed(hideHint, AUTO_HIDE_DELAY_MS);
 		return true;
 	}
 
@@ -219,17 +258,18 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 		float threshold = playerView.getHeight() * 0.08f;
 		if (Math.abs(dy) < threshold) return;
 
-		swipeTriggered = true;
 		if (dy < 0 && !controller.isFullscreen()) {
+			swipeTriggered = true;
 			controller.enterFullscreen();
 		} else if (dy > 0 && controller.isFullscreen()) {
+			swipeTriggered = true;
 			controller.exitFullscreen();
 		}
 	}
 
 	@Override
 	public void onLongPress(@NonNull MotionEvent e) {
-		if (!isEnabled() || !engine.isPlaying()) return;
+		if (!enabled(Gesture.LONG_PRESS) || !engine.isPlaying()) return;
 		vibrate();
 		longPressSpeed = engine.getPlaybackRate();
 		longPressing = true;
@@ -249,9 +289,24 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 			vib.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
 	}
 
-/**
- * Enumeration of app logic.
- */
+	private enum Gesture {
+		TAP,
+		DOUBLE_TAP,
+		LONG_PRESS,
+		BRIGHTNESS,
+		VOLUME,
+		SEEK,
+		FULLSCREEN
+	}
+
+	private enum GestureMode {
+		NONE,
+		BRIGHTNESS,
+		VOLUME,
+		FULLSCREEN,
+		SEEK
+	}
+
 	private enum DoubleTapAction {
 		SEEK_BACKWARD,
 		TOGGLE_PLAYBACK,

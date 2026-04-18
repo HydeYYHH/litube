@@ -323,6 +323,13 @@ public class LitePlayer {
 		engine.pause();
 	}
 
+	public void suspendBackgroundPlayback() {
+		engine.pause();
+		if (playbackSvc != null) {
+			playbackSvc.hideNotification();
+		}
+	}
+
 	public boolean seekLoadedVideo(@Nullable String url, long positionMs) {
 		if (positionMs < 0L || url == null) return false;
 		String videoId = YoutubeExtractor.getVideoId(url);

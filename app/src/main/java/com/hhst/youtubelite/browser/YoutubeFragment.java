@@ -116,6 +116,7 @@ public final class YoutubeFragment extends Fragment {
 		webView.setQueueRepository(queueRepository);
 		webView.setOkHttpClient(okHttpClient, webViewCachePolicy);
 		webView.setPoTokenContextStore(poTokenContextStore);
+		tabManager.injectScripts(webView);
 		webView.setUpdateVisitedHistory(url -> {
 			YoutubeFragment.this.url = url;
 			tabManager.onUrlChanged(this, url);
@@ -126,13 +127,6 @@ public final class YoutubeFragment extends Fragment {
 		if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 		else if (url != null) loadUrl(url);
 
-		// Load scripts in background
-		new Thread(() -> {
-			if (tabManager != null) {
-				tabManager.injectScripts(webView);
-			}
-		}).start();
-
 		return view;
 	}
 
@@ -141,6 +135,7 @@ public final class YoutubeFragment extends Fragment {
 		super.onResume();
 		if (webView != null && !isHidden()) {
 			webView.setScriptActive(true);
+			webView.syncPreferences();
 			webView.onResume();
 			webView.resumeTimers();
 			webView.refreshPoTokenContext();
@@ -174,6 +169,7 @@ public final class YoutubeFragment extends Fragment {
 				webView.pauseTimers();
 			} else {
 				webView.setScriptActive(true);
+				webView.syncPreferences();
 				webView.onResume();
 				webView.resumeTimers();
 				webView.refreshPoTokenContext();

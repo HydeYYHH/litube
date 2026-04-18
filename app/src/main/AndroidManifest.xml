@@ -142,6 +142,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".extension.ExtensionActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
+
+        <activity
             android:name=".downloader.ui.DownloadActivity"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
             android:exported="false" />
