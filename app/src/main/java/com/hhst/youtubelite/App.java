@@ -2,6 +2,8 @@ package com.hhst.youtubelite;
 
 import android.app.Application;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -31,6 +33,11 @@ public class App extends Application {
 		}
 		Constant.USER_AGENT = WebSettings.getDefaultUserAgent(this);
 		startLogging();
+		// Warm up WebView renderer process as early as possible to reduce cold-start latency
+		new Handler(Looper.getMainLooper()).post(() -> {
+			WebView wv = new WebView(this);
+			wv.destroy();
+		});
 	}
 
 	private void startLogging() {

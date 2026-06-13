@@ -133,7 +133,23 @@
                     android:padding="4dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_playback_end_next" />
-
+                
+                <ImageButton
+                    android:id="@+id/btn_pip"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="-2dp"
+                    android:alpha="0.92"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/pip"
+                    android:maxWidth="32dp"
+                    android:maxHeight="32dp"
+                    android:minWidth="32dp"
+                    android:minHeight="32dp"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_pip" />
+                
                 <ImageButton
                     android:id="@+id/btn_more"
                     android:layout_width="32dp"

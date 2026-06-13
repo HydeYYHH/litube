@@ -160,7 +160,7 @@
 
     new Function(interpreterJavascript)();
     const webPoSignalOutput = [];
-    return loadBotGuard({
+    return loadBotGuard.call(window, {
       globalName: challengeData.globalName,
       globalObj: this,
       program: challengeData.program

@@ -46,15 +46,26 @@ public final class DeviceUtils {
 	 * Adjusts device brightness based on vertical movement.
 	 */
 	public static float adjustBrightness(@NonNull Activity activity, float dy, @NonNull View view, float brightness, float scrollSens) {
+		final WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
 		float b = brightness;
 		if (b == -1) {
-			final WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
-			b = lp.screenBrightness < 0 ? DEFAULT_BRIGHTNESS : lp.screenBrightness;
+			// First touch: save original window brightness (may be -1 = system auto)
+			b = lp.screenBrightness < 0 ? 0.0f : lp.screenBrightness;
 		}
-		float delta = (dy / view.getHeight()) * scrollSens * SCROLL_SENSITIVITY_FACTOR;
-		b = Math.max(0.01f, Math.min(1.0f, b + delta));
+		// Non-linear sensitivity: slow near 0%, faster near 100% (like NewPipe)
+		float linearDelta = (dy / view.getHeight()) * scrollSens * SCROLL_SENSITIVITY_FACTOR;
+		// Scale delta by current brightness so small values are easier to control
+		float scale = 0.2f + 0.8f * b; // range [0.2, 1.0]
+		float delta = linearDelta * scale;
+		b = b + delta;
 
-		final WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
+		if (b <= 0.0f) {
+			// Restore system auto brightness
+			lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+			activity.getWindow().setAttributes(lp);
+			return -2f;
+		}
+		b = Math.min(1.0f, b);
 		lp.screenBrightness = b;
 		activity.getWindow().setAttributes(lp);
 

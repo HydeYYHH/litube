@@ -15,8 +15,6 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * Planner that selects the best playback delivery path.
@@ -96,26 +94,6 @@ public final class PlaybackPlanner {
 		plan.setDelivery(muxed);
 		plan.setMuxedCandidate(findVideoCandidate(muxed.getMuxed(), selected));
 		return plan.getMuxedCandidate() != null ? plan : null;
-	}
-
-	@Nullable
-	public static PlaybackPlan adaptiveFallbackPlan(@NonNull DeliveryCatalog deliveries,
-	                                                @Nullable String preferredQuality,
-	                                                @Nullable String preferredAudioLanguage,
-	                                                @NonNull Predicate<StreamCandidate> blocked) {
-		Delivery adaptive = deliveries.first(PlaybackMode.ADAPTIVE);
-		if (adaptive == null) {
-			return null;
-		}
-		List<StreamCandidate> video = adaptive.getVideo().stream()
-						.filter(candidate -> !blocked.test(candidate))
-						.collect(Collectors.toList());
-		List<StreamCandidate> audio = adaptive.getAudio().stream()
-						.filter(candidate -> !blocked.test(candidate))
-						.collect(Collectors.toList());
-		PlaybackPlan plan = adaptivePlan(new PlaybackPlan(), adaptive, video, audio,
-						preferredQuality, preferredAudioLanguage);
-		return plan.getVideoCandidate() != null && plan.getAudioCandidate() != null ? plan : null;
 	}
 
 	@Nullable

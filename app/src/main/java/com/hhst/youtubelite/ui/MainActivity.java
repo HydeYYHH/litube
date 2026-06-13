@@ -107,6 +107,7 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	private long lastBackTime;
 	private boolean bootstrapped;
 	private boolean suppressPiP;
+	private boolean wasInPiP;
 	@Nullable
 	private Runnable pendingPermissionAction;
 	@Nullable
@@ -137,7 +138,8 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		ViewCompat.setOnApplyWindowInsetsListener(mainView, (v, insets) -> {
 			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
 			Insets tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement());
-			v.setPadding(systemBars.left, systemBars.top, systemBars.right, tappable.bottom);
+			int bottomPadding = Math.max(systemBars.bottom, tappable.bottom);
+			v.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomPadding);
 			return insets;
 		});
 
@@ -233,6 +235,7 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, @NonNull Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 		player.onPictureInPictureModeChanged(isInPictureInPictureMode);
+		wasInPiP = isInPictureInPictureMode;
 	}
 
 	@Override
@@ -637,6 +640,10 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		if (player != null && player.isInMiniPlayer() && !isChangingConfigurations() && !DeviceUtils.isInPictureInPictureMode(this)) {
 			player.suspendInAppMiniPlayerUiIfNeeded();
 		}
+		if (player != null && !isChangingConfigurations() && wasInPiP) {
+			player.pause();
+		}
+		wasInPiP = false;
 		super.onStop();
 	}
 

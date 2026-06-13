@@ -132,10 +132,12 @@ public class TabManager {
 		} else {
 			YoutubeFragment home = null;
 			YoutubeFragment nav = null;
+			java.util.List<YoutubeFragment> hiddenNavTabs = new java.util.ArrayList<>();
 			for (var t : tabs) {
 				var tabTag = t.getTabTag();
 				if (homeTag.equals(tabTag)) home = t;
 				else if (targetTag.equals(tabTag)) nav = t;
+				else if (NAV_TAGS.contains(tabTag)) { ft.hide(t); hiddenNavTabs.add(t); }
 				else ft.remove(t);
 			}
 			tabs.clear();
@@ -144,6 +146,7 @@ public class TabManager {
 				ft.add(R.id.fragment_container, home, homeTag);
 			}
 			tabs.offer(home);
+			for (var hidden : hiddenNavTabs) tabs.offer(hidden);
 			if (homeTag.equals(targetTag)) {
 				this.tab = home;
 			} else {

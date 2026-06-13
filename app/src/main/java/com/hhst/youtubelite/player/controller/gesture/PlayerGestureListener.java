@@ -144,7 +144,9 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	@Override
 	public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
 		if (!enabled(Gesture.TAP)) return false;
-		controller.setControlsVisible(!controller.isControlsVisible());
+		boolean nowVisible = !controller.isControlsVisible();
+		controller.setControlsVisible(nowVisible);
+		controller.syncNavbarWithControls(nowVisible);
 		return true;
 	}
 
@@ -239,8 +241,14 @@ public class PlayerGestureListener extends GestureDetector.SimpleOnGestureListen
 	}
 
 	private void adjustBrightness(float dy) {
-		brightness = DeviceUtils.adjustBrightness(activity, dy, playerView, brightness, 0.5f);
-		controller.showHint(Math.round(brightness * 100) + "%", -1);
+		// Pass -1f to DeviceUtils when in auto mode so it reads from window
+		float currentBrightness = (brightness <= -2f) ? -1f : brightness;
+		brightness = DeviceUtils.adjustBrightness(activity, dy, playerView, currentBrightness, 0.5f);
+		if (brightness <= -2f) {
+			controller.showHint("Auto brightness", -1);
+		} else {
+			controller.showHint(Math.round(brightness * 100) + "%", -1);
+		}
 	}
 
 	private void adjustVolume(float dy) {

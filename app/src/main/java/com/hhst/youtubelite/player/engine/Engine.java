@@ -60,10 +60,8 @@ import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
@@ -134,8 +132,6 @@ public class Engine {
 	private PlaybackPlan playbackPlan;
 	@Nullable
 	private VideoStream videoStream;
-	@NonNull
-	private final Set<String> failedAdaptiveCandidates = new HashSet<>();
 
 	@Inject
 	public Engine(@NonNull @ApplicationContext Context context,
@@ -333,7 +329,6 @@ public class Engine {
 		PlaybackPlan plan = details.plan();
 		List<SubtitlesStream> subtitles = details.subtitles();
 		if (!Objects.equals(this.videoId, video.getId())) {
-			failedAdaptiveCandidates.clear();
 		}
 		this.videoId = video.getId();
 		this.videoDetails = video;
@@ -373,36 +368,16 @@ public class Engine {
 	}
 
 	public boolean recoverFromPlaybackError(@NonNull PlaybackException error) {
-		PlaybackRecoveryReason reason = playbackRecoveryReason(error);
-		if (reason == null) {
-			return false;
-		}
+		if (playbackRecoveryReason(error) == null) return false;
 		State state = state();
-		if (state == null || state.plan().getMode() != PlaybackMode.ADAPTIVE) {
-			return false;
-		}
-		rememberFailedAdaptiveCandidates(state.plan());
-		PlaybackPlan adaptiveFallback = PlaybackPlanner.adaptiveFallbackPlan(
-						state.deliveries(),
-						prefs.getPreferredQuality(),
-						null,
-						this::isFailedAdaptiveCandidate);
-		if (adaptiveFallback != null) {
-			return recoverWithPlan(state, adaptiveFallback, reason, false);
-		}
+		if (state == null || state.plan().getMode() != PlaybackMode.ADAPTIVE) return false;
 		PlaybackPlan muxedFallback = PlaybackPlanner.muxedFallbackPlan(
-						state.deliveries(),
-						prefs.getPreferredQuality());
-		if (muxedFallback == null) {
-			return false;
-		}
-		return recoverWithPlan(state, muxedFallback, reason, true);
+						state.deliveries(), prefs.getPreferredQuality());
+		if (muxedFallback == null) return false;
+		return recoverWithPlan(state, muxedFallback);
 	}
 
-	private boolean recoverWithPlan(@NonNull State state,
-	                                @NonNull PlaybackPlan fallback,
-	                                @NonNull PlaybackRecoveryReason reason,
-	                                boolean rememberVideoFallback) {
+	private boolean recoverWithPlan(@NonNull State state, @NonNull PlaybackPlan fallback) {
 		long position = Math.max(0L, player.getCurrentPosition());
 		PlaybackParameters speed = player.getPlaybackParameters();
 		boolean playWhenReady = player.getPlayWhenReady();
@@ -417,27 +392,12 @@ public class Engine {
 			player.setPlaybackParameters(speed);
 			player.prepare();
 			player.setPlayWhenReady(playWhenReady);
-			if (rememberVideoFallback && reason == PlaybackRecoveryReason.HTTP_403) {
-				prefs.markAdaptiveMuxedFallback(state.video().getId());
-			}
-			Log.w(TAG, "recovered from adaptive " + reason.logLabel + " with " + fallback.getMode()
-							+ " videoId=" + state.video().getId());
+			Log.d(TAG, "recovered with muxed fallback videoId=" + state.video().getId());
 			return true;
 		} catch (RuntimeException e) {
-			Log.w(TAG, fallback.getMode() + " fallback failed", e);
+			Log.w(TAG, "muxed fallback failed", e);
 			return false;
 		}
-	}
-
-	private void rememberFailedAdaptiveCandidates(@NonNull PlaybackPlan plan) {
-		String video = candidateKey(plan.getVideoCandidate());
-		String audio = candidateKey(plan.getAudioCandidate());
-		if (video != null) failedAdaptiveCandidates.add(video);
-		if (audio != null) failedAdaptiveCandidates.add(audio);
-	}
-
-	private boolean isFailedAdaptiveCandidate(@NonNull StreamCandidate candidate) {
-		return failedAdaptiveCandidates.contains(candidateKey(candidate));
 	}
 
 	public void pause() {
@@ -945,7 +905,7 @@ public class Engine {
 	}
 
 	@Nullable
-	static PlaybackRecoveryReason playbackRecoveryReason(@NonNull Throwable throwable) {
+	public static PlaybackRecoveryReason playbackRecoveryReason(@NonNull Throwable throwable) {
 		List<Throwable> pending = new ArrayList<>();
 		List<Throwable> visited = new ArrayList<>();
 		pending.add(throwable);
@@ -1013,7 +973,7 @@ public class Engine {
 	                     @NonNull PlaybackPlan plan) {
 	}
 
-	enum PlaybackRecoveryReason {
+	public enum PlaybackRecoveryReason {
 		HTTP_403("HTTP 403"),
 		CONNECTION_OPEN_FAILED("connection open failure");
 

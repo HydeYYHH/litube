@@ -317,6 +317,12 @@ public class YoutubeWebview extends WebView {
 		settings.setMediaPlaybackRequiresUserGesture(false);
 		settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
+		// Performance optimizations
+		settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+		settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+		settings.setEnableSmoothTransition(true);
+		settings.setOffscreenPreRaster(true);
+
 		JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager, queueRepository);
 		addJavascriptInterface(jsInterface, "lite");
 		setTag(jsInterface);
@@ -359,6 +365,17 @@ public class YoutubeWebview extends WebView {
 			@Override
 			public void onPageStarted(@NonNull WebView view, @NonNull String url, @Nullable Bitmap favicon) {
 				super.onPageStarted(view, url, favicon);
+				// Force cookie consent dialog above native player (only when visible)
+				evaluateJavascript(
+					"(function(){" +
+					"function fixConsent(){" +
+					"var b=document.querySelector('ytd-consent-bump-v2-lightbox,#consent-bump,tp-yt-paper-dialog[aria-modal]');" +
+					"if(b){b.style.cssText='z-index:2147483647!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;';}" +
+					"}" +
+					"fixConsent();" +
+					"var obs=new MutationObserver(fixConsent);" +
+					"obs.observe(document.body||document.documentElement,{childList:true,subtree:true});" +
+					"})()", null);
 				frame.epoch.incrementAndGet();
 				frame.finished = false;
 				frame.url = url;

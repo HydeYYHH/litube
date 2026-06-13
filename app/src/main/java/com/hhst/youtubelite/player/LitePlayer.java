@@ -21,6 +21,8 @@ import com.hhst.youtubelite.extractor.PlaybackPlanner;
 import com.hhst.youtubelite.extractor.YoutubeExtractor;
 import com.hhst.youtubelite.extractor.exception.ExtractionException;
 import com.hhst.youtubelite.extractor.exception.LoginRequiredExtractionException;
+import com.hhst.youtubelite.extension.ExtensionManager;
+import com.hhst.youtubelite.Constant;
 import com.hhst.youtubelite.player.common.PlayerLoopMode;
 import com.hhst.youtubelite.player.common.PlayerPreferences;
 import com.hhst.youtubelite.player.controller.Controller;
@@ -105,6 +107,8 @@ public class LitePlayer {
 	@Getter
 	private boolean inMiniPlayer;
 	private boolean wasInPip;
+	@NonNull
+	private final ExtensionManager extensionManager;
 
 	@Inject
 	public LitePlayer(@NonNull Activity activity,
@@ -116,7 +120,8 @@ public class LitePlayer {
 	                  @NonNull QueueRepository queueRepo,
 	                  @NonNull PlayerPreferences prefs,
 	                  @NonNull PlayerStateStore stateStore,
-	                  @NonNull Executor executor) {
+	                  @NonNull Executor executor,
+	                  @NonNull ExtensionManager extensionManager) {
 		this.activity = activity;
 		this.extractor = extractor;
 		this.playerView = playerView;
@@ -127,6 +132,7 @@ public class LitePlayer {
 		this.prefs = prefs;
 		this.stateStore = stateStore;
 		this.executor = executor;
+		this.extensionManager = extensionManager;
 		playerView.setup();
 		queueRepo.addListener(queueListener);
 		setupEngineListeners();
@@ -157,6 +163,11 @@ public class LitePlayer {
 			@Override
 			public void onIsPlayingChanged(boolean isPlaying) {
 				updateServiceProgress(isPlaying);
+				if (isPlaying && extensionManager.isEnabled(Constant.ENABLE_PIP)) {
+					playerView.enableAutoPiP();
+				} else {
+					playerView.disableAutoPiP();
+				}
 			}
 
 			@Override
@@ -173,9 +184,7 @@ public class LitePlayer {
 
 			@Override
 			public void onPlayerError(@NonNull PlaybackException error) {
-				if (engine.recoverFromPlaybackError(error)) {
-					return;
-				}
+				if (engine.recoverFromPlaybackError(error)) return;
 				ErrorDialog.show(activity, error.getMessage(), error);
 			}
 		});
@@ -503,7 +512,13 @@ public class LitePlayer {
 
 	public void onPictureInPictureModeChanged(boolean isInPiP) {
 		controller.onPictureInPictureModeChanged(isInPiP);
-		if (!isInPiP) playerView.disableAutoPiP();
+		if (!isInPiP) {
+			if (engine.isPlaying() && extensionManager.isEnabled(Constant.ENABLE_PIP)) {
+				playerView.enableAutoPiP();
+			} else {
+				playerView.disableAutoPiP();
+			}
+		}
 		if (wasInPip && !isInPiP && inMiniPlayer && onRestore != null) {
 			onRestore.run();
 		}
