@@ -282,10 +282,20 @@ public final class JavascriptInterface {
 		if (itemJson == null) return;
 		handler.post(() -> {
 			try {
-				final QueueItem item;
+				// Queue payloads always use the {videoId, url, title, ...} shape, so map them
+				// through MediaItemMenuPayload (which translates "url" -> videoUrl). Falling
+				// back to gson.fromJson into QueueItem would silently drop the item, because
+				// gson ignores the unknown "url" key and QueueItem.videoUrl stays null.
 				MediaItemMenuPayload mediaItemPayload = parseMediaItemMenuPayload(itemJson);
-				item = mediaItemPayload != null ? mediaItemPayload.toQueueItem() : gson.fromJson(itemJson, QueueItem.class);
-				if (item == null || item.getVideoUrl() == null) return;
+				if (mediaItemPayload == null) {
+					ToastUtils.show(context, R.string.queue_item_unavailable);
+					return;
+				}
+				final QueueItem item = mediaItemPayload.toQueueItem();
+				if (item.getVideoUrl() == null) {
+					ToastUtils.show(context, R.string.queue_item_unavailable);
+					return;
+				}
 				String videoId = item.getVideoId();
 				if (videoId == null || videoId.isBlank() || item.getTitle() == null || item.getTitle().isBlank()) {
 					ToastUtils.show(context, R.string.queue_item_unavailable);

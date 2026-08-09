@@ -3,6 +3,7 @@ package com.hhst.youtubelite.extension;
 import static com.hhst.youtubelite.Constant.ENABLE_BACKGROUND_PLAY;
 import static com.hhst.youtubelite.Constant.ENABLE_IN_APP_MINI_PLAYER;
 import static com.hhst.youtubelite.Constant.ENABLE_PIP;
+import static com.hhst.youtubelite.Constant.FULLSCREEN_ORIENTATION_LOCK;
 import static com.hhst.youtubelite.Constant.REMEMBER_LAST_POSITION;
 import static com.hhst.youtubelite.Constant.REMEMBER_RESIZE_MODE;
 import static com.hhst.youtubelite.Constant.SKIP_POI_HIGHLIGHT;
@@ -32,7 +33,8 @@ public record Extension(String key, int title, int summary, int icon, List<Exten
 										toggle(REMEMBER_LAST_POSITION, R.string.remember_last_position),
 										toggle(Constant.REMEMBER_QUALITY, R.string.remember_quality),
 										toggle(Constant.REMEMBER_PLAYBACK_SPEED, R.string.remember_playback_speed),
-										toggle(REMEMBER_RESIZE_MODE, R.string.remember_resize_mode)
+										toggle(REMEMBER_RESIZE_MODE, R.string.remember_resize_mode),
+										toggle(FULLSCREEN_ORIENTATION_LOCK, R.string.fullscreen_orientation_lock)
 						)),
 						page(R.string.gesture, R.string.gesture_summary, R.drawable.ic_gesture, List.of(
 										page(R.string.gesture_single_tap, 0, 0, List.of(

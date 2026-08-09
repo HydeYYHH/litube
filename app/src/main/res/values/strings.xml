@@ -68,6 +68,12 @@
     <string name="skip_sponsors_highlight">Skip highlights</string>
 
     <string name="remember_last_position">Remember position</string>
+    <string name="mic_permission_granted">Microphone permission granted</string>
+    <string name="mic_permission_denied">Voice search will not work without microphone permission</string>
+    <string name="mic_permission_title">Microphone permission is required</string>
+    <string name="mic_permission_settings_message">Would you like to open Settings?</string>
+    <string name="mic_permission_yes">Yes</string>
+    <string name="mic_permission_no">No</string>
     <string name="remember_quality">Remember video quality</string>
     <string name="segments">Segments</string>
     <string name="background_play">Background playback</string>
@@ -94,6 +100,7 @@
     <string name="jumped_to_segment">Jumped to: %1$s</string>
     <string name="jump">Jump</string>
     <string name="remember_resize_mode">Remember resize mode</string>
+    <string name="fullscreen_orientation_lock">Lock orientation in fullscreen</string>
     <string name="in_app_mini_player">In-app mini-player</string>
     <string name="bitrate">Bitrate</string>
     <string name="dropped_frames">Dropped Frames</string>

@@ -135,10 +135,16 @@ public final class UrlUtils {
 	}
 
 	private static boolean isGoogleAccountsHost(@NonNull String lowerHost) {
-		return lowerHost.equals("accounts.google")
+		if (lowerHost.equals("accounts.google")
 						|| lowerHost.equals("accounts.google.com")
-						|| lowerHost.startsWith("accounts.google.")
-						|| lowerHost.equals("accounts.youtube.com");
+						|| lowerHost.equals("accounts.youtube.com")) {
+			return true;
+		}
+		// Country variants like accounts.google.co.in: require the host to actually end
+		// with .google.com so look-alikes such as accounts.google.evil.com are rejected
+		// (this host is used for navigation allowlisting and WebView media-permission grants).
+		return lowerHost.startsWith("accounts.google.")
+						&& lowerHost.endsWith(".google.com");
 	}
 
 	@NonNull

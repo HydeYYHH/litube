@@ -3,6 +3,7 @@ package com.hhst.youtubelite.extension;
 import static com.hhst.youtubelite.Constant.ENABLE_BACKGROUND_PLAY;
 import static com.hhst.youtubelite.Constant.ENABLE_IN_APP_MINI_PLAYER;
 import static com.hhst.youtubelite.Constant.ENABLE_PIP;
+import static com.hhst.youtubelite.Constant.FULLSCREEN_ORIENTATION_LOCK;
 import static com.hhst.youtubelite.Constant.REMEMBER_LAST_POSITION;
 import static com.hhst.youtubelite.Constant.REMEMBER_RESIZE_MODE;
 import static com.hhst.youtubelite.Constant.SKIP_POI_HIGHLIGHT;
@@ -64,6 +65,7 @@ public final class Constant {
 					Map.entry(ENABLE_PIP, true),
 					Map.entry(ENABLE_IN_APP_MINI_PLAYER, true),
 					Map.entry(REMEMBER_RESIZE_MODE, false),
+					Map.entry(FULLSCREEN_ORIENTATION_LOCK, true),
 					Map.entry(REMEMBER_PLAYBACK_SPEED, false),
 					Map.entry(GESTURE_TAP_WINDOWED, true),
 					Map.entry(GESTURE_TAP_FULLSCREEN, true),

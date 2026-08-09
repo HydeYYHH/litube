@@ -61,6 +61,24 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	private static final int HTTP_STATUS_TEMPORARY_REDIRECT = 307;
 	private static final int HTTP_STATUS_PERMANENT_REDIRECT = 308;
 	private static final byte[] POST_BODY = new byte[]{0x78, 0};
+	/**
+	 * User-Agent of the YouTube VR (Oculus) client. Streaming URLs issued to the ANDROID_VR
+	 * client must be requested with this User-Agent: googlevideo validates that the User-Agent
+	 * matches the client the URL was generated for and answers HTTP 403 on a mismatch (the
+	 * regular Android app User-Agent is rejected for ANDROID_VR URLs).
+	 */
+	private static final String YOUTUBE_ANDROID_VR_USER_AGENT =
+			"com.google.android.apps.youtube.vr.oculus/1.65.10 "
+					+ "(Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
+	/**
+	 * Desktop Chrome User-Agent for web-client (WEB / WEB_EMBEDDED_PLAYER) streaming URLs.
+	 * The Android WebView default User-Agent — Constant.USER_AGENT, which App.onCreate()
+	 * overwrites with WebSettings.getDefaultUserAgent(this) — is a known trigger for HTTP 403
+	 * responses from googlevideo on web-client URLs.
+	 */
+	private static final String YOUTUBE_WEB_USER_AGENT =
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+					+ "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 	private final boolean allowCrossProtocolRedirects;
 	private final boolean rangeParameterEnabled;
 	private final boolean rnParameterEnabled;
@@ -101,6 +119,16 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 	private static boolean isCompressed(HttpURLConnection connection) {
 		String contentEncoding = connection.getHeaderField("Content-Encoding");
 		return "gzip".equalsIgnoreCase(contentEncoding);
+	}
+
+	/**
+	 * Checks if a streaming URL was issued to the {@code ANDROID_VR} (YouTube VR) client.
+	 * The library's {@code isAndroidStreamingUrl} also matches {@code ANDROID_VR} URLs
+	 * (substring match on {@code &c=ANDROID}), so this must be checked before it: the VR
+	 * client has its own dedicated User-Agent.
+	 */
+	private static boolean isAndroidVrStreamingUrl(@NonNull String url) {
+		return url.contains("&c=ANDROID_VR") || url.contains("?c=ANDROID_VR");
 	}
 
 	@Override
@@ -322,7 +350,11 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 			if (rangeHeader != null) conn.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
 		}
 
-		if (isWebStreamingUrl(requestUrl) || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
+		boolean isWebStreamingRequest = isWebStreamingUrl(requestUrl);
+		boolean isWebEmbeddedStreamingRequest = isWebEmbeddedPlayerStreamingUrl(requestUrl);
+		boolean isWebClientRequest = isWebStreamingRequest || isWebEmbeddedStreamingRequest;
+
+		if (isWebClientRequest) {
 			conn.setRequestProperty(HttpHeaders.ORIGIN, "https://www.youtube.com");
 			conn.setRequestProperty(HttpHeaders.REFERER, "https://www.youtube.com");
 			conn.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
@@ -333,18 +365,29 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 		conn.setRequestProperty(HttpHeaders.TE, "trailers");
 		conn.setRequestProperty(HttpHeaders.ACCEPT, "*/*");
 
-		boolean isAndroidStreamingUrl = isAndroidStreamingUrl(requestUrl);
-		boolean isIosStreamingUrl = isIosStreamingUrl(requestUrl);
-		if (isAndroidStreamingUrl)
+		// googlevideo validates that the User-Agent matches the client the URL was issued to
+		// and answers HTTP 403 on a mismatch, so pick the User-Agent per client:
+		// - ANDROID_VR must use the VR client UA, not the regular Android app UA;
+		// - web-client URLs need a real browser UA, not the Android WebView default.
+		boolean isAndroidVrRequest = isAndroidVrStreamingUrl(requestUrl);
+		boolean isAndroidRequest = isAndroidStreamingUrl(requestUrl);
+		boolean isIosRequest = isIosStreamingUrl(requestUrl);
+		if (isWebClientRequest)
+			conn.setRequestProperty(HttpHeaders.USER_AGENT, YOUTUBE_WEB_USER_AGENT);
+		else if (isAndroidVrRequest)
+			conn.setRequestProperty(HttpHeaders.USER_AGENT, YOUTUBE_ANDROID_VR_USER_AGENT);
+		else if (isAndroidRequest)
 			conn.setRequestProperty(HttpHeaders.USER_AGENT, getAndroidUserAgent(null));
-		else if (isIosStreamingUrl)
+		else if (isIosRequest)
 			conn.setRequestProperty(HttpHeaders.USER_AGENT, getIosUserAgent(null));
 		else
 			conn.setRequestProperty(HttpHeaders.USER_AGENT, userAgent);
 
 		conn.setRequestProperty(HttpHeaders.ACCEPT_ENCODING, allowGzip ? "gzip" : "identity");
 		conn.setInstanceFollowRedirects(followRedirects);
-		if (isVideoPlaybackUrl) {
+		// The protobuf POST body mirrors the official Android/iOS apps and is only used for the
+		// mobile clients; web-client URLs are fetched with a plain GET like a browser would.
+		if (isVideoPlaybackUrl && !isWebClientRequest) {
 			conn.setRequestMethod("POST");
 			conn.setDoOutput(true);
 			conn.setFixedLengthStreamingMode(POST_BODY.length);

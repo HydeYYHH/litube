@@ -88,7 +88,8 @@ public final class DownloadTaskFactory {
 										config.threadCount(),
 										title,
 										thumbnailUrl,
-										null));
+										null,
+										pickMuxedFallback(catalog, selectedVideo)));
 					}
 				}
 			}
@@ -105,6 +106,7 @@ public final class DownloadTaskFactory {
 									config.threadCount(),
 									title,
 									thumbnailUrl,
+									null,
 									null));
 				}
 			}
@@ -124,6 +126,7 @@ public final class DownloadTaskFactory {
 							config.threadCount(),
 							title,
 							thumbnailUrl,
+							null,
 							null));
 		}
 
@@ -139,6 +142,7 @@ public final class DownloadTaskFactory {
 							config.threadCount(),
 							title,
 							thumbnailUrl,
+							null,
 							null));
 		}
 		return tasks;
@@ -175,7 +179,8 @@ public final class DownloadTaskFactory {
 									config.threadCount(),
 									title,
 									thumbnailUrl,
-									parentId));
+									parentId,
+									pickMuxedFallback(catalog, videoStream)));
 				}
 			}
 			case AUDIO -> {
@@ -192,7 +197,8 @@ public final class DownloadTaskFactory {
 									config.threadCount(),
 									title,
 									thumbnailUrl,
-									parentId));
+									parentId,
+									null));
 				}
 			}
 			case NONE -> {
@@ -213,7 +219,8 @@ public final class DownloadTaskFactory {
 								config.threadCount(),
 								title,
 								thumbnailUrl,
-								parentId));
+								parentId,
+								null));
 			}
 		}
 
@@ -230,7 +237,8 @@ public final class DownloadTaskFactory {
 								config.threadCount(),
 								title,
 								thumbnailUrl,
-								parentId));
+								parentId,
+								null));
 			}
 		}
 
@@ -270,6 +278,39 @@ public final class DownloadTaskFactory {
 						.orElse(null);
 		if (limited != null) return limited;
 		return streams.stream()
+						.filter(s -> s.getFormat() == MediaFormat.MPEG_4)
+						.max(comparator)
+						.orElse(null);
+	}
+
+	/**
+	 * Picks the best muxed MPEG-4 (progressive) stream to fall back to when the selected
+	 * video-only stream cannot be downloaded — e.g. because YouTube serves it in the SABR
+	 * format, which cannot be fetched as a plain progressive file. YouTube keeps muxed
+	 * MPEG-4 streams (notably 360p) available outside SABR, so this restores downloads that
+	 * would otherwise fail outright. The stream at or below the requested resolution is
+	 * preferred; the best available muxed MPEG-4 stream is used when nothing matches.
+	 */
+	@Nullable
+	private VideoStream pickMuxedFallback(@NonNull StreamCatalog catalog,
+	                                      @Nullable VideoStream requested) {
+		List<VideoStream> muxed = catalog.getMuxedStreams();
+		if (muxed.isEmpty()) return null;
+		int targetHeight = requested == null ? 0 : streamHeight(requested);
+		Comparator<VideoStream> comparator = Comparator
+						.comparingInt(this::streamHeight)
+						.thenComparingInt(VideoStream::getFps)
+						.thenComparingInt(VideoStream::getBitrate);
+		VideoStream limited = muxed.stream()
+						.filter(s -> s.getFormat() == MediaFormat.MPEG_4)
+						.filter(s -> {
+							int h = streamHeight(s);
+							return h > 0 && (targetHeight <= 0 || h <= targetHeight);
+						})
+						.max(comparator)
+						.orElse(null);
+		if (limited != null) return limited;
+		return muxed.stream()
 						.filter(s -> s.getFormat() == MediaFormat.MPEG_4)
 						.max(comparator)
 						.orElse(null);

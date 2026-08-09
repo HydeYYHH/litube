@@ -1,6 +1,7 @@
 package com.hhst.youtubelite.browser;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -13,6 +14,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -24,6 +26,7 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
 import androidx.media3.common.util.Consumer;
 import androidx.media3.common.util.UnstableApi;
 
@@ -39,6 +42,7 @@ import com.hhst.youtubelite.player.LitePlayer;
 import com.hhst.youtubelite.player.queue.QueueRepository;
 import com.hhst.youtubelite.ui.MainActivity;
 import com.hhst.youtubelite.ui.widget.LoadingProgressBar;
+import com.hhst.youtubelite.util.PermissionUtils;
 import com.hhst.youtubelite.util.StreamIOUtils;
 import com.hhst.youtubelite.util.ToastUtils;
 import com.hhst.youtubelite.util.UrlUtils;
@@ -67,6 +71,8 @@ import okhttp3.Response;
  */
 @UnstableApi
 public class YoutubeWebview extends WebView {
+
+	private static final String TAG = "YoutubeWebview";
 
 	private static final String PO_TOKEN_CONTEXT_SCRIPT = """
 					(function(){
@@ -117,6 +123,13 @@ public class YoutubeWebview extends WebView {
 					})();
 					""";
 	private final ArrayList<String> scripts = new ArrayList<>();
+	/**
+	 * Deferred WebView media permission (microphone for YouTube voice search) while the
+	 * runtime RECORD_AUDIO permission is being requested; resolved by
+	 * {@link #grantPendingMediaPermission(boolean)} via MainActivity.
+	 */
+	@Nullable
+	private PermissionRequest pendingPermissionRequest;
 	@NonNull
 	private final Frame frame = new Frame();
 	@Nullable
@@ -302,6 +315,11 @@ public class YoutubeWebview extends WebView {
 		setFocusableInTouchMode(true);
 		setLayerType(LAYER_TYPE_HARDWARE, null);
 
+		// Enable remote debugging via chrome://inspect (debug builds and release both — this
+		// app ships to users who may need to report WebView issues). Safe: only exposes the
+		// WebView when a debugger is actually attached via USB/ADB.
+		WebView.setWebContentsDebuggingEnabled(true);
+
 		CookieManager.getInstance().setAcceptCookie(true);
 
 		WebSettings settings = getSettings();
@@ -315,6 +333,8 @@ public class YoutubeWebview extends WebView {
 		settings.setSupportZoom(false);
 		settings.setBuiltInZoomControls(false);
 		settings.setMediaPlaybackRequiresUserGesture(false);
+		settings.setAllowFileAccess(true);
+		settings.setAllowContentAccess(true);
 		settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
 		JavascriptInterface jsInterface = new JavascriptInterface(this, youtubeExtractor, player, extensionManager, tabManager, queueRepository);
@@ -441,11 +461,63 @@ public class YoutubeWebview extends WebView {
 		});
 
 		setWebChromeClient(new WebChromeClient() {
-
 			@Override
 			public boolean onConsoleMessage(@NonNull ConsoleMessage consoleMessage) {
 				Log.d("js-log", consoleMessage.message() + " -- From line " + consoleMessage.lineNumber() + " of " + consoleMessage.sourceId());
 				return super.onConsoleMessage(consoleMessage);
+			}
+
+			@Override
+			public void onPermissionRequest(@NonNull PermissionRequest request) {
+				// YouTube voice search calls getUserMedia({audio:true}); without this the
+				// default WebChromeClient silently cancels the request and the mic never
+				// activates. Only grant capture to the sites this WebView is allowed to load.
+				Log.d(TAG, "onPermissionRequest origin=" + request.getOrigin()
+								+ " resources=" + Arrays.toString(request.getResources()));
+				if (!isAllowedPermissionOrigin(request)) {
+					Log.w(TAG, "Denying permission request from disallowed origin " + request.getOrigin());
+					request.deny();
+					return;
+				}
+				boolean needsAudio = containsResource(request, PermissionRequest.RESOURCE_AUDIO_CAPTURE);
+				if (needsAudio && !PermissionUtils.hasMicrophonePermission(getContext())) {
+					Log.d(TAG, "Deferring audio permission request until RECORD_AUDIO is granted");
+					// Defer until the user answers the runtime RECORD_AUDIO prompt; the
+					// check, system dialog and result toasts are owned by MainActivity.
+					pendingPermissionRequest = request;
+					if (getContext() instanceof MainActivity mainActivity) {
+						mainActivity.ensureMicrophonePermissionForVoiceSearch();
+					} else if (getContext() instanceof Activity activity) {
+						ActivityCompat.requestPermissions(
+										activity,
+										PermissionUtils.microphonePermission(),
+										PermissionUtils.REQUEST_RECORD_AUDIO);
+					} else {
+						pendingPermissionRequest = null;
+						request.deny();
+					}
+					return;
+				}
+				String[] resources = Arrays.stream(request.getResources())
+								.filter(r -> PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)
+												|| PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(r))
+								.toArray(String[]::new);
+				if (resources.length == 0) {
+					Log.d(TAG, "Denying permission request: no grantable resources");
+					request.deny();
+					return;
+				}
+				Log.d(TAG, "Granting permission request: " + Arrays.toString(resources));
+				request.grant(resources);
+			}
+
+			@Override
+			public void onPermissionRequestCanceled(@NonNull PermissionRequest request) {
+				super.onPermissionRequestCanceled(request);
+				Log.d(TAG, "onPermissionRequestCanceled origin=" + request.getOrigin());
+				if (pendingPermissionRequest == request) {
+					pendingPermissionRequest = null;
+				}
 			}
 
 			@Override
@@ -499,6 +571,48 @@ public class YoutubeWebview extends WebView {
 				if (getContext() instanceof MainActivity) {
 					evaluateJavascript("window.dispatchEvent(new Event('exitFullScreen'));", null);
 				}
+			}
+		});
+	}
+
+	/**
+	 * Only grants media capture to origins this WebView is allowed to load (YouTube and
+	 * related Google domains); anything else is denied.
+	 */
+	private static boolean isAllowedPermissionOrigin(@NonNull PermissionRequest request) {
+		Uri origin = request.getOrigin();
+		return origin != null && UrlUtils.isAllowedDomain(origin);
+	}
+
+	private static boolean containsResource(@NonNull PermissionRequest request,
+	                                        @NonNull String resource) {
+		for (String r : request.getResources()) {
+			if (resource.equals(r)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Completes a deferred WebView microphone permission request after the runtime
+	 * RECORD_AUDIO permission result. Called by MainActivity.onRequestPermissionsResult.
+	 */
+	public void grantPendingMediaPermission(boolean granted) {
+		PermissionRequest request = pendingPermissionRequest;
+		pendingPermissionRequest = null;
+		if (request == null) return;
+		post(() -> {
+			if (granted) {
+				String[] resources = Arrays.stream(request.getResources())
+								.filter(r -> PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)
+												|| PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(r))
+								.toArray(String[]::new);
+				if (resources.length > 0) {
+					request.grant(resources);
+				} else {
+					request.deny();
+				}
+			} else {
+				request.deny();
 			}
 		});
 	}

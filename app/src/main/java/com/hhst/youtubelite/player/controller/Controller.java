@@ -166,6 +166,11 @@ public class Controller {
 	private boolean rotationSynced = false;
 	private boolean portraitExitLocked;
 	private boolean suppressAutoEnterUntilPortrait;
+	/**
+	 * Actual orientation (portrait/landscape) the device was in before fullscreen was
+	 * entered, so exiting fullscreen can restore it instead of always forcing portrait.
+	 */
+	private int previousOrientationBeforeFullscreen = Configuration.ORIENTATION_UNDEFINED;
 	private int physicalOrientation = Configuration.ORIENTATION_UNDEFINED;
 	private boolean portraitExitStartedPortrait;
 	private boolean portraitExitSawLandscape;
@@ -263,12 +268,22 @@ public class Controller {
 	}
 
 	static boolean shouldRequestPortraitOnManualExit(final boolean fullscreen,
-	                                                 final int orientation) {
-		return fullscreen && orientation == Configuration.ORIENTATION_LANDSCAPE;
+	                                                 final int orientation,
+	                                                 final int previousOrientation) {
+		// Only force portrait back when the user was in portrait before entering fullscreen.
+		// If they entered from landscape — or the pre-fullscreen orientation was cleared
+		// (e.g. after a PiP round-trip) — exit leaves the system orientation alone so the
+		// device stays landscape instead of being yanked to portrait.
+		return fullscreen
+						&& orientation == Configuration.ORIENTATION_LANDSCAPE
+						&& previousOrientation == Configuration.ORIENTATION_PORTRAIT;
 	}
 
-	static int fsOrientation(boolean autoFs, boolean portrait) {
-		if (autoFs) return ActivityInfo.SCREEN_ORIENTATION_FULL_USER;
+	static int fsOrientation(boolean autoFs, boolean portrait, boolean lockOrientation) {
+		// Auto-fullscreen, or manual fullscreen with the orientation lock disabled, follows
+		// the system rotation. Otherwise fullscreen locks to the video's orientation:
+		// landscape for landscape videos, portrait for portrait (e.g. Shorts) videos.
+		if (autoFs || !lockOrientation) return ActivityInfo.SCREEN_ORIENTATION_FULL_USER;
 		return portrait
 						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
 						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
@@ -853,7 +868,14 @@ public class Controller {
 		if (state.isFullscreen()) return;
 		autoFs = false;
 		pendingAutoEnterOnPhysicalLandscape = false;
-		manualFullscreenSensorExit = true;
+		previousOrientationBeforeFullscreen = orientation();
+		// With the orientation lock enabled, fullscreen is locked to the video's orientation
+		// (landscape for landscape videos) via setRequestedOrientation, and the device sensor
+		// must neither rotate the screen nor exit fullscreen when the phone is held vertically
+		// (this happens even with the system auto-rotate setting off, because the orientation
+		// listener uses the accelerometer). The sensor-based exit-to-portrait only applies
+		// when the orientation lock is disabled and fullscreen follows the system rotation.
+		manualFullscreenSensorExit = !prefs.isFullscreenOrientationLockEnabled();
 		manualFullscreenSawLandscape =
 						physicalOrientation == Configuration.ORIENTATION_LANDSCAPE;
 		manualFullscreenPortraitSinceMs = 0L;
@@ -869,7 +891,7 @@ public class Controller {
 
 	public void exitFullscreen() {
 		if (!state.isFullscreen()) return;
-		if (shouldRequestPortraitOnManualExit(true, orientation())) {
+		if (shouldRequestPortraitOnManualExit(true, orientation(), previousOrientationBeforeFullscreen)) {
 			beginManualPortraitLock();
 			playerView.requestPortraitNormalState();
 		}
@@ -1062,6 +1084,7 @@ public class Controller {
 		autoFs = false;
 		portraitExitLocked = false;
 		suppressAutoEnterUntilPortrait = false;
+		previousOrientationBeforeFullscreen = Configuration.ORIENTATION_UNDEFINED;
 		pendingAutoEnterOnPhysicalLandscape = false;
 		manualFullscreenSensorExit = false;
 		portraitExitStartedPortrait = false;
@@ -1168,7 +1191,7 @@ public class Controller {
 		playerView.applyControllerState(
 						previousState,
 						state.mode(),
-						fsOrientation(autoFs, PlayerUtils.isPortrait(engine)),
+						fsOrientation(autoFs, PlayerUtils.isPortrait(engine), prefs.isFullscreenOrientationLockEnabled()),
 						prefs.getResizeMode());
 		if (state.isInPictureInPicture() || state.isInMiniPlayer()) {
 			hideHint();
@@ -1179,6 +1202,7 @@ public class Controller {
 
 	private void enterAutoFs() {
 		autoFs = true;
+		previousOrientationBeforeFullscreen = orientation();
 		final ControllerState.Mode previousState = state.mode();
 		state = state.enterFullscreen();
 		applyControllerState(previousState, true);

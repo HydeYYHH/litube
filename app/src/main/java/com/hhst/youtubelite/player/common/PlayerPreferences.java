@@ -144,6 +144,15 @@ public final class PlayerPreferences {
 		mmkv.encode(KEY_RESIZE_MODE, mode);
 	}
 
+	/**
+	 * Whether fullscreen should lock the screen to the video's orientation (landscape for
+	 * landscape videos, portrait for portrait videos). When disabled, fullscreen follows
+	 * the system rotation instead.
+	 */
+	public boolean isFullscreenOrientationLockEnabled() {
+		return extensionManager.isEnabled(Constant.FULLSCREEN_ORIENTATION_LOCK);
+	}
+
 	public long getResumePosition(@Nullable String videoId) {
 		boolean enabled = extensionManager.isEnabled(Constant.REMEMBER_LAST_POSITION);
 		if (!enabled || videoId == null) return 0;

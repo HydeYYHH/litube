@@ -158,13 +158,10 @@ public final class QueueRepository {
 			return offset > 0 ? items.get(0).copy() : items.get(items.size() - 1).copy();
 		}
 		int target = index + offset;
-		if (target < 0) return null;
-		if (target >= items.size()) {
-			if (offset > 0) {
-				return items.get(target % items.size()).copy();
-			}
-			return null;
-		}
+		// The queue is linear: there is no item before the head or after the tail.
+		// Wrapping here would make autoplay loop the queue forever (and, combined with the
+		// single-item case, would re-request the same video that just ended).
+		if (target < 0 || target >= items.size()) return null;
 		return items.get(target).copy();
 	}
 

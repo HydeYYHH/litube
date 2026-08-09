@@ -164,15 +164,16 @@ public class DownloadService extends Service {
 					markRecordCompleted(taskId, outputReference, fileSize);
 					onTaskCompleted(taskId, file.getName(), true);
 				} catch (Exception e) {
-					updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
-					onTaskCompleted(taskId, task.fileName(), false);
+					failRecord(taskId, e.getMessage());
+					onTaskCompleted(taskId, task.fileName(), false, e.getMessage());
 				}
 			}
 
 			@Override
 			public void onError(Exception error) {
-				updateRecordProgress(taskId, -1, -1, -1, DownloadStatus.FAILED);
-				onTaskCompleted(taskId, task.fileName(), false);
+				String reason = error != null ? error.getMessage() : null;
+				failRecord(taskId, reason);
+				onTaskCompleted(taskId, task.fileName(), false, reason);
 			}
 
 			@Override
@@ -231,6 +232,21 @@ public class DownloadService extends Service {
 		if (d >= 0) record.setDownloadedSize(d);
 		if (t >= 0) record.setTotalSize(t);
 		record.setStatus(status);
+		record.setUpdatedAt(System.currentTimeMillis());
+		historyRepository.upsert(record);
+		broadcastRecordUpdated(taskId);
+		updateParentRecord(record.getParentId());
+	}
+
+	/**
+	 * Marks the record failed and stores the failure reason (e.g. "Chunk 12 failed after 3
+	 * attempts") so the history UI and the final notification can show what went wrong.
+	 */
+	private void failRecord(@NonNull String taskId, @Nullable String reason) {
+		DownloadRecord record = historyRepository.findByTaskId(taskId);
+		if (record == null) return;
+		record.setStatus(DownloadStatus.FAILED);
+		record.setErrorMessage(reason);
 		record.setUpdatedAt(System.currentTimeMillis());
 		historyRepository.upsert(record);
 		broadcastRecordUpdated(taskId);
@@ -371,10 +387,15 @@ public class DownloadService extends Service {
 	}
 
 	private synchronized void onTaskCompleted(@NonNull String taskId, @NonNull String fileName, boolean success) {
+		onTaskCompleted(taskId, fileName, success, null);
+	}
+
+	private synchronized void onTaskCompleted(@NonNull String taskId, @NonNull String fileName, boolean success,
+	                                          @Nullable String reason) {
 		activeIds.remove(taskId);
 		activeNames.remove(taskId);
 		if (activeIds.isEmpty()) {
-			finalizeNotification(fileName, success);
+			finalizeNotification(fileName, success, reason);
 		} else {
 			updateRemainingNotification();
 		}
@@ -393,12 +414,17 @@ public class DownloadService extends Service {
 	}
 
 	private synchronized void finalizeNotification(String fileName, boolean success) {
+		finalizeNotification(fileName, success, null);
+	}
+
+	private synchronized void finalizeNotification(String fileName, boolean success, @Nullable String reason) {
 		if (notificationBuilder != null) {
 			notificationBuilder.setOngoing(false)
 							.setAutoCancel(true)
 							.setProgress(0, 0, false)
 							.setContentTitle(success ? "Download Finished" : "Download Failed")
-							.setContentText(fileName);
+							// On failure, surface the reason (e.g. "Chunk 12 failed after 3 attempts").
+							.setContentText(success || reason == null || reason.isBlank() ? fileName : reason);
 			notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
 
 			stopForeground(STOP_FOREGROUND_DETACH);

@@ -168,6 +168,15 @@ public class LitePlayer {
 			public void onPlaybackStateChanged(int state) {
 				if (state == Player.STATE_READY) {
 					updateServiceProgress(engine.isPlaying());
+				} else if (state == Player.STATE_ENDED) {
+					// Drop the stale play request marker so the finished video can be
+					// requested again (queue replay, autoplay wrap). Guard with activeId so we
+					// don't clear a request that auto-advance just queued for the next video
+					// (the Engine listener runs before this one). `this` inside the anonymous
+					// listener refers to the listener, so qualify with the enclosing LitePlayer.
+					if (Objects.equals(LitePlayer.this.queuedId, LitePlayer.this.activeId)) {
+						LitePlayer.this.queuedId = null;
+					}
 				}
 			}
 

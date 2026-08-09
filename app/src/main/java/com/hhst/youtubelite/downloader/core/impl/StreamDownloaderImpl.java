@@ -1,5 +1,12 @@
 package com.hhst.youtubelite.downloader.core.impl;
 
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getAndroidUserAgent;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.getIosUserAgent;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isAndroidStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isIosStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebEmbeddedPlayerStreamingUrl;
+import static org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper.isWebStreamingUrl;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -13,6 +20,7 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.security.MessageDigest;
 import java.util.BitSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -39,6 +47,34 @@ import okhttp3.Response;
  */
 @Singleton
 public class StreamDownloaderImpl implements StreamDownloader {
+	/**
+	 * User-Agent of the YouTube VR (Oculus) client. Streaming URLs issued to the ANDROID_VR
+	 * client must be requested with this User-Agent: googlevideo validates that the User-Agent
+	 * matches the client the URL was generated for and answers HTTP 403 on a mismatch (the
+	 * regular Android app User-Agent is rejected for ANDROID_VR URLs). Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	private static final String YOUTUBE_ANDROID_VR_USER_AGENT =
+			"com.google.android.apps.youtube.vr.oculus/1.65.10 "
+					+ "(Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
+	/**
+	 * Desktop Chrome User-Agent for web-client (WEB / WEB_EMBEDDED_PLAYER) streaming URLs.
+	 * The Android WebView default User-Agent is a known trigger for HTTP 403 responses from
+	 * googlevideo on web-client URLs.
+	 */
+	private static final String YOUTUBE_WEB_USER_AGENT =
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+					+ "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+	/**
+	 * Number of attempts per chunk before the download fails. Transient failures (HTTP 5xx,
+	 * dropped connections, read timeouts) are retried automatically; only after every attempt
+	 * is exhausted does the chunk — and therefore the whole download — fail.
+	 */
+	private static final int MAX_CHUNK_ATTEMPTS = 3;
+	/**
+	 * Base delay between chunk retry attempts, in milliseconds, scaled by the attempt number.
+	 */
+	private static final long RETRY_BACKOFF_BASE_MS = 500L;
 	private final OkHttpClient client;
 	private final MMKV mmkv;
 	private final ThreadPoolExecutor executor;
@@ -64,6 +100,66 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		dispatcher.setMaxRequests(24);
 		dispatcher.setMaxRequestsPerHost(12);
 		return dispatcher;
+	}
+
+	/**
+	 * Checks if a streaming URL was issued to the {@code ANDROID_VR} (YouTube VR) client.
+	 * The library's {@code isAndroidStreamingUrl} also matches {@code ANDROID_VR} URLs
+	 * (substring match on {@code &c=ANDROID}), so this must be checked before it: the VR
+	 * client has its own dedicated User-Agent. Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	private static boolean isAndroidVrStreamingUrl(@NonNull String url) {
+		return url.contains("&c=ANDROID_VR") || url.contains("?c=ANDROID_VR");
+	}
+
+	/**
+	 * Builds the request headers googlevideo expects for a streaming URL, per the client the
+	 * URL was issued to. Without the matching User-Agent (and, for web-client URLs, the
+	 * browser headers), googlevideo answers HTTP 403 and the download fails — this is what
+	 * happens to the non-SABR ANDROID_VR / iOS / WEB streams the extractor now serves for
+	 * resolutions above 360p. Mirrors
+	 * {@link com.hhst.youtubelite.player.engine.datasource.YoutubeHttpDataSource}.
+	 */
+	static Map<String, String> clientHeaders(@NonNull String url) {
+		Map<String, String> headers = new LinkedHashMap<>();
+		boolean web = isWebStreamingUrl(url) || isWebEmbeddedPlayerStreamingUrl(url);
+		if (web) {
+			headers.put("Origin", "https://www.youtube.com");
+			headers.put("Referer", "https://www.youtube.com");
+			headers.put("Sec-Fetch-Dest", "empty");
+			headers.put("Sec-Fetch-Mode", "cors");
+			headers.put("Sec-Fetch-Site", "cross-site");
+			headers.put("User-Agent", YOUTUBE_WEB_USER_AGENT);
+			return headers;
+		}
+		String userAgent;
+		if (isAndroidVrStreamingUrl(url)) {
+			userAgent = YOUTUBE_ANDROID_VR_USER_AGENT;
+		} else if (isAndroidStreamingUrl(url)) {
+			userAgent = getAndroidUserAgent(null);
+		} else if (isIosStreamingUrl(url)) {
+			userAgent = getIosUserAgent(null);
+		} else {
+			userAgent = YOUTUBE_WEB_USER_AGENT;
+		}
+		headers.put("User-Agent", userAgent);
+		return headers;
+	}
+
+	private static void applyClientHeaders(@NonNull Request.Builder builder, @NonNull String url) {
+		for (Map.Entry<String, String> header : clientHeaders(url).entrySet()) {
+			builder.header(header.getKey(), header.getValue());
+		}
+	}
+
+	private static long parseContentLength(@Nullable String value) {
+		if (value == null) return -1;
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
 	}
 
 	private static long chunkLength(int idx, int totalChunks, long partSize, long totalLen) {
@@ -109,45 +205,59 @@ public class StreamDownloaderImpl implements StreamDownloader {
 	private void runTask(TaskContext task) {
 		RandomAccessFile raf = null;
 		try {
-			// 1. fetch metadata
-			final long total;
-			final boolean range;
-			try (Response head = client.newCall(new Request.Builder().url(task.url).head().build()).execute()) {
-				if (!head.isSuccessful()) throw new IOException("HEAD " + head.code());
-				total = Long.parseLong(head.header("Content-Length", "-1"));
-				range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
+			// 1. fetch metadata; a failed HEAD (e.g. HTTP 403 without the client User-Agent)
+			// falls back to a single full GET, which carries the client headers below.
+			long total = -1;
+			boolean range = false;
+			Request.Builder headBuilder = new Request.Builder().url(task.url).head();
+			applyClientHeaders(headBuilder, task.url);
+			try (Response head = client.newCall(headBuilder.build()).execute()) {
+				if (head.isSuccessful()) {
+					total = parseContentLength(head.header("Content-Length"));
+					range = head.code() == 206 || "bytes".equalsIgnoreCase(head.header("Accept-Ranges"));
+				}
 			}
+
+			// Final copies for lambda capture: total/range are assigned above, and the lambdas
+			// below can only capture effectively final locals.
+			final long totalLength = total;
+			final boolean rangeSupported = range;
 
 			// 2. calculate chunk count
 			int chunks;
-			if (total <= 0 || !range) chunks = 1;
+			if (totalLength <= 0 || !rangeSupported) chunks = 1;
 			else {
-				int candidate = (int) Math.min(128, Math.max(4, total / 512 * 1024));
-				chunks = (total / Math.max(candidate, 1)) > 0 ? candidate : 1;
+				int candidate = (int) Math.min(128, Math.max(4, totalLength / 512 * 1024));
+				chunks = (totalLength / Math.max(candidate, 1)) > 0 ? candidate : 1;
 			}
-			long part = total > 0 ? total / chunks : total;
+			long part = totalLength > 0 ? totalLength / chunks : totalLength;
 
-			// 3. resume or initialize
+			// 3. resume or initialize — saved chunks are only trusted when the partial file
+			// still holds them; if the file was deleted (e.g. after a cancel or a completed
+			// download of another stream that reused the temp path), restart this stream
+			// cleanly instead of skipping ranges that now contain no data.
 			byte[] saved = mmkv.decodeBytes(task.key);
-			BitSet bits = (range && saved != null) ? BitSet.valueOf(saved) : new BitSet();
+			boolean fileMatches = totalLength > 0 && task.out.isFile() && task.out.length() == totalLength;
+			BitSet bits = (rangeSupported && saved != null && fileMatches) ? BitSet.valueOf(saved) : new BitSet();
+			if (saved != null && (!fileMatches || !rangeSupported)) mmkv.removeValueForKey(task.key);
 			task.done.set(bits.cardinality());
-			if (total > 0) {
+			if (totalLength > 0) {
 				long initialDownloaded = IntStream.range(0, chunks)
 								.filter(bits::get)
-								.mapToLong(i -> chunkLength(i, chunks, part, total))
+								.mapToLong(i -> chunkLength(i, chunks, part, totalLength))
 								.sum();
 				task.downloadedBytes.set(initialDownloaded);
-				maybeReportProgress(task, total);
+				maybeReportProgress(task, totalLength);
 			}
 			raf = new RandomAccessFile(task.out, "rw");
-			if (total > 0) raf.setLength(total);
+			if (totalLength > 0) raf.setLength(totalLength);
 			else raf.setLength(0);
 
 			// 4. submit task
 			if (task.done.get() < chunks) {
 				RandomAccessFile finalRaf = raf;
 				CompletableFuture.allOf(IntStream.range(0, chunks).filter(i -> !bits.get(i)) // skip finished
-								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(task, i, chunks, part, total, range, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
+								.mapToObj(i -> CompletableFuture.runAsync(() -> downloadChunk(task, i, chunks, part, totalLength, rangeSupported, finalRaf, bits), executor)).toArray(CompletableFuture[]::new)).join();
 			}
 
 			// 5. clean up
@@ -172,15 +282,42 @@ public class StreamDownloaderImpl implements StreamDownloader {
 		}
 	}
 
-	private void downloadChunk(TaskContext task, int idx, int totalChunks, long partSize, long totalLen, boolean rangeSupported, RandomAccessFile raf, BitSet bits) {
-		if (task.isInactive()) return;
+	private void downloadChunk(TaskContext task, int idx, int totalChunks, long partSize, long totalLen,
+	                           boolean rangeSupported, RandomAccessFile raf, BitSet bits) {
+		int attempt = 0;
+		Exception lastError = null;
+		while (attempt < MAX_CHUNK_ATTEMPTS) {
+			if (task.isInactive()) return; // paused/cancelled: abort without retrying
+			attempt++;
+			long written = 0;
+			try {
+				written = fetchChunk(task, idx, totalChunks, partSize, totalLen, rangeSupported, raf, bits);
+				return;
+			} catch (Exception e) {
+				lastError = e;
+				// Undo the progress reported by the failed attempt so a retry does not
+				// double-count bytes (progress stays monotonic via maybeReportProgress).
+				if (written > 0) task.downloadedBytes.addAndGet(-written);
+				if (task.isInactive()) throw new RuntimeException(e); // paused/cancelled mid-attempt
+				if (attempt < MAX_CHUNK_ATTEMPTS) sleepBeforeRetry(attempt);
+			}
+		}
+		// Clear, actionable error for the UI: the download stops after all attempts.
+		throw new RuntimeException("Chunk " + idx + " failed after " + MAX_CHUNK_ATTEMPTS
+						+ " attempts" + (lastError != null ? ": " + lastError.getMessage() : ""), lastError);
+	}
+
+	private long fetchChunk(TaskContext task, int idx, int totalChunks, long partSize, long totalLen,
+	                        boolean rangeSupported, RandomAccessFile raf, BitSet bits) throws IOException {
 		long start = idx * partSize;
 		long end = (idx == totalChunks - 1 && totalLen > 0) ? totalLen - 1 : (start + partSize - 1);
 		String range = rangeSupported && totalLen > 0 ? "bytes=" + start + "-" + end : null;
 
 		Request.Builder rb = new Request.Builder().url(task.url);
+		applyClientHeaders(rb, task.url);
 		if (range != null) rb.header("Range", range);
 
+		long written = 0;
 		try (Response resp = client.newCall(rb.build()).execute()) {
 			if (!resp.isSuccessful()) throw new IOException("GET " + resp.code());
 			try (InputStream is = resp.body().byteStream()) {
@@ -195,6 +332,7 @@ public class StreamDownloaderImpl implements StreamDownloader {
 					}
 					if (totalLen > 0) {
 						task.downloadedBytes.addAndGet(read);
+						written += read;
 						maybeReportProgress(task, totalLen);
 					}
 					offset += read;
@@ -204,8 +342,15 @@ public class StreamDownloaderImpl implements StreamDownloader {
 					mmkv.encode(task.key, bits.toByteArray());
 				}
 			}
-		} catch (Exception e) {
-			throw new RuntimeException(e);
+		}
+		return written;
+	}
+
+	private static void sleepBeforeRetry(int attempt) {
+		try {
+			Thread.sleep(RETRY_BACKOFF_BASE_MS * attempt);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 

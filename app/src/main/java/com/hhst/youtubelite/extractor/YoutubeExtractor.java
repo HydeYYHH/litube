@@ -114,12 +114,14 @@ public final class YoutubeExtractor {
 		this.auth = auth;
 	}
 
+	private static final Pattern VIDEO_ID_PATTERN = Pattern.compile(
+			"(?:v=|=v/|/v/|/u/\\w/|embed/|watch\\?v=|shorts/|youtu.be/)([a-zA-Z0-9_-]{11})");
+
 	@Nullable
 	public static String getVideoId(@Nullable String url) {
 		if (url == null) return null;
 
-		Pattern compiledPattern = Pattern.compile("(?:v=|=v/|/v/|/u/\\w/|embed/|watch\\?v=|shorts/|youtu.be/)([a-zA-Z0-9_-]{11})");
-		Matcher matcher = compiledPattern.matcher(url);
+		Matcher matcher = VIDEO_ID_PATTERN.matcher(url);
 
 		if (matcher.find()) {
 			return matcher.group(1);

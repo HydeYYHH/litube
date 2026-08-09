@@ -1,5 +1,6 @@
 package com.hhst.youtubelite.ui;
 
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -7,11 +8,13 @@ import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -20,6 +23,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
@@ -111,6 +115,14 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	private Runnable pendingPermissionAction;
 	@Nullable
 	private String restoredUrl;
+	/**
+	 * True once the RECORD_AUDIO permission has been requested at least once in this process,
+	 * used together with shouldShowRequestPermissionRationale to detect a permanent denial
+	 * ("don't ask again") and route the user to system settings.
+	 */
+	private boolean micPermissionRequested;
+	@Nullable
+	private AlertDialog micPermissionDialog;
 
 	static boolean shouldEnterPictureInPicture(@Nullable LitePlayer player,
 	                                           @Nullable ExtensionManager extensionManager,
@@ -250,7 +262,9 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 	@Override
 	public void onConfigurationChanged(@NonNull Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
-		player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
+		// The activity is not recreated (see configChanges in the manifest); keep the
+		// player's rotation/fullscreen state in sync with the new configuration.
+		if (player != null) player.syncRotation(DeviceUtils.isRotateOn(this), newConfig.orientation);
 	}
 
 	private void handleIntent(@Nullable Intent intent) {
@@ -648,11 +662,100 @@ public final class MainActivity extends AppCompatActivity implements LifecycleEv
 		if (!isChangingConfigurations() && player != null) player.release();
 	}
 
+	/**
+	 * Ensures the app holds RECORD_AUDIO before WebView voice search captures audio. Called
+	 * by YoutubeWebview.onPermissionRequest when YouTube's mic button is tapped: if the
+	 * permission is already granted the deferred WebView request completes immediately;
+	 * otherwise the system permission dialog is shown (or, if permanently denied, a dialog
+	 * that leads to system settings). Must run on the UI thread.
+	 */
+	public void ensureMicrophonePermissionForVoiceSearch() {
+		if (Looper.myLooper() != Looper.getMainLooper()) {
+			runOnUiThread(this::ensureMicrophonePermissionForVoiceSearch);
+			return;
+		}
+		if (!PermissionUtils.hasMicrophonePermission(this)) {
+			boolean everRequested = micPermissionRequested;
+			micPermissionRequested = true;
+			if (everRequested && !ActivityCompat.shouldShowRequestPermissionRationale(
+							this, Manifest.permission.RECORD_AUDIO)) {
+				// Previously denied with "don't ask again": the system dialog will no longer
+				// appear, so route the user to the app's settings instead.
+				showMicrophonePermissionSettingsDialog();
+				return;
+			}
+			ActivityCompat.requestPermissions(
+							this,
+							PermissionUtils.microphonePermission(),
+							PermissionUtils.REQUEST_RECORD_AUDIO);
+			return;
+		}
+		YoutubeWebview webView = getWebView();
+		if (webView != null) {
+			webView.grantPendingMediaPermission(true);
+		}
+	}
+
+	/**
+	 * Shows the fallback dialog when the microphone permission is not granted and the system
+	 * permission dialog can no longer be shown (e.g. "don't ask again"): "Yes" opens the
+	 * app's permission screen in system settings, "No" shows a toast.
+	 */
+	private void showMicrophonePermissionSettingsDialog() {
+		if (micPermissionDialog != null && micPermissionDialog.isShowing()) {
+			return;
+		}
+		micPermissionDialog = new MaterialAlertDialogBuilder(this)
+						.setTitle(R.string.mic_permission_title)
+						.setMessage(R.string.mic_permission_settings_message)
+						.setPositiveButton(R.string.mic_permission_yes,
+										(dialog, which) -> openAppSettings())
+						.setNegativeButton(R.string.mic_permission_no,
+										(dialog, which) -> {
+											// Deny the deferred WebView request so the page
+											// does not wait forever for the microphone.
+											YoutubeWebview webView = getWebView();
+											if (webView != null) {
+												webView.grantPendingMediaPermission(false);
+											}
+											ToastUtils.show(this, R.string.mic_permission_denied);
+										})
+						.show();
+	}
+
+	private void openAppSettings() {
+		Intent intent = new Intent(
+						Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+						Uri.parse("package:" + getPackageName()));
+		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+		startActivity(intent);
+	}
+
 	@Override
 	public void onRequestPermissionsResult(int requestCode,
 	                                       @NonNull String[] permissions,
 	                                       @NonNull int[] grantResults) {
 		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		if (requestCode == PermissionUtils.REQUEST_RECORD_AUDIO) {
+			// YouTube voice search: complete the deferred WebView microphone request and
+			// tell the user what happened.
+			boolean granted = grantResults.length > 0
+							&& grantResults[0] == PackageManager.PERMISSION_GRANTED;
+			YoutubeWebview webView = getWebView();
+			if (webView != null) {
+				webView.grantPendingMediaPermission(granted);
+			}
+			if (granted) {
+				ToastUtils.show(this, R.string.mic_permission_granted);
+			} else if (!ActivityCompat.shouldShowRequestPermissionRationale(
+							this, Manifest.permission.RECORD_AUDIO)) {
+				// "Don't ask again" was chosen: the system dialog will not reappear.
+				showMicrophonePermissionSettingsDialog();
+			} else {
+				ToastUtils.show(this, R.string.mic_permission_denied);
+			}
+			return;
+		}
 		if (requestCode != PermissionUtils.REQUEST_STORAGE_PERMISSION) return;
 		Runnable action = pendingPermissionAction;
 		pendingPermissionAction = null;

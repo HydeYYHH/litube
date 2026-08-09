@@ -605,11 +605,13 @@ public class Engine {
 		boolean playlistAtHead = UrlUtils.isPlaylistFirstItemUrl(tabManager.getWatchUrl());
 		boolean queueContext = queueEnabled && hasQueueItems;
 		boolean playlistContext = !queueContext && hasPlaylist;
-		boolean queueAtHead = queueContext && queueRepository.findRelative(watchId, -1) == null;
+		boolean queueAtHead = inQueue && queueRepository.findRelative(watchId, -1) == null;
+		boolean queueAtTail = inQueue && queueRepository.findRelative(watchId, 1) == null;
 		if (queueContext) {
+			boolean queueNextEnabled = !inQueue || !queueAtTail;
 			boolean queuePrevEnabled = inQueue && !queueAtHead;
 			boolean queueBackEnabled = canGoBack && (!inQueue || queueAtHead);
-			return new QueueNav(true, true, true, queuePrevEnabled, queueBackEnabled);
+			return new QueueNav(true, queueNextEnabled, true, queuePrevEnabled, queueBackEnabled);
 		}
 		if (playlistContext) {
 			boolean playlistPrevEnabled = !playlistAtHead || canGoBack;
